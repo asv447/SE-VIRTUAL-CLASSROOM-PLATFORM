@@ -7,7 +7,6 @@ import "./globals.css"
 export const metadata = {
   title: "Classync - Virtual Classroom Platform",
   description: "Collaborative educational platform with AI integration for modern learning",
-  generator: "v0.app",
 }
 
 export default function RootLayout({ children }) {
