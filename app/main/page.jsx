@@ -7,7 +7,6 @@ import { signOut, onAuthStateChanged } from "firebase/auth"
 export default function Main() {
   const [user, setUser] = useState(null)
   const router = useRouter()
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user)setUser(user)
@@ -19,7 +18,6 @@ export default function Main() {
     await signOut(auth)
     router.push("/")
   }
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
       <h1 className="text-2xl font-bold">Welcome to Virtual Classroom</h1>
