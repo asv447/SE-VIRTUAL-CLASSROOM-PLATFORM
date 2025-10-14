@@ -29,7 +29,7 @@ export default function Login({ onBackToHome }) {
         setShowVerifyButton(true)
         return
       }
-// *********************************For later************
+// *********************************to be For later************
       // const userRef = doc(db, "users", user.uid)
       // const userSnap = await getDoc(userRef)
       // if (!userSnap.exists()) {
@@ -39,7 +39,7 @@ export default function Login({ onBackToHome }) {
       //   })
       // }
 // ***********
-      router.push("/main")
+      router.push("/homepage")
     } catch (err) {
       setError(err.message)
     }
@@ -51,7 +51,7 @@ export default function Login({ onBackToHome }) {
     if (auth.currentUser.emailVerified) {
       setError("")
       setShowVerifyButton(false)
-      router.push("/main")
+      router.push("/homepage")
     } else {
       setError("Email still not verified. Please check your inbox.")
     }
@@ -70,7 +70,7 @@ export default function Login({ onBackToHome }) {
           createdAt: new Date(),
         })
       }
-      router.push("/main")//LR page
+      router.push("/homepage")//LR page
     } catch (err) {
       setError(err.message)
     }
@@ -82,7 +82,7 @@ export default function Login({ onBackToHome }) {
       />
     )
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 animate-gradient">
+    <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
       <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
         <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
           Sign in to Virtual Classroom

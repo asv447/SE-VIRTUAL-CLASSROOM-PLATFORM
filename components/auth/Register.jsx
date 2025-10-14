@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState,useEffect } from "react"
 import { auth } from "../../lib/firebase"
 import {
   createUserWithEmailAndPassword,
@@ -7,39 +7,136 @@ import {
   signInWithPopup,
   sendEmailVerification,
 } from "firebase/auth"
+import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore"
+import Login from "./Login"
+const db = getFirestore()
 
-export default function Register({ onBackToLogin, onBackToHome }) {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
+export default function Register({ onBackToHome }) {
+  const [showLogin, setShowLogin] = useState(false); // toggle between register and login
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+
+  // keep online status in sync
+  useEffect(() => {
+    function handleOnline() { setIsOnline(true); setError(""); }
+    function handleOffline() { setIsOnline(false); setError("You are offline. Please connect to the internet and try again."); }
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  if (showLogin) {
+    return (
+      <Login
+        onBackToRegister={() => setShowLogin(false)}
+        onBackToHome={onBackToHome}
+      />
+    );
+  }
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    setError("");
+    setMessage("");
+
+    if(!email) {
+      setError("Please enter an email.");
       return;
     }
+    if(!password) {
+      setError("Please enter a password.");
+      return;
+    }
+    if(password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if(!isOnline) {
+      setError("You're offline. Connect to the internet to register.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      await sendEmailVerification(user); //mail for veri
-      setMessage(
-        "Verification email sent. Please check your inbox to verify your account."
-      );
+
+       try {
+        await sendEmailVerification(user);
+        setMessage("Verification email sent. Please check your inbox to verify your account.");
+      } catch (verifErr) {
+        // verification send failed — still continue but inform user
+        console.warn("sendEmailVerification error:", verifErr);
+        setError("Account created but failed to send verification email. Please check your email settings.");
+      }
+
+      // wuser document
+      const username = email.split("@")[0];
+      console.log("Creating user document for:", user.uid, username, email);
+      await setDoc(doc(db, "users", user.uid), {
+        username,
+        email,
+        role: "student",
+        createdAt: new Date().toISOString(),
+      });
+
+      // barabar
       setError("");
+      setMessage((msg) => (msg ? msg + " Account created successfully!" : "Account created successfully!"));
+
+      // call 
+      onBackToHome && onBackToHome();
     } catch (e) {
-      setError(e.message);
+      // handle network/offline specific error from Firebase
+      const msg = (e && e.message) ? e.message : String(e);
+      if (msg.toLowerCase().includes("client is offline") || msg.toLowerCase().includes("offline")) {
+        setError("Failed to contact server: you appear to be offline. Connect to the internet and try again.");
+      } else {
+        //Firebase err
+        if (e.code === "auth/email-already-in-use") {
+          setError("This email is already in use. Try logging in or use a different email.");
+        } else if (e.code === "auth/invalid-email") {
+          setError("Invalid email address.");
+        } else if (e.code === "auth/weak-password") {
+          setError("Password is too weak. Choose a stronger password (at least 6 characters).");
+        } else {
+          setError(msg);
+        }
+      }
       setMessage("");
+      console.error("Register error:", e);
+    } finally {
+      setLoading(false);
     }
   };
-//direct also
+
+
   const handleGoogleRegister = async () => {
     try {
       const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
-       window.location.href = "/main"
+      const result = await signInWithPopup(auth, provider)
+      const user = result.user
+
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+      if (!userDoc.exists()) {
+        const username = user.email.split("@")[0]
+        await setDoc(doc(db, "users", user.uid), {
+          username: username,
+          email: user.email,
+          role: "student",
+        })
+      }
+
+      onBackToHome && onBackToHome()
     } catch (err) {
       setError(err.message)
       setMessage("")
@@ -47,7 +144,7 @@ export default function Register({ onBackToLogin, onBackToHome }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 animate-gradient">
+    <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
       <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
         <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
           Create your account
@@ -108,7 +205,7 @@ export default function Register({ onBackToLogin, onBackToHome }) {
           <div className="text-center space-y-2 pt-2">
             <button
               type="button"
-              onClick={onBackToLogin}
+              onClick={() => setShowLogin(true)}
               className="text-blue-600 hover:text-blue-500 text-sm font-medium"
             >
               Already have an account? Login
@@ -140,3 +237,4 @@ export default function Register({ onBackToLogin, onBackToHome }) {
     </div>
   )
 }
+

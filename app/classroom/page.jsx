@@ -330,8 +330,6 @@ export default function ClassroomPage() {
             <TabButton tabName="assignments" label="Assignments" />
              <TabButton tabName="people" label="People" />
                 </div>
-
-
                 <div className="max-w-3xl mx-auto">
                     {renderContent()}
                 </div>
