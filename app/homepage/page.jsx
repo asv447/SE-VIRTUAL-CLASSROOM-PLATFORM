@@ -17,9 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-import Login from "../../components/auth/Login"
-import Register from "../../components/auth/Register"
+import { Upload } from "lucide-react";
 
 import {
   LogIn as LogInIcon,
@@ -36,15 +34,15 @@ import {
   Sparkles,
 } from "lucide-react"
 
-import { auth, db } from "../../lib/firebase"
+import { auth } from "../../lib/firebase"
 import { onAuthStateChanged, signOut } from "firebase/auth"
-import { doc, getDoc } from "firebase/firestore"
 
 export default function ClassyncDashboard() {
   // User state
   const [user, setUser] = useState(null)
   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   // Courses state
   const [courses, setCourses] = useState([
@@ -73,19 +71,32 @@ export default function ClassyncDashboard() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser)
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid))
-        if (userDoc.exists()) {
-          const data = userDoc.data()
-          setUsername(data.username)
-          setIsAdmin(data.role === "admin")
-        } else {
+        setLoading(true)
+        
+        try {
+          // Fetch user data from MongoDB API
+          const res = await fetch(`/api/users/${currentUser.uid}`)
+          if (res.ok) {
+            const data = await res.json()
+            setUsername(data.user.username || currentUser.email.split("@")[0])
+            setIsAdmin(data.user.role === "admin")
+          } else {
+            // User not found in database, use defaults
+            setUsername(currentUser.email.split("@")[0])
+            setIsAdmin(false)
+          }
+        } catch (err) {
+          console.error("Error fetching user data:", err)
           setUsername(currentUser.email.split("@")[0])
           setIsAdmin(false)
+        } finally {
+          setLoading(false)
         }
       } else {
         setUser(null)
         setUsername("")
         setIsAdmin(false)
+        setLoading(false)
       }
     })
     return () => unsubscribe()
@@ -116,51 +127,47 @@ export default function ClassyncDashboard() {
     setIsCreateDialogOpen(false)
   }
 
+  // Commented out original navbar - now using shared navbar with same register/login functionality
+/*
+// Original header - now using shared navbar from layout
+<header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+  <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <div className="flex items-center space-x-2">
+      <div className="w-8 h-8 flex items-center justify-center">
+        <img src="/classync-logo.png" alt="Classync Logo" className="w-8 h-8 object-contain" />
+      </div>
+      <span className="text-xl font-bold text-foreground">Classync</span>
+    </div>
+    <nav className="hidden md:flex items-center space-x-8">
+      <a href="#" className="text-foreground hover:text-primary transition-colors font-medium">Home</a>
+      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Courses</a>
+      <a href="../assignments" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</a>
+      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Progress</a>
+      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">AI Tools</a>
+    </nav>
+    <div className="flex items-center space-x-4">
+      <Button variant="ghost" size="icon" className="relative">
+        <Bell className="w-5 h-5" />
+        <span className="absolute -top-1 -right-1 w-3 h-3 bg-foreground rounded-full text-xs flex items-center justify-center text-background">2</span>
+      </Button>
+      <div className="relative">
+        {user ? (
+          <div className="flex items-center gap-2">
+            <span className="text-foreground font-medium">{username}</span>
+            <Button size="sm" variant="outline" onClick={() => signOut(auth)}>
+              Logout
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" onClick={() => setIsRegisterOpen(true)}>Register / Login</Button>
+        )}
+      </div>
+    </div>
+  </div>
+</header>
+*/
   return (
     <div className="min-h-screen bg-background relative">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 flex items-center justify-center">
-              <img src="/classync-logo.png" alt="Classync Logo" className="w-8 h-8 object-contain" />
-            </div>
-            <span className="text-xl font-bold text-foreground">Classync</span>
-          </div>
-
-          {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
-            <a href="#" className="text-foreground hover:text-primary transition-colors font-medium">Home</a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Courses</a>
-            <a href="../assignments" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Progress</a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">AI Tools</a>
-          </nav>
-
-          {/* User Actions */}
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-foreground rounded-full text-xs flex items-center justify-center text-background">2</span>
-            </Button>
-
-            <div className="relative">
-              {user ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-foreground font-medium">{username}</span>
-                  <Button size="sm" variant="outline" onClick={() => signOut(auth)}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="outline" onClick={() => setIsRegisterOpen(true)}>Register / Login</Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -168,13 +175,26 @@ export default function ClassyncDashboard() {
           <div className="lg:col-span-3 space-y-6">
             {/* Buttons row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><FileText className="w-6 h-6" /><span className="text-sm">Create Assignment</span></Button>
+              {user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com") ? (
+                <>
+                  <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild>
+                    <a href="/admin"><FileText className="w-6 h-6" /><span className="text-sm">Admin Dashboard</span></a>
+                  </Button>
+                  <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild>
+                    <a href="/assignments"><Upload className="w-6 h-6" /><span className="text-sm">Create Assignment</span></a>
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild>
+                  <a href="/student"><FileText className="w-6 h-6" /><span className="text-sm">Student Dashboard</span></a>
+                </Button>
+              )}
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><BarChart3 className="w-6 h-6" /><span className="text-sm">View Analytics</span></Button>
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><MessageSquare className="w-6 h-6" /><span className="text-sm">Send Announcement</span></Button>
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><Sparkles className="w-6 h-6" /><span className="text-sm">AI Tools</span></Button>
-              {isAdmin && (
+              {user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com") ? (
                 <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><Users className="w-6 h-6" /><span className="text-sm">Manage Classroom</span></Button>
-              )}
+              ) : null}
             </div>
 
             {/* Courses List */}
@@ -289,26 +309,6 @@ export default function ClassyncDashboard() {
           <div className="lg:col-span-1 space-y-6">{/* Sidebar content */}</div>
         </div>
       </main>
-
-      {/* Login Modal */}
-      {isLoginOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
-          <div className="relative w-full max-w-md mx-auto z-[10000]">
-            <Login onBackToHome={() => setIsLoginOpen(false)} />
-            <button className="absolute top-2 right-2 text-white text-2xl font-bold z-[10001]" onClick={() => setIsLoginOpen(false)}>×</button>
-          </div>
-        </div>
-      )}
-
-      {/* Register Modal */}
-      {isRegisterOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
-          <div className="relative w-full max-w-md mx-auto z-[10000]">
-            <Register onBackToHome={() => setIsRegisterOpen(false)} />
-            <button className="absolute top-2 right-2 text-white text-2xl font-bold z-[10001]" onClick={() => setIsRegisterOpen(false)}>×</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

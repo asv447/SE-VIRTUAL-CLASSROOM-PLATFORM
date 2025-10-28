@@ -7,12 +7,10 @@ import {
   signInWithPopup,
   sendEmailVerification,
 } from "firebase/auth"
-import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore"
 import Login from "./Login"
-const db = getFirestore()
 
 export default function Register({ onBackToHome }) {
-  const [showLogin, setShowLogin] = useState(false); // toggle between register and login
+  const [showLogin, setShowLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,7 +19,6 @@ export default function Register({ onBackToHome }) {
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
 
-  // keep online status in sync
   useEffect(() => {
     function handleOnline() { setIsOnline(true); setError(""); }
     function handleOffline() { setIsOnline(false); setError("You are offline. Please connect to the internet and try again."); }
@@ -47,6 +44,7 @@ export default function Register({ onBackToHome }) {
     e.preventDefault();
     setError("");
     setMessage("");
+    console.log("[Register] Submit clicked. Email:", email);
 
     if(!email) {
       setError("Please enter an email.");
@@ -67,41 +65,66 @@ export default function Register({ onBackToHome }) {
 
     setLoading(true);
     try {
-       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      console.log("[Register] Calling createUserWithEmailAndPassword...");
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      console.log("[Register] Auth user created:", {
+        uid: user?.uid,
+        email: user?.email,
+        emailVerified: user?.emailVerified,
+        providerData: user?.providerData?.map(p => p.providerId),
+      });
 
-       try {
+      try {
+        console.log("[Register] Sending email verification...");
         await sendEmailVerification(user);
         setMessage("Verification email sent. Please check your inbox to verify your account.");
       } catch (verifErr) {
-        // verification send failed — still continue but inform user
         console.warn("sendEmailVerification error:", verifErr);
         setError("Account created but failed to send verification email. Please check your email settings.");
       }
 
-      // wuser document
       const username = email.split("@")[0];
-      console.log("Creating user document for:", user.uid, username, email);
-      await setDoc(doc(db, "users", user.uid), {
+      console.log("[Register] Calling server API to create user doc:", {
+        uid: user?.uid,
         username,
         email,
-        role: "student",
-        createdAt: new Date().toISOString(),
       });
 
-      // barabar
+      // Try server-side API write first (recommended)
+      try {
+        const res = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: user.uid,
+            username,
+            email,
+            role: "student",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("[Register] Server API write failed:", data);
+          throw new Error(data.error || "Server write failed");
+        }
+        console.log("[Register] Server API write success:", data);
+      } catch (apiErr) {
+        console.error("[Register] Server API error:", apiErr);
+
+        // Client-side fallback no longer needed - MongoDB handles all writes
+      }
+
       setError("");
       setMessage((msg) => (msg ? msg + " Account created successfully!" : "Account created successfully!"));
 
-      // call 
       onBackToHome && onBackToHome();
     } catch (e) {
-      // handle network/offline specific error from Firebase
       const msg = (e && e.message) ? e.message : String(e);
-      if (msg.toLowerCase().includes("client is offline") || msg.toLowerCase().includes("offline")) {
+      console.error("[Register] Error during registration:", { code: e?.code, message: msg });
+      if (msg.toLowerCase().includes("client is offline") || msg.toLowerCase().includes("offline") || msg.toLowerCase().includes("network")) {
         setError("Failed to contact server: you appear to be offline. Connect to the internet and try again.");
       } else {
-        //Firebase err
         if (e.code === "auth/email-already-in-use") {
           setError("This email is already in use. Try logging in or use a different email.");
         } else if (e.code === "auth/invalid-email") {
@@ -126,19 +149,41 @@ export default function Register({ onBackToHome }) {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
-      const userDoc = await getDoc(doc(db, "users", user.uid))
-      if (!userDoc.exists()) {
-        const username = user.email.split("@")[0]
-        await setDoc(doc(db, "users", user.uid), {
-          username: username,
-          email: user.email,
-          role: "student",
-        })
+      // Try server-side API write for Google registration
+      try {
+        const username = (user.email || "").split("@")[0];
+        const res = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: user.uid,
+            username,
+            email: user.email,
+            role: "student",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("[Google Register] Server API write failed:", data);
+          throw new Error(data.error || "Server write failed");
+        }
+        console.log("[Google Register] Server API write success:", data);
+      } catch (apiErr) {
+        console.error("[Google Register] Server API error:", apiErr);
+        throw new Error("Failed to create user record in database.");
       }
 
       onBackToHome && onBackToHome()
     } catch (err) {
-      setError(err.message)
+      console.error("Google register error:", err);
+      const msg = err?.message || String(err);
+      if (msg.toLowerCase().includes("permission")) {
+        setError("Permission denied: Database write failed. Check server configuration.");
+      } else if (msg.toLowerCase().includes("popup")) {
+        setError("Google sign-in popup blocked or closed. Try again.");
+      } else {
+        setError(msg);
+      }
       setMessage("")
     }
   }
@@ -189,9 +234,10 @@ export default function Register({ onBackToHome }) {
 
           <button
             type="submit"
+            disabled={loading}
             className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200"
           >
-            Sign up
+            {loading ? "Creating..." : "Sign up"}
           </button>
 
           <button
@@ -237,4 +283,3 @@ export default function Register({ onBackToHome }) {
     </div>
   )
 }
-
