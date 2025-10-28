@@ -2,13 +2,12 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Register from "./Register"
-import { auth, db } from "../../lib/firebase"
+import { auth } from "../../lib/firebase"
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider
 } from "firebase/auth"
-import { doc, setDoc, getDoc } from "firebase/firestore" //forstoring after veri.
 export default function Login({ onBackToHome }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -29,16 +28,7 @@ export default function Login({ onBackToHome }) {
         setShowVerifyButton(true)
         return
       }
-// *********************************to be For later************
-      // const userRef = doc(db, "users", user.uid)
-      // const userSnap = await getDoc(userRef)
-      // if (!userSnap.exists()) {
-      //   await setDoc(userRef, {
-      //     email: user.email,
-      //     createdAt: new Date(),
-      //   })
-      // }
-// ***********
+      // User login successful - no database checks needed
       router.push("/homepage")
     } catch (err) {
       setError(err.message)
@@ -62,14 +52,32 @@ export default function Login({ onBackToHome }) {
       const provider = new GoogleAuthProvider()
       const result = await signInWithPopup(auth, provider)
       const user = result.user
-      const userRef = doc(db, "users", user.uid)
-      const userSnap = await getDoc(userRef)
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          email: user.email,
-          createdAt: new Date(),
-        })
+      
+      // Try server-side API write for Google login user creation
+      try {
+        const username = (user.email || "").split("@")[0];
+        const res = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: user.uid,
+            username,
+            email: user.email,
+            role: "student",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("[Google Login] Server API write failed:", data);
+          // Continue with login even if user creation fails - user can be created later
+        } else {
+          console.log("[Google Login] Server API write success:", data);
+        }
+      } catch (apiErr) {
+        console.error("[Google Login] Server API error:", apiErr);
+        // Continue with login even if user creation fails
       }
+      
       router.push("/homepage")//LR page
     } catch (err) {
       setError(err.message)
