@@ -4,18 +4,24 @@ import React, { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
-import { 
-  BookOpen, 
-  Upload, 
-  Download, 
-  Calendar, 
+import {
+  BookOpen,
+  Upload,
+  Download,
+  Calendar,
   Clock,
   CheckCircle,
   AlertCircle,
-  FileText
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -30,11 +36,19 @@ export default function StudentDashboard() {
   const [uploading, setUploading] = useState({});
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (usr) => {
-      setUser(usr);
-    });
-    return () => unsubscribe();
-  }, []);
+    if (auth) {
+      const unsubscribe = onAuthStateChanged(auth, (usr) => {
+        setUser(usr);
+        if (!usr) {
+          setPageLoading(false);
+        }
+      });
+
+      return () => unsubscribe();
+    } else if (!auth) {
+      setPageLoading(false);
+    }
+  }, [auth]);
 
   useEffect(() => {
     if (user) {
@@ -47,10 +61,7 @@ export default function StudentDashboard() {
   const loadData = async () => {
     setPageLoading(true);
     try {
-      await Promise.all([
-        loadCourses(),
-        loadAssignments()
-      ]);
+      await Promise.all([loadCourses(), loadAssignments()]);
     } catch (err) {
       console.error("Error loading data:", err);
     } finally {
@@ -77,7 +88,7 @@ export default function StudentDashboard() {
         const data = await res.json();
         setAssignments(data);
         // Load submissions for each assignment
-        data.forEach(assignment => {
+        data.forEach((assignment) => {
           loadSubmissions(assignment.id);
         });
       }
@@ -91,9 +102,9 @@ export default function StudentDashboard() {
       const res = await fetch(`/api/submissions?assignmentId=${assignmentId}`);
       if (res.ok) {
         const data = await res.json();
-        setSubmissions(prev => ({
+        setSubmissions((prev) => ({
           ...prev,
-          [assignmentId]: data
+          [assignmentId]: data,
         }));
       }
     } catch (err) {
@@ -102,9 +113,9 @@ export default function StudentDashboard() {
   };
 
   const handleFileSelect = (assignmentId, file) => {
-    setSelectedFile(prev => ({
+    setSelectedFile((prev) => ({
       ...prev,
-      [assignmentId]: file
+      [assignmentId]: file,
     }));
   };
 
@@ -120,9 +131,9 @@ export default function StudentDashboard() {
       return;
     }
 
-    setUploading(prev => ({
+    setUploading((prev) => ({
       ...prev,
-      [assignmentId]: true
+      [assignmentId]: true,
     }));
 
     try {
@@ -138,9 +149,9 @@ export default function StudentDashboard() {
       });
 
       if (res.ok) {
-        setSelectedFile(prev => ({
+        setSelectedFile((prev) => ({
           ...prev,
-          [assignmentId]: null
+          [assignmentId]: null,
         }));
         await loadSubmissions(assignmentId);
         alert("Assignment submitted successfully!");
@@ -152,15 +163,15 @@ export default function StudentDashboard() {
       console.error("Error submitting assignment:", err);
       alert("Failed to submit assignment");
     } finally {
-      setUploading(prev => ({
+      setUploading((prev) => ({
         ...prev,
-        [assignmentId]: false
+        [assignmentId]: false,
       }));
     }
   };
 
   const getCourseName = (courseId) => {
-    const course = courses.find(c => c.id === courseId);
+    const course = courses.find((c) => c.id === courseId);
     return course ? `${course.name} (${course.code})` : "Unknown Course";
   };
 
@@ -170,12 +181,12 @@ export default function StudentDashboard() {
 
   const hasSubmitted = (assignmentId) => {
     const assignmentSubmissions = submissions[assignmentId] || [];
-    return assignmentSubmissions.some(sub => sub.studentId === user?.uid);
+    return assignmentSubmissions.some((sub) => sub.studentId === user?.uid);
   };
 
   const getSubmission = (assignmentId) => {
     const assignmentSubmissions = submissions[assignmentId] || [];
-    return assignmentSubmissions.find(sub => sub.studentId === user?.uid);
+    return assignmentSubmissions.find((sub) => sub.studentId === user?.uid);
   };
 
   const groupAssignmentsByStatus = () => {
@@ -183,7 +194,7 @@ export default function StudentDashboard() {
     const submitted = [];
     const overdue = [];
 
-    assignments.forEach(assignment => {
+    assignments.forEach((assignment) => {
       const submittedStatus = hasSubmitted(assignment.id);
       const overdueStatus = isOverdue(assignment.deadline);
 
@@ -203,7 +214,9 @@ export default function StudentDashboard() {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
         <h1 className="text-2xl font-bold mb-4">Student Dashboard</h1>
-        <p className="text-gray-600">Please log in to access your assignments.</p>
+        <p className="text-gray-600">
+          Please log in to access your assignments.
+        </p>
       </div>
     );
   }
@@ -248,7 +261,11 @@ export default function StudentDashboard() {
           {assignment.fileUrl && (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" asChild>
-                <a href={assignment.fileUrl} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={assignment.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <Download className="h-4 w-4 mr-2" />
                   Download Assignment
                 </a>
@@ -263,11 +280,16 @@ export default function StudentDashboard() {
                 <span className="text-sm font-medium">Submitted</span>
               </div>
               <p className="text-xs text-gray-500">
-                Submitted on: {format(new Date(submission.submittedAt), "PPP p")}
+                Submitted on:{" "}
+                {format(new Date(submission.submittedAt), "PPP p")}
               </p>
               {submission.fileUrl && (
                 <Button variant="outline" size="sm" asChild>
-                  <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={submission.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <Download className="h-4 w-4 mr-2" />
                     View Your Submission
                   </a>
@@ -282,7 +304,9 @@ export default function StudentDashboard() {
                 </label>
                 <input
                   type="file"
-                  onChange={(e) => handleFileSelect(assignment.id, e.target.files[0])}
+                  onChange={(e) =>
+                    handleFileSelect(assignment.id, e.target.files[0])
+                  }
                   accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png,.py,.js,.java,.cpp"
                   required
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -296,9 +320,13 @@ export default function StudentDashboard() {
                   Accepted formats: PDF, DOC, TXT, ZIP, Images, Code files
                 </p>
               </div>
-              <Button 
+              <Button
                 onClick={() => submitAssignment(assignment.id)}
-                disabled={!selectedFile[assignment.id] || uploading[assignment.id] || isOverdueStatus}
+                disabled={
+                  !selectedFile[assignment.id] ||
+                  uploading[assignment.id] ||
+                  isOverdueStatus
+                }
                 className="w-full"
               >
                 {uploading[assignment.id] ? (
@@ -323,7 +351,9 @@ export default function StudentDashboard() {
           ) : (
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-              <p className="text-sm text-gray-600">Cannot submit - deadline has passed</p>
+              <p className="text-sm text-gray-600">
+                Cannot submit - deadline has passed
+              </p>
             </div>
           )}
         </CardContent>
@@ -335,15 +365,11 @@ export default function StudentDashboard() {
     <div className="p-6 max-w-6xl mx-auto">
       <Tabs defaultValue="pending" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="pending">
-            Pending ({pending.length})
-          </TabsTrigger>
+          <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
           <TabsTrigger value="submitted">
             Submitted ({submitted.length})
           </TabsTrigger>
-          <TabsTrigger value="overdue">
-            Overdue ({overdue.length})
-          </TabsTrigger>
+          <TabsTrigger value="overdue">Overdue ({overdue.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4">
@@ -351,16 +377,20 @@ export default function StudentDashboard() {
             <Card>
               <CardContent className="text-center py-8">
                 <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                <h3 className="text-lg font-semibold text-green-700">All caught up!</h3>
-                <p className="text-gray-600">You have no pending assignments.</p>
+                <h3 className="text-lg font-semibold text-green-700">
+                  All caught up!
+                </h3>
+                <p className="text-gray-600">
+                  You have no pending assignments.
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {pending.map((assignment) => (
-                <AssignmentCard 
-                  key={assignment.id} 
-                  assignment={assignment} 
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
                   showSubmitButton={true}
                 />
               ))}
@@ -373,16 +403,20 @@ export default function StudentDashboard() {
             <Card>
               <CardContent className="text-center py-8">
                 <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700">No submissions yet</h3>
-                <p className="text-gray-600">You haven't submitted any assignments.</p>
+                <h3 className="text-lg font-semibold text-gray-700">
+                  No submissions yet
+                </h3>
+                <p className="text-gray-600">
+                  You haven't submitted any assignments.
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {submitted.map((assignment) => (
-                <AssignmentCard 
-                  key={assignment.id} 
-                  assignment={assignment} 
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
                   showSubmitButton={false}
                 />
               ))}
@@ -395,16 +429,20 @@ export default function StudentDashboard() {
             <Card>
               <CardContent className="text-center py-8">
                 <Calendar className="h-12 w-12 mx-auto text-blue-500 mb-4" />
-                <h3 className="text-lg font-semibold text-blue-700">No overdue assignments</h3>
-                <p className="text-gray-600">Great job! All assignments are submitted on time.</p>
+                <h3 className="text-lg font-semibold text-blue-700">
+                  No overdue assignments
+                </h3>
+                <p className="text-gray-600">
+                  Great job! All assignments are submitted on time.
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {overdue.map((assignment) => (
-                <AssignmentCard 
-                  key={assignment.id} 
-                  assignment={assignment} 
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
                   showSubmitButton={false}
                 />
               ))}
