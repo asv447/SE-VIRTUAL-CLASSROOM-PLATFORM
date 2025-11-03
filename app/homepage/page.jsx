@@ -79,7 +79,7 @@ export default function ClassyncDashboard() {
           if (res.ok) {
             const data = await res.json()
             setUsername(data.user.username || currentUser.email.split("@")[0])
-            setIsAdmin(data.user.role === "admin")
+            setIsAdmin(data.user.role === "instructor")
           } else {
             // User not found in database, use defaults
             setUsername(currentUser.email.split("@")[0])
@@ -175,7 +175,7 @@ export default function ClassyncDashboard() {
           <div className="lg:col-span-3 space-y-6">
             {/* Buttons row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com") ? (
+              {isAdmin  ? (
                 <>
                   <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild>
                     <a href="/admin"><FileText className="w-6 h-6" /><span className="text-sm">Admin Dashboard</span></a>

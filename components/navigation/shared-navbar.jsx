@@ -46,7 +46,7 @@ export default function SharedNavbar() {
           if (res.ok) {
             const data = await res.json();
             setUsername(data.user.username || currentUser.email.split("@")[0]);
-            setIsAdmin(data.user.role === "admin");
+            setIsAdmin(data.user.role === "instructor");
           } else {
             setUsername(currentUser.email.split("@")[0]);
             setIsAdmin(false);
