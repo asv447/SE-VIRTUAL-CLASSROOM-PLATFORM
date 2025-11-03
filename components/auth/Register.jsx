@@ -14,6 +14,8 @@ export default function Register({ onBackToHome }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState("student");
+  const [instructorPassword, setInstructorPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -63,6 +65,19 @@ export default function Register({ onBackToHome }) {
       return;
     }
 
+    // Check if email is instructor domain
+     
+    // Validate instructor credentials
+    if(role === "instructor") {
+      if(instructorPassword !== "instructor") {
+        setError("Invalid instructor verification password.");
+        return;
+      }
+      // Force role to instructor if email is instructor domain
+         setRole("instructor");
+      
+    }
+
     setLoading(true);
     try {
       console.log("[Register] Calling createUserWithEmailAndPassword...");
@@ -100,7 +115,7 @@ export default function Register({ onBackToHome }) {
             uid: user.uid,
             username,
             email,
-            role: "student",
+            role: role,
           }),
         });
         const data = await res.json();
@@ -231,6 +246,31 @@ export default function Register({ onBackToHome }) {
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Role</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            >
+              <option value="student">Student</option>
+              <option value="instructor">Instructor</option>
+            </select>
+          </div>
+
+          {role === "instructor" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Instructor Verification Password</label>
+              <input
+                type="password"
+                required={role === "instructor"}
+                value={instructorPassword}
+                onChange={(e) => setInstructorPassword(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+          )}
 
           <button
             type="submit"
