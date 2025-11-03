@@ -191,7 +191,7 @@ export default function ClassyncDashboard() {
               )}
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><BarChart3 className="w-6 h-6" /><span className="text-sm">View Analytics</span></Button>
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><MessageSquare className="w-6 h-6" /><span className="text-sm">Send Announcement</span></Button>
-              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><Sparkles className="w-6 h-6" /><span className="text-sm">AI Tools</span></Button>
+              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild><a href="/ai-tools/chatbot"><Sparkles className="w-6 h-6" /><span className="text-sm">AI Tools</span></a></Button>
               {user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com") ? (
                 <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><Users className="w-6 h-6" /><span className="text-sm">Manage Classroom</span></Button>
               ) : null}
