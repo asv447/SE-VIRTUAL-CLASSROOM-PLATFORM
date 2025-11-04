@@ -4,8 +4,19 @@ import { getCoursesCollection } from "../../../lib/mongodb";
 
 export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const role = searchParams.get('role');
+
     const coursesCollection = await getCoursesCollection();
-    const courses = await coursesCollection.find({}).toArray();
+    let query = {};
+    
+    // If user is instructor, only show their courses
+    if (role === 'instructor') {
+      query.instructorId = userId;
+    }
+    
+    const courses = await coursesCollection.find(query).toArray();
     
     const formattedCourses = courses.map((course) => ({
       id: course._id.toString(),
@@ -22,10 +33,12 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { name, code, description } = await request.json();
+    const { name, code, description, instructorId, instructorName } = await request.json();
     
-    if (!name || !code) {
-      return NextResponse.json({ error: "Missing required fields: name and code" }, { status: 400 });
+    if (!name || !code || !instructorId || !instructorName) {
+      return NextResponse.json({ 
+        error: "Missing required fields: name, code, instructorId, and instructorName" 
+      }, { status: 400 });
     }
 
     const coursesCollection = await getCoursesCollection();
@@ -40,8 +53,11 @@ export async function POST(request) {
       name,
       code,
       description: description || "",
+      instructorId,
+      instructorName,
       createdAt: new Date(),
       updatedAt: new Date(),
+      students: [],
     };
 
     const result = await coursesCollection.insertOne(newCourse);
