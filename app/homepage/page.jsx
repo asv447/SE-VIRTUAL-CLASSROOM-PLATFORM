@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,6 +52,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 
 export default function ClassyncDashboard() {
   // User state
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -386,6 +388,7 @@ export default function ClassyncDashboard() {
                     <Card
                       key={course.id}
                       className="hover:shadow-lg transition-shadow cursor-pointer group"
+                      onClick={() => router.push("/classroom")}
                     >
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
