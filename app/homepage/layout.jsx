@@ -3,6 +3,7 @@ import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import "./globals.css"
+import Sidebar from "../sidebar/page"
 
 export const metadata = {
   title: "Classync - Virtual Classroom Platform",
@@ -13,7 +14,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}>
       <body className="font-sans">
-        <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1">
+            <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+          </main>
+        </div>
         <Analytics />
       </body>
     </html>

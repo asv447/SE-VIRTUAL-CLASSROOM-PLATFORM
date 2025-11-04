@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import Sidebar from "../sidebar/page";
 
 const dummyClassroomData = {
     subjectName: 'Software Engineering',
@@ -329,24 +330,23 @@ export default function ClassroomPage() {
     );
 
     return (
-        <div className="bg-gray-100 min-h-screen font-sans">
-            <div className="container mx-auto p-4 md:p-8">
-                <ClassroomHeader
-                    subjectName={classroom.subjectName}
-                    courseCode={classroom.courseCode}
-                    professorName={classroom.professor?.name}
-                    classCode={classroom.classCode}
-                />
+        <div className="container mx-auto">
+            <ClassroomHeader
+                subjectName={classroom.subjectName}
+                courseCode={classroom.courseCode}
+                professorName={classroom.professor?.name}
+                classCode={classroom.classCode}
+            />
 
-                {/* Tabs: Stream → Assignments → Chat → People */}
-                <div className="flex justify-center border-b border-gray-200 mb-8 space-x-1">
+            {/* Tabs: Stream → Assignments → Chat → People */}
+            <div className="bg-white rounded-lg shadow-sm mb-6">
+                <div className="flex justify-center border-b border-gray-200 space-x-1">
                     <TabButton tabName="stream" label="Stream" />
                     <TabButton tabName="assignments" label="Assignments" />
                     <TabButton tabName="chat" label="Chat" />
                     <TabButton tabName="people" label="People" />
                 </div>
-
-                <div className="max-w-4xl mx-auto">
+                <div className="p-4">
                     {renderContent()}
                 </div>
             </div>
