@@ -56,23 +56,22 @@ const sampleAnnouncements = [
 ];
 
 const seedDatabase = async () => {
+  const logger = require('./utils/logger');
   try {
     await mongoose.connect('mongodb://localhost:27017/announcement-system');
     
-    // Check if data already exists
     const count = await Announcement.countDocuments();
     
     if (count === 0) {
-      // Only seed if database is empty
       await Announcement.insertMany(sampleAnnouncements);
-      console.log('✅ Sample data inserted successfully (first time only)');
+      logger.info('Sample data inserted successfully (first time only)');
     } else {
-      console.log(`✅ Database already has ${count} announcements. Skipping seed.`);
+      logger.info(`Database already has ${count} announcements. Skipping seed.`);
     }
     
     process.exit(0);
   } catch (error) {
-    console.error('❌ Error seeding database:', error);
+    logger.error('Error seeding database:', error);
     process.exit(1);
   }
 };
