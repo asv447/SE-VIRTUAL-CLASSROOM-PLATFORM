@@ -25,7 +25,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 export default function AdminDashboard() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
@@ -53,14 +53,35 @@ export default function AdminDashboard() {
   const [viewingSubmissions, setViewingSubmissions] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (usr) => {
+    const unsubscribe = onAuthStateChanged(auth, async (usr) => {
       if (usr) {
-        const isInstructor = usr.email?.includes("@instructor.com") || 
-                           usr.email?.includes("@admin.com");
+
+        // HAVE NAI KARVU AA
+        // const isInstructorEmail = usr.email?.includes("@instructor.com") || 
+        //                         usr.email?.includes("@admin.com");
         
-        if (!isInstructor) {
-          window.location.href = "/student";
-          return;
+        // Check role from database
+        try {
+          const res = await fetch(`/api/users/${usr.uid}`);
+          if (res.ok) {
+            const data = await res.json();
+            const isInstructorRole = data.user.role === "instructor";
+            
+            if (!isInstructorRole) {
+              window.location.href = "/student";
+              return;
+            }
+          } else if (!isInstructorEmail) {
+            // If can't verify role, fall back to email check
+            window.location.href = "/student";
+            return;
+          }
+        } catch (err) {
+          console.error("Error checking user role:", err);
+          if (!isInstructorEmail) {
+            window.location.href = "/student";
+            return;
+          }
         }
         
         setUser(usr);
@@ -137,6 +158,14 @@ export default function AdminDashboard() {
 
     setLoading(true);
     try {
+      if (!user) {
+        alert("User not available. Please sign in again.");
+        setLoading(false);
+        return;
+      }
+
+      const instructorId = user.uid;
+      const instructorName = (user.email && user.email.split("@")[0]) || instructorId;
       const res = await fetch("/api/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,6 +173,8 @@ export default function AdminDashboard() {
           name: courseName,
           code: courseCode,
           description: courseDescription,
+          instructorId,
+          instructorName,
         }),
       });
 
@@ -174,11 +205,21 @@ export default function AdminDashboard() {
 
     setLoading(true);
     try {
+      if (!user) {
+        alert("User not available. Please sign in again.");
+        setLoading(false);
+        return;
+      }
+
+      const instructorId = user.uid;
+      const instructorName = (user.email && user.email.split("@")[0]) || instructorId;
       const formData = new FormData();
       formData.append("courseId", selectedCourse);
       formData.append("title", assignmentTitle);
       formData.append("description", assignmentDescription);
       formData.append("deadline", assignmentDeadline);
+      formData.append("instructorId", instructorId);
+      formData.append("instructorName", instructorName);
       if (assignmentFile) {
         formData.append("file", assignmentFile);
       }
