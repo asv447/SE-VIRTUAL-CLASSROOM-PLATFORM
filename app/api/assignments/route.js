@@ -8,11 +8,21 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const classId = searchParams.get('classId');
+    const userId = searchParams.get('userId');
+    const role = searchParams.get('role');
     
     const assignmentsCollection = await getAssignmentsCollection();
-    const assignments = classId 
-      ? await assignmentsCollection.find({ classId }).toArray()
-      : await assignmentsCollection.find({}).toArray();
+    let query = {};
+    
+    if (classId) {
+      query.classId = classId;
+    }
+    
+    if (role === 'instructor') {
+      query.instructorId = userId;
+    }
+    
+    const assignments = await assignmentsCollection.find(query).toArray();
     
     const formattedAssignments = assignments.map((assignment) => ({
       id: assignment._id.toString(),
@@ -36,8 +46,10 @@ export async function POST(request) {
     const description = formData.get("description");
     const deadline = formData.get("deadline");
     const file = formData.get("file");
+    const instructorId = formData.get("instructorId");
+    const instructorName = formData.get("instructorName");
     
-    if (!courseId || !title || !description || !deadline) {
+    if (!courseId || !title || !description || !deadline || !instructorId || !instructorName) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 

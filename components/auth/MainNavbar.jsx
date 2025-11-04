@@ -25,16 +25,20 @@ export default function MainNavbar() {
         setLoading(true);
         
         try {
+          // Check if email is instructor domain
+          const isInstructorEmail = currentUser.email?.endsWith("@instructor.com") || 
+                                  currentUser.email?.endsWith("@admin.com");
+
           // Fetch user data from MongoDB API
-          const res = await fetch(`/api/users/${currentUser.uid}`);
+          const res = await fetch(`/api/users?uid=${currentUser.uid}`);
           if (res.ok) {
             const data = await res.json();
-            setUsername(data.user.username || currentUser.email.split("@")[0]);
-            setIsAdmin(data.user.role === "admin");
+            setUsername(data.user?.username || currentUser.email.split("@")[0]);
+            setIsAdmin(data.user?.role === "instructor" || isInstructorEmail);
           } else {
             // User not found in database, use defaults
             setUsername(currentUser.email.split("@")[0]);
-            setIsAdmin(false);
+            setIsAdmin(isInstructorEmail);
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
