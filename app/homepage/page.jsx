@@ -37,6 +37,8 @@ import {
 import { auth } from "../../lib/firebase"
 import { onAuthStateChanged, signOut } from "firebase/auth"
 
+import Link from "next/link"
+
 export default function ClassyncDashboard() {
   // User state
   const [user, setUser] = useState(null)
@@ -48,13 +50,13 @@ export default function ClassyncDashboard() {
   const [courses, setCourses] = useState([
     {
       id: "1",
-      title: "Advanced Machine Learning",
-      description: "Deep dive into neural networks and AI algorithms",
-      instructor: "Dr. Sarah Chen",
-      students: 24,
-      progress: 68,
-      assignments: 3,
-      nextClass: "Today, 2:00 PM",
+      title: "Software Engineering",
+      description: "It's the discipline of applying engineering principles to build, test, and maintain large, complex software systems efficiently and reliably.",
+      instructor: "Prof. Saurabh Tiwari",
+      students: 250,
+      progress: 80,
+      assignments: 10,
+      nextClass: "Tomorrow, 8:00 AM",
     },
   ])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -127,45 +129,6 @@ export default function ClassyncDashboard() {
     setIsCreateDialogOpen(false)
   }
 
-  // Commented out original navbar - now using shared navbar with same register/login functionality
-/*
-// Original header - now using shared navbar from layout
-<header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-  <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-    <div className="flex items-center space-x-2">
-      <div className="w-8 h-8 flex items-center justify-center">
-        <img src="/classync-logo.png" alt="Classync Logo" className="w-8 h-8 object-contain" />
-      </div>
-      <span className="text-xl font-bold text-foreground">Classync</span>
-    </div>
-    <nav className="hidden md:flex items-center space-x-8">
-      <a href="#" className="text-foreground hover:text-primary transition-colors font-medium">Home</a>
-      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Courses</a>
-      <a href="../assignments" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</a>
-      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Progress</a>
-      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">AI Tools</a>
-    </nav>
-    <div className="flex items-center space-x-4">
-      <Button variant="ghost" size="icon" className="relative">
-        <Bell className="w-5 h-5" />
-        <span className="absolute -top-1 -right-1 w-3 h-3 bg-foreground rounded-full text-xs flex items-center justify-center text-background">2</span>
-      </Button>
-      <div className="relative">
-        {user ? (
-          <div className="flex items-center gap-2">
-            <span className="text-foreground font-medium">{username}</span>
-            <Button size="sm" variant="outline" onClick={() => signOut(auth)}>
-              Logout
-            </Button>
-          </div>
-        ) : (
-          <Button variant="outline" onClick={() => setIsRegisterOpen(true)}>Register / Login</Button>
-        )}
-      </div>
-    </div>
-  </div>
-</header>
-*/
   return (
     <div className="min-h-screen bg-background relative">
       {/* Main Content */}
@@ -257,48 +220,54 @@ export default function ClassyncDashboard() {
               ) : (
                 <div className="max-w-md">
                   {courses.map((course) => (
-                    <Card key={course.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
-                      <CardHeader className="pb-3">
-                        <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
-                          <BookOpen className="w-8 h-8 text-foreground" />
-                        </div>
-                        <CardTitle className="text-lg group-hover:text-primary transition-colors">{course.title}</CardTitle>
-                        <CardDescription className="text-sm">{course.description}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">Instructor: {course.instructor}</Badge>
+                    //Wrapped Card in Link
+                    <Link key={course.id} href={{pathname: "/classroom",query: { course: course.id },   // ← passes the ID
+}}
+      className="block"
+    >
+                      <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+                        <CardHeader className="pb-3">
+                          <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
+                            <BookOpen className="w-8 h-8 text-foreground" />
                           </div>
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Users className="w-4 h-4" /><span>{course.students}</span>
-                          </div>
-                        </div>
-                        {course.progress > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Progress</span>
-                              <span className="font-medium">{course.progress}%</span>
+                          <CardTitle className="text-lg group-hover:text-primary transition-colors">{course.title}</CardTitle>
+                          <CardDescription className="text-sm">{course.description}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-xs">Instructor: {course.instructor}</Badge>
                             </div>
-                            <div className="w-full bg-secondary rounded-full h-2">
-                              <div className="bg-foreground h-2 rounded-full transition-all duration-300" style={{ width: `${course.progress}%` }} />
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <Users className="w-4 h-4" /><span>{course.students}</span>
                             </div>
                           </div>
-                        )}
-                        <div className="flex items-center justify-between pt-2">
-                          <div className="flex gap-2">
-                            {course.assignments > 0 && <Badge variant="secondary" className="text-xs">{course.assignments} assignments</Badge>}
-                            <Badge variant="outline" className="text-xs"><Brain className="w-3 h-3 mr-1" />AI Enhanced</Badge>
+                          {course.progress > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Progress</span>
+                                <span className="font-medium">{course.progress}%</span>
+                              </div>
+                              <div className="w-full bg-secondary rounded-full h-2">
+                                <div className="bg-foreground h-2 rounded-full transition-all duration-300" style={{ width: `${course.progress}%` }} />
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between pt-2">
+                            <div className="flex gap-2">
+                              {course.assignments > 0 && <Badge variant="secondary" className="text-xs">{course.assignments} assignments</Badge>}
+                              <Badge variant="outline" className="text-xs"><Brain className="w-3 h-3 mr-1" />AI Enhanced</Badge>
+                            </div>
                           </div>
-                        </div>
-                        {course.nextClass && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-                            <Calendar className="w-4 h-4" />
-                            <span>Next: {course.nextClass}</span>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+                          {course.nextClass && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
+                              <Calendar className="w-4 h-4" />
+                              <span>Next: {course.nextClass}</span>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Link>
                   ))}
                 </div>
               )}
