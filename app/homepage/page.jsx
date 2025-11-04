@@ -60,7 +60,14 @@ export default function ClassyncDashboard() {
     },
   ])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [newCourse, setNewCourse] = useState({ title: "", description: "", subject: "" })
+  const [newCourse, setNewCourse] = useState({
+    title: "",
+    description: "",
+    subject: "",
+    profName: "",
+    profEmail: ""
+  })
+  
 
   // Hover dropdown state
   const [menuOpen, setMenuOpen] = useState(false)
@@ -114,20 +121,54 @@ export default function ClassyncDashboard() {
   }, [isLoginOpen, isRegisterOpen])
 
   // Create course
-  const handleCreateCourse = () => {
-    const course = {
-      id: Date.now().toString(),
-      title: newCourse.title,
-      description: newCourse.description,
-      instructor: "You",
-      students: 0,
-      progress: 0,
-      assignments: 0,
+  const handleCreateCourse = async () => {
+    try {
+      const classCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  
+      const res = await fetch("/api/classroom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newCourse.title,
+          description: newCourse.description,
+          subject: newCourse.subject,
+          instructor: newCourse.profName || username || "Unknown",
+          instructorEmail: newCourse.profEmail || user?.email || "Not provided",
+          classCode,
+          students: [],
+          createdAt: new Date()
+        }),
+      });
+  
+      if (!res.ok) throw new Error("Failed to create course");
+  
+      const data = await res.json();
+      const classroom = data.classroom;
+  
+      // Update UI immediately
+      setCourses([...courses, classroom]);
+      setNewCourse({ title: "", description: "", subject: "", profName: "", profEmail: "" });
+      setIsCreateDialogOpen(false);
+    } catch (error) {
+      console.error("Error creating classroom:", error);
     }
-    setCourses([...courses, course])
-    setNewCourse({ title: "", description: "", subject: "" })
-    setIsCreateDialogOpen(false)
-  }
+  };
+  
+  
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const res = await fetch("/api/classroom");
+        const data = await res.json();
+        setCourses(data.classrooms || []);
+      } catch (err) {
+        console.error("Error fetching classrooms:", err);
+      }
+    };
+    fetchCourses();
+  }, []);
+  
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -182,6 +223,27 @@ export default function ClassyncDashboard() {
                         <Input id="title" value={newCourse.title} onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })} placeholder="e.g., Introduction to Python" />
                       </div>
                       <div className="grid gap-2">
+  <Label htmlFor="profName">Professor Name</Label>
+  <Input
+    id="profName"
+    value={newCourse.profName}
+    onChange={(e) => setNewCourse({ ...newCourse, profName: e.target.value })}
+    placeholder="e.g., Dr. A. Sharma"
+  />
+</div>
+
+<div className="grid gap-2">
+  <Label htmlFor="profEmail">Professor Email</Label>
+  <Input
+    id="profEmail"
+    type="email"
+    value={newCourse.profEmail}
+    onChange={(e) => setNewCourse({ ...newCourse, profEmail: e.target.value })}
+    placeholder="e.g., prof.sharma@university.edu"
+  />
+</div>
+
+                      <div className="grid gap-2">
                         <Label htmlFor="description">Description</Label>
                         <Textarea id="description" value={newCourse.description} onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })} placeholder="Brief description of the course" />
                       </div>
@@ -221,10 +283,11 @@ export default function ClassyncDashboard() {
                 <div className="max-w-md">
                   {courses.map((course) => (
                     //Wrapped Card in Link
-                    <Link key={course.id} href={{pathname: "/classroom",query: { course: course.id },   // ← passes the ID
-}}
-      className="block"
-    >
+                    <Link 
+                    key={course.id} 
+                    href={`/classroom/${course._id?.toString()}`}
+                    className="block"  // ← Makes whole card clickable
+                  >
                       <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
                         <CardHeader className="pb-3">
                           <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
