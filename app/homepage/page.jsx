@@ -60,13 +60,14 @@ export default function ClassyncDashboard() {
   const [courses, setCourses] = useState([
     {
       id: "1",
-      title: "Advanced Machine Learning",
-      description: "Deep dive into neural networks and AI algorithms",
-      instructor: "Dr. Sarah Chen",
-      students: 24,
-      progress: 68,
-      assignments: 3,
-      nextClass: "Today, 2:00 PM",
+      title: "Software Engineering",
+      description:
+        "It's the discipline of applying engineering principles to build, test, and maintain large, complex software systems efficiently and reliably.",
+      instructor: "Prof. Saurabh Tiwari",
+      students: 250,
+      progress: 80,
+      assignments: 10,
+      nextClass: "Tomorrow, 8:00 AM",
     },
   ]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
