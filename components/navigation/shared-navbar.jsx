@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import NotificationBell from "./notification-bell";
 import { Button } from "@/components/ui/button";
-import { Bell } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 
@@ -196,12 +196,7 @@ export default function SharedNavbar() {
           </nav>
           {/* User Actions */}
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-foreground rounded-full text-xs flex items-center justify-center text-background">
-                2
-              </span>
-            </Button>
+            <NotificationBell />
 
             <div className="relative">
               {!mounted ? (
