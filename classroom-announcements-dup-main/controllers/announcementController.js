@@ -1,7 +1,6 @@
 const AnnouncementActivity = require('../models/AnnouncementActivity');
-const Announcement = require('../models/Announcements'); // use singular if your model file is Announcement.js
+const Announcement = require('../models/Announcements');
 
-// Helper function to log activity
 async function logActivity({announcementId, action, performedBy, meta}) {
   try {
     await AnnouncementActivity.create({
@@ -11,17 +10,16 @@ async function logActivity({announcementId, action, performedBy, meta}) {
       meta
     });
   } catch (err) {
-    console.log("Audit log error:", err.message);
+    const logger = require('../utils/logger');
+    logger.error('Audit log error:', err.message);
   }
 }
 
-// Get all announcements for a specific classroom (Student + Faculty)
 const getAnnouncementsByClassroom = async (req, res) => {
   try {
     const { classroomId } = req.params;
     const announcements = await Announcement.find({ classroomId })
-  .sort({ isPinned: -1, createdAt: -1 });
-
+      .sort({ isPinned: -1, createdAt: -1 });
 
     res.json({
       success: true,
@@ -37,7 +35,6 @@ const getAnnouncementsByClassroom = async (req, res) => {
   }
 };
 
-// Search and filter announcements
 const searchAnnouncements = async (req, res) => {
   try {
     const { classroomId } = req.params;
@@ -83,7 +80,6 @@ const searchAnnouncements = async (req, res) => {
   }
 };
 
-// Get single announcement by ID
 const getAnnouncementById = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
@@ -106,16 +102,14 @@ const getAnnouncementById = async (req, res) => {
   }
 };
 
-// CREATE announcement (Faculty)
 const createAnnouncement = async (req, res) => {
   try {
     const announcementData = {
       ...req.body,
-      editHistory: [] // Initialize empty edit history
+      editHistory: []
     };
     const announcement = await Announcement.create(announcementData);
 
-    // Log activity
     await logActivity({
       announcementId: announcement._id,
       action: "create",
@@ -140,7 +134,6 @@ const createAnnouncement = async (req, res) => {
   }
 };
 
-// UPDATE/EDIT announcement (Faculty) - Saves previous version to history
 const updateAnnouncement = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
@@ -151,7 +144,6 @@ const updateAnnouncement = async (req, res) => {
       });
     }
 
-    // Save current version to edit history before updating
     const historyEntry = {
       title: announcement.title,
       content: announcement.content,
@@ -164,7 +156,6 @@ const updateAnnouncement = async (req, res) => {
     };
     announcement.editHistory.push(historyEntry);
 
-    // Update fields
     Object.keys(req.body).forEach(key => {
       if (key !== 'editHistory') {
         announcement[key] = req.body[key];
@@ -173,7 +164,6 @@ const updateAnnouncement = async (req, res) => {
     announcement.updatedAt = new Date();
     await announcement.save();
 
-    // Log activity
     await logActivity({
       announcementId: announcement._id,
       action: "edit",
@@ -198,7 +188,6 @@ const updateAnnouncement = async (req, res) => {
   }
 };
 
-// UNDO last edit (restore previous version)
 const undoEdit = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
@@ -216,10 +205,8 @@ const undoEdit = async (req, res) => {
       });
     }
 
-    // Get the last version from history
     const previousVersion = announcement.editHistory.pop();
 
-    // Restore previous version
     announcement.title = previousVersion.title;
     announcement.content = previousVersion.content;
     announcement.tags = previousVersion.tags;
@@ -230,7 +217,6 @@ const undoEdit = async (req, res) => {
     announcement.updatedAt = new Date();
     await announcement.save();
 
-    // Log activity
     await logActivity({
       announcementId: announcement._id,
       action: "undo",
@@ -255,7 +241,6 @@ const undoEdit = async (req, res) => {
   }
 };
 
-// Toggle Pin status
 const togglePin = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
@@ -269,7 +254,6 @@ const togglePin = async (req, res) => {
     announcement.updatedAt = new Date();
     await announcement.save();
 
-    // Log activity
     await logActivity({
       announcementId: announcement._id,
       action: announcement.isPinned ? "pin" : "unpin",
@@ -294,7 +278,6 @@ const togglePin = async (req, res) => {
   }
 };
 
-// DELETE announcement
 const deleteAnnouncement = async (req, res) => {
   try {
     const announcement = await Announcement.findByIdAndDelete(req.params.id);
@@ -305,7 +288,6 @@ const deleteAnnouncement = async (req, res) => {
       });
     }
 
-    // Log activity
     await logActivity({
       announcementId: announcement._id,
       action: "delete",
@@ -330,7 +312,6 @@ const deleteAnnouncement = async (req, res) => {
   }
 };
 
-// Get all unique tags for a classroom
 const getTagsByClassroom = async (req, res) => {
   try {
     const { classroomId } = req.params;
@@ -350,7 +331,6 @@ const getTagsByClassroom = async (req, res) => {
   }
 };
 
-// Get audit trail for an announcement
 const getAnnouncementActivity = async (req, res) => {
   try {
     const { id } = req.params;
