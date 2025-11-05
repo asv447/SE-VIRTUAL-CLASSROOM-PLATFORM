@@ -1,0 +1,283 @@
+"use client";
+import { useState, useRef, useEffect } from "react";
+import { Home, Calendar, Book, ChevronDown, Layers, Menu } from "lucide-react";
+import axios from "axios";
+
+export default function Sidebar() {
+  const [pathname, setPathname] = useState("/dashboard");
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCoursesOpen, setIsCoursesOpen] = useState(true);
+  const [isPinned, setIsPinned] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(256); // 256px = w-64
+  const [isResizing, setIsResizing] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const sidebarRef = useRef(null);
+  const toggleRef = useRef(null);
+
+  const minWidth = 64; // minimum width (w-16)
+  const maxWidth = 400; // maximum width
+
+  const navigate = (path) => {
+    setPathname(path);
+    console.log("Navigating to:", path);
+  };
+
+  const handleToggle = () => {
+    const newPinnedState = !isPinned;
+    setIsPinned(newPinnedState);
+    
+    if (!newPinnedState) {
+      // Unpinning - collapse sidebar
+      setIsCollapsed(true);
+      setSidebarWidth(64);
+    } else {
+      // Pinning - expand sidebar
+      setIsCollapsed(false);
+      setSidebarWidth(256);
+    }
+  };
+
+  // Emit custom event when sidebar width changes
+  useEffect(() => {
+    const event = new CustomEvent('sidebarWidthChange', { 
+      detail: { width: sidebarWidth, isCollapsed }
+    });
+    window.dispatchEvent(event);
+  }, [sidebarWidth, isCollapsed]);
+
+  const handleMouseEnter = (e) => {
+    if (!isPinned && !isResizing) {
+      // If the mouse entered via the toggle area, do not expand on hover
+      if (toggleRef.current && e && toggleRef.current.contains(e.target)) {
+        return;
+      }
+      setIsHovered(true);
+      setIsCollapsed(false);
+      setSidebarWidth(256);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (!isPinned && !isResizing) {
+      setIsHovered(false);
+      setIsCollapsed(true);
+      setSidebarWidth(64);
+    }
+  };
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing) return;
+
+      const newWidth = e.clientX;
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setSidebarWidth(newWidth);
+        
+        // Auto collapse/expand based on width
+        if (newWidth < 100) {
+          setIsCollapsed(true);
+        } else {
+          setIsCollapsed(false);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
+
+  useEffect(() => {
+    // Hardcoded sample courses for demonstration
+    const sampleCourses = [
+      { id: 1, name: 'Software Engineering', color: 'bg-blue-500' },
+      { id: 2, name: 'Computer Networks', color: 'bg-green-500' },
+    ];
+    
+    // Uncomment the following code when you want to fetch real data
+    /*
+    const fetchCourses = async () => {
+      try {
+        const response = await axios.get("/api/classroom/courses");
+        setCourses(response.data);
+      } catch (error) {
+        console.error("Error fetching courses:", error);
+      }
+    };
+    fetchCourses();
+    */
+    
+    // Set the sample courses
+    setCourses(sampleCourses);
+  }, []);
+
+  return (
+    <div
+      ref={sidebarRef}
+      className="fixed left-0 bg-gray-50 z-10 transition-all duration-300"
+      style={{ 
+        width: `${sidebarWidth}px`,
+        top: '64px', // Position below the navigation bar
+        height: 'calc(100vh - 64px)'
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <aside
+        className="h-full bg-white border-r border-gray-200 flex flex-col transition-all duration-300 overflow-y-auto"
+        style={{ 
+          width: `${sidebarWidth}px`,
+          height: '100%'
+        }}
+      >
+        {/* Toggle Button - click only; excluded from hover expand */}
+        <div 
+          ref={toggleRef}
+          className="absolute top-4 left-4 z-20"
+          onMouseEnter={(e) => e.stopPropagation()}
+          onMouseLeave={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={handleToggle}
+            className="transition-all duration-300 bg-white border border-gray-300 rounded-full p-1 shadow hover:bg-gray-100"
+          >
+            <Menu size={16} />
+          </button>
+        </div>
+
+        {/* Header (Logo) */}
+        {/* <div
+          className={`flex items-center gap-2 p-4 cursor-pointer transition-all duration-300 ${
+            isCollapsed ? "justify-center" : "justify-start hover:bg-gray-100"
+          }`}
+          onClick={() => navigate("/dashboard")}
+          onMouseEnter={(e) => e.stopPropagation()}
+          onMouseLeave={(e) => e.stopPropagation()}
+        >
+          <Book className="text-blue-600 flex-shrink-0" size={20} />
+          {!isCollapsed && <h1 className="font-semibold text-lg truncate">Classync</h1>}
+        </div> */}
+
+        {/* Body with custom scrollbar */}
+        <div className="flex-1 overflow-hidden mt-14">
+          <nav className="h-full overflow-y-auto custom-scrollbar">
+            <ul className="space-y-1 px-2">
+              {/* <li
+                onClick={() => navigate("/dashboard")}
+                className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
+                  pathname === "/dashboard" ? "bg-gray-100" : ""
+                }`}
+              >
+                <Home size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Home</span>}
+              </li> */}
+
+              <li
+                onClick={() => navigate("/calendar")}
+                className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
+                  pathname === "/calendar" ? "bg-gray-100" : ""
+                }`}
+              >
+                <Calendar size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Calendar</span>}
+              </li>
+
+              {/* Enrolled Section */}
+              <li className="mt-4">
+                <button
+                  onClick={() => setIsCoursesOpen(!isCoursesOpen)}
+                  className="flex items-center justify-between w-full px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <Layers size={18} className="flex-shrink-0" />
+                    {!isCollapsed && <span className="truncate">Enrolled</span>}
+                  </span>
+                  {!isCollapsed && (
+                    <ChevronDown
+                      size={18}
+                      className={`transform transition-transform flex-shrink-0 ${
+                        isCoursesOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
+                </button>
+
+                {isCoursesOpen && !isCollapsed && (
+                  <ul className="mt-1 space-y-1 pl-6">
+                    {courses.map((course) => (
+                      <li
+                        key={course.id}
+                        onClick={() => navigate(`/course/${course.id}`)}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
+                          pathname === `/course/${course.id}` ? "bg-gray-100" : ""
+                        }`}
+                      >
+                        <div
+                          className={`w-3 h-3 rounded-full flex-shrink-0 ${course.color}`}
+                        ></div>
+                        <span className="truncate">{course.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            </ul>
+          </nav>
+        </div>
+
+        {/* Resize Handle */}
+        <div
+          onMouseDown={handleMouseDown}
+          className={`absolute top-0 right-0 w-1 h-full cursor-ew-resize hover:bg-blue-500 transition-colors ${
+            isResizing ? "bg-blue-500" : "bg-transparent"
+          }`}
+        >
+          {/* Visual indicator */}
+          <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-gray-300 rounded-l opacity-0 hover:opacity-100 transition-opacity" />
+        </div>
+      </aside>
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
+        }
+
+        /* For Firefox */
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #c1c1c1 #f1f1f1;
+        }
+      `}</style>
+    </div>
+  );
+}

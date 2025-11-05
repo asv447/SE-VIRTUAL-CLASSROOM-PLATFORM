@@ -6,6 +6,12 @@ import NotificationBell from "./notification-bell";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import {
+  onAuthStateChanged,
+  signOut,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 
 // Dynamically import Login/Register to avoid SSR issues
 const Login = dynamic(() => import("../auth/Login"), {
@@ -18,9 +24,6 @@ const Register = dynamic(() => import("../auth/Register"), {
   loading: () => <div>Loading...</div>,
 });
 
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-
 export default function SharedNavbar() {
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
@@ -29,6 +32,27 @@ export default function SharedNavbar() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [loadingReset, setLoadingReset] = useState(false);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      setResetMessage("Please enter your registered email.");
+      return;
+    }
+
+    setLoadingReset(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetMessage("Password reset email sent! Check your inbox.");
+    } catch (err) {
+      setResetMessage(err.message);
+    } finally {
+      setLoadingReset(false);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -77,6 +101,62 @@ export default function SharedNavbar() {
     }
   }, [isLoginOpen, isRegisterOpen]);
 
+  async function handleChangeUsername() {
+    if (!user) return;
+
+    const newUsername = prompt("Enter your new username:");
+    if (!newUsername || newUsername.trim() === "") return;
+
+    try {
+      console.log(
+        "Sending update request for uid:",
+        user.uid,
+        "newUsername:",
+        newUsername.trim()
+      );
+      const idToken = await user.getIdToken?.();
+
+      const res = await fetch(`/api/users/update-username`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          newUsername: newUsername.trim(),
+        }),
+      });
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+
+      console.log(
+        "update-username response status:",
+        res.status,
+        "body:",
+        data
+      );
+
+      if (!res.ok) {
+        alert("Update failed: " + (data?.message || res.status));
+        return;
+      }
+
+      // success path
+      setUsername(newUsername.trim());
+      alert(data?.message || "Username updated.");
+    } catch (err) {
+      console.error("Error updating username:", err);
+      alert("An error occurred. See console for details.");
+    }
+  }
+
   function ProfileMenu({ username }) {
     const router = useRouter();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -109,12 +189,37 @@ export default function SharedNavbar() {
             <button
               onClick={() => {
                 setIsProfileOpen(false);
-                router.push("/change-password");
+                handleChangeUsername();
               }}
               className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
             >
-              Change password
+              Change Username
             </button>
+
+            <button
+              onClick={async () => {
+                setIsProfileOpen(false);
+                const email = prompt(
+                  "Enter your registered email to reset password:",
+                  user?.email || ""
+                );
+                if (!email || email.trim() === "") return;
+
+                try {
+                  await sendPasswordResetEmail(auth, email.trim());
+                  alert("Password reset email sent! Please check your inbox.");
+                } catch (err) {
+                  console.error("Error sending password reset email:", err);
+                  alert(
+                    "Failed to send reset email. Please check the console for details."
+                  );
+                }
+              }}
+              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
+            >
+              Change Password
+            </button>
+
             <button
               onClick={() => {
                 setIsProfileOpen(false);
