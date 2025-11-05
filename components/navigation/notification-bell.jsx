@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Check, Bell, X } from "lucide-react";
+import { Check, Bell, X, Trash2 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
@@ -84,6 +84,24 @@ export default function NotificationBell() {
     }
   }
 
+  async function deleteNotification(id) {
+    try {
+      const res = await fetch(`/api/notifications`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setNotifications((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        const err = await res.json().catch(() => ({}));
+        console.error("deleteNotification failed:", err);
+      }
+    } catch (err) {
+      console.error("deleteNotification error:", err);
+    }
+  }
+
   function renderNotification(n) {
     const id = n.id;
     return (
@@ -105,15 +123,27 @@ export default function NotificationBell() {
                 : ""}
             </div>
           </div>
-          <div className="ml-3 text-right">
-            {!n.read && (
+          <div className="ml-3 text-right flex flex-col items-end gap-2">
+            <div>
+              {!n.read && (
+                <button
+                  onClick={() => markAsRead(id)}
+                  className="rounded-full text-sm px-1.5 py-1.5 bg-primary text-white rounded"
+                  title="Mark as read"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <div>
               <button
-                onClick={() => markAsRead(id)}
-                className="rounded-full text-sm px-1.5 py-1.5 bg-primary text-white rounded"
+                onClick={() => deleteNotification(id)}
+                className="rounded-full text-sm px-1.5 py-1.5 bg-red-600 text-white"
+                title="Delete notification"
               >
-                <Check className="w-3 h-3" />
+                <Trash2 className="w-3 h-3" />
               </button>
-            )}
+            </div>
           </div>
         </div>
       </div>
