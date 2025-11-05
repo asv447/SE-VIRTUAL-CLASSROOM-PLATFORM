@@ -26,17 +26,16 @@ export default function ClassroomPage() {
   // fetch classroom details
   const fetchClassroom = async () => {
     try {
-      const res = await fetch(`/api/classroom/${id}`);
+      // [FIXED] Use 'id' from useParams(), not 'course._id'
+      const res = await fetch(`/api/classroom/${id}`); 
       const data = await res.json();
-      console.log("Classroom API response:", data, "Status:", res.status);
-      if (!res.ok) throw new Error(data.error || `Failed with status ${res.status}`);
+      if (!res.ok) throw new Error(data.error || "Failed to load classroom");
       setClassroom(data.classroom);
     } catch (err) {
       console.error("Error fetching classroom:", err);
-      setError("Failed to load classroom details: " + err.message);
+      setError("Failed to load classroom details.");
     }
   };
-  
 
   // fetch stream posts for this classroom
   const fetchStreamPosts = async () => {
@@ -137,12 +136,14 @@ export default function ClassroomPage() {
 
             <div className="text-sm text-gray-700 space-y-1">
               <p>
+                {/* [FIXED] Use the 'instructor' field from the API response */}
                 <span className="font-semibold">Instructor:</span> {classroom.instructor}
               </p>
 
               <div className="flex items-center gap-3">
                 <p>
                   <span className="font-semibold">Class Code:</span>{" "}
+                  {/* [FIXED] Use the 'classCode' field from the API response */}
                   <span className="bg-gray-100 border px-3 py-1 rounded-md text-black">
                     {classroom.classCode}
                   </span>
@@ -263,6 +264,5 @@ export default function ClassroomPage() {
       </div>
     </div>
   );
-
 }
 
