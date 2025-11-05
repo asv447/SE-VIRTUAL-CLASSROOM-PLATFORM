@@ -54,6 +54,7 @@ import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 export default function ClassyncDashboard() {
+  const router = useRouter();
   // User state
   const [user, setUser] = useState(null)
   const [username, setUsername] = useState("")
@@ -530,7 +531,7 @@ export default function ClassyncDashboard() {
                     <Card
                       key={course.id}
                       className="hover:shadow-lg transition-shadow cursor-pointer group"
-                      onClick={() => router.push("/classroom")}
+                      onClick={() => router.push("../classroom")}
                     >
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
