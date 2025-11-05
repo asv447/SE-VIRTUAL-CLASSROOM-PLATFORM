@@ -26,7 +26,7 @@ export default function ClassroomDetails() {
   if (error) return <p className="text-center text-red-500">{error}</p>;
   if (!classroom) return <p className="text-center text-gray-500">Loading...</p>;
 
-  return (
+    return (
     <div className="min-h-screen bg-white text-black p-8">
       {/* Header Section */}
       <div className="border-b border-gray-300 pb-6 mb-6">
@@ -39,7 +39,7 @@ export default function ClassroomDetails() {
             className="border border-black text-sm px-2 py-1 rounded hover:bg-black hover:text-white transition"
           >
             Copy
-          </button>
+                    </button>
         </div>
       </div>
 
