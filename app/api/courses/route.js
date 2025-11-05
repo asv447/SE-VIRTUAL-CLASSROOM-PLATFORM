@@ -12,7 +12,7 @@ export async function GET(request) {
     let query = {};
     
     // If user is instructor, only show their courses
-    if (role === 'instructor') {
+    if (role === 'instructor' && userId) {
       query.instructorId = userId;
     }
     

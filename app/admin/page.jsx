@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
@@ -22,14 +23,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useSearchParams } from "next/navigation";
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") || "assignments";
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [classrooms, setClassrooms] = useState([]);
+  const [classroomsLoading, setClassroomsLoading] = useState(false);
+  const [classroomsError, setClassroomsError] = useState("");
   
   const [formLoading, setFormLoading] = useState(false);
   const [newCourse, setNewCourse] = useState({ name: "", code: "", description: "" });
@@ -51,14 +59,37 @@ export default function AdminDashboard() {
   const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
   const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
   const [viewingSubmissions, setViewingSubmissions] = useState(null);
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  const handleTabChange = (value) => {
+    setActiveTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "assignments") {
+      params.delete("tab");
+    } else {
+      params.set("tab", value);
+    }
+    const queryString = params.toString();
+    router.replace(queryString ? `/admin?${queryString}` : "/admin", { scroll: false });
+  };
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+    if (!tabParam && activeTab !== "assignments") {
+      // Keep current selection when navigating internally without query param
+      return;
+    }
+  }, [searchParams, activeTab]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
       if (usr) {
-
-        // HAVE NAI KARVU AA
-        // const isInstructorEmail = usr.email?.includes("@instructor.com") || 
-        //                         usr.email?.includes("@admin.com");
+        const isInstructorEmail =
+          usr.email?.includes("@instructor.com") ||
+          usr.email?.includes("@admin.com");
         
         // Check role from database
         try {
@@ -105,7 +136,8 @@ export default function AdminDashboard() {
     try {
       await Promise.all([
         loadCourses(),
-        loadAssignments()
+        loadAssignments(),
+        loadClassrooms()
       ]);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -116,7 +148,11 @@ export default function AdminDashboard() {
 
   const loadCourses = async () => {
     try {
-      const res = await fetch("/api/courses");
+      const params = new URLSearchParams({
+        userId: user?.uid || "",
+        role: "instructor",
+      });
+      const res = await fetch(`/api/courses?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setCourses(data);
@@ -135,6 +171,54 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error("Error loading assignments:", err);
+    }
+  };
+
+  const loadClassrooms = async () => {
+    if (!user) {
+      setClassrooms([]);
+      return;
+    }
+
+    setClassroomsLoading(true);
+    setClassroomsError("");
+    try {
+      const params = new URLSearchParams({
+        userId: user.uid,
+        email: user.email || "",
+        role: "instructor",
+      });
+
+      const res = await fetch(`/api/classrooms?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(`Failed to load classrooms (${res.status})`);
+      }
+
+      const payload = await res.json();
+      const classroomDocs = Array.isArray(payload.classrooms) ? payload.classrooms : [];
+
+      const normalized = classroomDocs.map((cls) => {
+        const rawId = cls.classroomId || cls.id || cls._id;
+        const id = rawId?.toString ? rawId.toString() : String(rawId || "");
+        return {
+          id,
+          classroomId: id,
+          title: cls.subjectName || cls.name || cls.courseCode || "Untitled Course",
+          description: cls.description || "",
+          courseCode: cls.courseCode || cls.code || "",
+          classCode: cls.classCode || "",
+          studentCount: Array.isArray(cls.students) ? cls.students.length : 0,
+          updatedAt: cls.updatedAt || cls.modifiedAt || cls.createdAt || null,
+        };
+      });
+
+      setClassrooms(normalized);
+    } catch (err) {
+      console.error("Error loading classrooms:", err);
+      setClassrooms([]);
+      setClassroomsError("Failed to load classrooms.");
+    } finally {
+      setClassroomsLoading(false);
     }
   };
 
@@ -164,8 +248,9 @@ export default function AdminDashboard() {
         return;
       }
 
-      const instructorId = user.uid;
-      const instructorName = (user.email && user.email.split("@")[0]) || instructorId;
+  const instructorId = user.uid;
+  const instructorName = (user.email && user.email.split("@")[0]) || instructorId;
+  const instructorEmail = user.email || "";
       const res = await fetch("/api/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -179,11 +264,28 @@ export default function AdminDashboard() {
       });
 
       if (res.ok) {
+        try {
+          await fetch("/api/classrooms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subjectName: courseName,
+              courseCode,
+              description: courseDescription,
+              instructorId,
+              instructorName,
+              instructorEmail,
+            }),
+          });
+        } catch (err) {
+          console.error("Error creating classroom document:", err);
+        }
+
         setCourseName("");
         setCourseCode("");
         setCourseDescription("");
         setIsCreateCourseOpen(false);
-        await loadCourses();
+        await Promise.all([loadCourses(), loadClassrooms()]);
         alert("Course created successfully!");
       } else {
         const error = await res.json();
@@ -279,6 +381,14 @@ export default function AdminDashboard() {
     await loadSubmissions(assignment.id);
   };
 
+  const handleOpenClassroom = (classroomId) => {
+    if (!classroomId) {
+      alert("Unable to open classroom. Identifier missing.");
+      return;
+    }
+    router.push(`/classroom?classId=${encodeURIComponent(classroomId)}&tab=announcements`);
+  };
+
   if (!user) {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
@@ -306,7 +416,7 @@ export default function AdminDashboard() {
         <p className="text-gray-600">Welcome, {user.displayName || user.email}</p>
       </div>
 
-      <Tabs defaultValue="assignments" className="space-y-4">
+  <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="assignments">Assignments</TabsTrigger>
@@ -370,20 +480,40 @@ export default function AdminDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              {courses.length === 0 ? (
-                <p className="text-gray-600 text-center py-8">No courses created yet.</p>
+              {classroomsLoading ? (
+                <p className="text-gray-600 text-center py-8">Loading classrooms…</p>
+              ) : classrooms.length === 0 ? (
+                <p className="text-gray-600 text-center py-8">
+                  {classroomsError || "No classrooms created yet."}
+                </p>
               ) : (
                 <div className="grid gap-4">
-                  {courses.map((course) => (
-                    <div key={course.id} className="border rounded-lg p-4">
+                  {classrooms.map((classroom) => (
+                    <div
+                      key={classroom.id}
+                      className="border rounded-lg p-4 transition hover:shadow cursor-pointer"
+                      onClick={() => handleOpenClassroom(classroom.classroomId)}
+                    >
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-semibold text-lg">{course.name}</h3>
-                          <p className="text-sm text-gray-600">Code: {course.code}</p>
-                          <p className="text-sm mt-2">{course.description}</p>
+                          <h3 className="font-semibold text-lg">{classroom.title}</h3>
+                          {classroom.courseCode ? (
+                            <p className="text-sm text-gray-600">Code: {classroom.courseCode}</p>
+                          ) : null}
+                          {classroom.classCode ? (
+                            <p className="text-sm text-gray-600">Class Code: {classroom.classCode}</p>
+                          ) : null}
+                          {classroom.description ? (
+                            <p className="text-sm mt-2 text-gray-700">{classroom.description}</p>
+                          ) : null}
+                          <p className="text-xs text-gray-500 mt-3">
+                            {classroom.studentCount} students enrolled
+                          </p>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          <p>{format(new Date(course.createdAt), "PPP")}</p>
+                        <div className="text-sm text-gray-500 text-right">
+                          {classroom.updatedAt ? (
+                            <p>Updated {format(new Date(classroom.updatedAt), "PPP")}</p>
+                          ) : null}
                         </div>
                       </div>
                     </div>

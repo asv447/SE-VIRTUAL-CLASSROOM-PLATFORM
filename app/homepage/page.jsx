@@ -55,6 +55,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 
 export default function ClassyncDashboard() {
   // User state
+  const router = useRouter()
   const [user, setUser] = useState(null)
   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
@@ -149,19 +150,11 @@ export default function ClassyncDashboard() {
   }
 
   // Courses state
-  const [courses, setCourses] = useState([
-    {
-      id: "1",
-      title: "Software Engineering",
-      description:
-        "It's the discipline of applying engineering principles to build, test, and maintain large, complex software systems efficiently and reliably.",
-      instructor: "Prof. Saurabh Tiwari",
-      students: 250,
-      progress: 80,
-      assignments: 10,
-      nextClass: "Tomorrow, 8:00 AM",
-    },
-  ]);
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [courseFetchError, setCourseFetchError] = useState("");
+  const [coursePickerOpen, setCoursePickerOpen] = useState(false);
+  const [coursePickerContext, setCoursePickerContext] = useState("announcements");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
     title: "",
@@ -222,18 +215,143 @@ export default function ClassyncDashboard() {
 
   // Create course
   const handleCreateCourse = () => {
+    if (!newCourse.title.trim()) {
+      toast.error("Please provide a course title");
+      return;
+    }
+
+    const classroomId = `local-${Date.now()}`;
     const course = {
-      id: Date.now().toString(),
+      id: classroomId,
+      classroomId,
       title: newCourse.title,
       description: newCourse.description,
-      instructor: "You",
-      students: 0,
-      progress: 0,
-      assignments: 0,
+      instructor: username || user?.email || "You",
+      instructorEmail: user?.email || "",
+      studentCount: 0,
+      progress: null,
+      assignmentCount: 0,
+      courseCode: newCourse.subject || "",
+      nextClass: "",
     };
-    setCourses([...courses, course]);
+    setCourses((prev) => [...prev, course]);
     setNewCourse({ title: "", description: "", subject: "" });
     setIsCreateDialogOpen(false);
+  };
+
+  const loadUserClassrooms = async (currentUser, instructorFlag) => {
+    setCoursesLoading(true);
+    setCourseFetchError("");
+    try {
+      const params = new URLSearchParams({
+        userId: currentUser.uid,
+        email: currentUser.email || "",
+        role: instructorFlag ? "instructor" : "student",
+      });
+
+      const response = await fetch(`/api/classrooms?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load classrooms (${response.status})`);
+      }
+
+      const payload = await response.json();
+      const classrooms = Array.isArray(payload.classrooms) ? payload.classrooms : [];
+
+      const normalized = classrooms.map((cls) => {
+        const rawId = cls.classroomId || cls.id || cls._id;
+        const normalizedId = rawId?.toString ? rawId.toString() : String(rawId || "");
+        return {
+          id: normalizedId,
+          classroomId: normalizedId,
+          title: cls.subjectName || cls.name || cls.courseCode || "Untitled Course",
+          description: cls.description || cls.summary || "",
+          instructor:
+            cls.professor?.name ||
+            cls.instructorName ||
+            username ||
+            currentUser.email?.split("@")[0] ||
+            "",
+          instructorEmail: cls.professor?.email || cls.instructorEmail || currentUser.email || "",
+          studentCount: Array.isArray(cls.students) ? cls.students.length : cls.studentCount || 0,
+          progress: typeof cls.progress === "number" ? cls.progress : null,
+          assignmentCount: Array.isArray(cls.assignments)
+            ? cls.assignments.length
+            : cls.assignmentCount || 0,
+          courseCode: cls.courseCode || cls.code || "",
+          classCode: cls.classCode || "",
+          nextClass: cls.nextClass || "",
+        };
+      });
+
+      setCourses(normalized);
+    } catch (error) {
+      console.error("Error loading classrooms:", error);
+      setCourses([]);
+      setCourseFetchError("Failed to load classrooms.");
+      toast.error("Failed to load your classrooms.");
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setCourses([]);
+      return;
+    }
+    if (loading) {
+      return;
+    }
+    loadUserClassrooms(user, isAdmin);
+  }, [user, isAdmin, loading]);
+
+  const buildClassroomUrl = (course, tab) => {
+    const classroomId = course?.classroomId || course?.id;
+    if (!classroomId) {
+      return null;
+    }
+    const params = new URLSearchParams({ classId: classroomId });
+    if (tab) {
+      params.set('tab', tab);
+    }
+    return `/classroom?${params.toString()}`;
+  };
+
+  const handleOpenClassroom = (course, tab) => {
+    const url = buildClassroomUrl(course, tab);
+    if (!url) {
+      toast.error('Unable to open classroom. Missing identifier.');
+      return;
+    }
+    router.push(url);
+  };
+
+  const openCoursePicker = (context) => {
+    if (!courses || courses.length === 0) {
+      toast.error('No classrooms found for your account yet.');
+      return;
+    }
+    if (courses.length === 1) {
+      const tab = context === 'announcements' ? 'announcements' : undefined;
+      handleOpenClassroom(courses[0], tab);
+      return;
+    }
+    setCoursePickerContext(context);
+    setCoursePickerOpen(true);
+  };
+
+  const handleSendAnnouncement = () => {
+    openCoursePicker('announcements');
+  };
+
+  const handleManageClassroom = () => {
+    router.push('/admin?tab=courses');
+  };
+
+  const handleSelectCourse = (course) => {
+    const targetTab = coursePickerContext === 'announcements' ? 'announcements' : undefined;
+    setCoursePickerOpen(false);
+    handleOpenClassroom(course, targetTab);
   };
 
   // Commented out original navbar - now using shared navbar with same register/login functionality
@@ -326,13 +444,16 @@ export default function ClassyncDashboard() {
                 <BarChart3 className="w-6 h-6" />
                 <span className="text-sm">View Analytics</span>
               </Button>
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2 bg-transparent cursor-pointer"
-              >
-                <MessageSquare className="w-6 h-6" />
-                <span className="text-sm">Send Announcement</span>
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col gap-2 bg-transparent cursor-pointer"
+                  onClick={handleSendAnnouncement}
+                >
+                  <MessageSquare className="w-6 h-6" />
+                  <span className="text-sm">Send Announcement</span>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 className="h-20 flex-col gap-2 bg-transparent"
@@ -343,11 +464,11 @@ export default function ClassyncDashboard() {
                   <span className="text-sm">AI Tools</span>
                 </a>
               </Button>
-              {user?.email?.includes("@instructor.com") ||
-              user?.email?.includes("@admin.com") ? (
+              {isAdmin ? (
                 <Button
                   variant="outline"
                   className="h-20 flex-col gap-2 bg-transparent"
+                  onClick={handleManageClassroom}
                 >
                   <Users className="w-6 h-6" />
                   <span className="text-sm">Manage Classroom</span>
@@ -512,12 +633,19 @@ export default function ClassyncDashboard() {
                 </Dialog>
               </div>
 
-              {courses.length === 0 ? (
+              {coursesLoading ? (
+                <Card className="p-12 text-center">
+                  <h3 className="text-xl font-semibold mb-2">Loading classrooms…</h3>
+                  <p className="text-muted-foreground">Fetching the classrooms linked to your account.</p>
+                </Card>
+              ) : courses.length === 0 ? (
                 <Card className="p-12 text-center">
                   <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-xl font-semibold mb-2">No courses yet</h3>
                   <p className="text-muted-foreground mb-4">
-                    Create your first course to get started
+                    {courseFetchError
+                      ? 'We could not load your classrooms. Try again later.'
+                      : 'Create your first course to get started'}
                   </p>
                   <Button onClick={() => setIsCreateDialogOpen(true)}>
                     <Plus className="w-4 h-4 mr-2" />
@@ -530,7 +658,7 @@ export default function ClassyncDashboard() {
                     <Card
                       key={course.id}
                       className="hover:shadow-lg transition-shadow cursor-pointer group"
-                      onClick={() => router.push("/classroom")}
+                      onClick={() => handleOpenClassroom(course, 'announcements')}
                     >
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
@@ -540,7 +668,7 @@ export default function ClassyncDashboard() {
                           {course.title}
                         </CardTitle>
                         <CardDescription className="text-sm">
-                          {course.description}
+                          {course.description || (course.courseCode ? `Course code: ${course.courseCode}` : "")}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
@@ -549,13 +677,18 @@ export default function ClassyncDashboard() {
                             <Badge variant="secondary" className="text-xs">
                               Instructor: {course.instructor}
                             </Badge>
+                            {course.courseCode ? (
+                              <Badge variant="outline" className="text-xs">
+                                {course.courseCode}
+                              </Badge>
+                            ) : null}
                           </div>
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Users className="w-4 h-4" />
-                            <span>{course.students}</span>
+                            <span>{course.studentCount}</span>
                           </div>
                         </div>
-                        {course.progress > 0 && (
+                        {typeof course.progress === 'number' ? (
                           <div className="space-y-2">
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">
@@ -572,12 +705,12 @@ export default function ClassyncDashboard() {
                               />
                             </div>
                           </div>
-                        )}
+                        ) : null}
                         <div className="flex items-center justify-between pt-2">
                           <div className="flex gap-2">
-                            {course.assignments > 0 && (
+                            {course.assignmentCount > 0 && (
                               <Badge variant="secondary" className="text-xs">
-                                {course.assignments} assignments
+                                {course.assignmentCount} assignments
                               </Badge>
                             )}
                             <Badge variant="outline" className="text-xs">
@@ -604,6 +737,49 @@ export default function ClassyncDashboard() {
           <div className="lg:col-span-1 space-y-6">{/* Sidebar content */}</div>
         </div>
       </main>
+
+      <Dialog open={coursePickerOpen} onOpenChange={setCoursePickerOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>
+              {coursePickerContext === 'announcements' ? 'Choose a classroom' : 'Open a classroom'}
+            </DialogTitle>
+            <DialogDescription>
+              Select one of your classrooms to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {courses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                You do not have any classrooms yet.
+              </p>
+            ) : (
+              courses.map((course) => (
+                <Button
+                  key={course.id}
+                  variant="outline"
+                  className="justify-start h-auto py-3"
+                  onClick={() => handleSelectCourse(course)}
+                >
+                  <div className="flex flex-col text-left w-full">
+                    <span className="font-semibold text-sm">{course.title}</span>
+                    {course.courseCode ? (
+                      <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                        {course.courseCode}
+                      </span>
+                    ) : null}
+                    {course.description ? (
+                      <span className="text-xs text-muted-foreground mt-1">
+                        {course.description}
+                      </span>
+                    ) : null}
+                  </div>
+                </Button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
-import Sidebar from "../sidebar/page";
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import CreateAnnouncement from '@/components/announcements/CreateAnnouncement';
+import AnnouncementList from '@/components/announcements/AnnouncementList';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const dummyClassroomData = {
     subjectName: 'Software Engineering',
@@ -12,6 +16,7 @@ const dummyClassroomData = {
         email: 'saurabh_tiwari@dau.ac.in' 
     },
     classCode: 'abcd123',
+    classroomId: 'SE_IT314_2025', // Added for announcements
     students: [
         { _id: 's1', name: '202301447', email: '202301447@dau.ac.in' },
         { _id: 's2', name: '202301184', email: '202301184@dau.ac.in' },
@@ -278,8 +283,118 @@ const ClassroomChat = ({ chatMessages, onSendMessage }) => {
 };
 
 export default function ClassroomPage() {
-    const [classroom, setClassroom] = useState(dummyClassroomData);
-    const [activeTab, setActiveTab] = useState('stream');
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const classroomId = searchParams.get('id') || searchParams.get('classId');
+    const requestedTab = searchParams.get('tab');
+    
+    const [classroom, setClassroom] = useState(null);
+    const [activeTab, setActiveTab] = useState('announcements');
+    const [user, setUser] = useState(null);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [username, setUsername] = useState('');
+    const [userRole, setUserRole] = useState('Student'); // Will be 'Professor', 'TA', or 'Student'
+    const [loading, setLoading] = useState(true);
+    const [authorized, setAuthorized] = useState(false);
+    const [error, setError] = useState('');
+
+    // Listen for auth state changes
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            if (currentUser) {
+                setUser(currentUser);
+                
+                try {
+                    // Check if email is instructor domain
+                    const isInstructorEmail = currentUser.email?.endsWith("@instructor.com") || 
+                                            currentUser.email?.endsWith("@admin.com");
+
+                    // Fetch user data from MongoDB API
+                    const res = await fetch(`/api/users?uid=${currentUser.uid}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const userName = data.user?.username || data.user?.name || currentUser.displayName || currentUser.email.split("@")[0];
+                        const isInstructor = data.user?.role === "instructor" || isInstructorEmail;
+                        
+                        setUsername(userName);
+                        setIsAdmin(isInstructor);
+                        setUserRole(isInstructor ? 'Professor' : 'Student');
+                    } else {
+                        // User not found in database, use defaults
+                        setUsername(currentUser.displayName || currentUser.email.split("@")[0]);
+                        setIsAdmin(isInstructorEmail);
+                        setUserRole(isInstructorEmail ? 'Professor' : 'Student');
+                    }
+                } catch (err) {
+                    console.error("Error fetching user data:", err);
+                    setUsername(currentUser.displayName || currentUser.email.split("@")[0]);
+                    setIsAdmin(false);
+                    setUserRole('Student');
+                }
+            } else {
+                setUser(null);
+                setUsername('');
+                setIsAdmin(false);
+                setUserRole('Student');
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Fetch classroom data from database
+    useEffect(() => {
+        if (user && classroomId) {
+            fetchClassroomData();
+        } else if (user && !classroomId) {
+            setAuthorized(false);
+            setError('No classroom selected.');
+            setLoading(false);
+        }
+    }, [user, classroomId]);
+
+    const fetchClassroomData = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            // Fetch classroom from API
+            const response = await fetch(`/api/classroom?classId=${classroomId}`);
+            
+            if (!response.ok) {
+                // If classroom not found in DB, fall back to dummy data
+                console.warn('Classroom not found in database, using dummy data');
+                setClassroom(dummyClassroomData);
+                setAuthorized(true);
+                setLoading(false);
+                return;
+            }
+
+            const classroomData = await response.json();
+            
+            // Check authorization: user must be instructor OR enrolled student
+            const isInstructor = classroomData.instructorId === user.uid || 
+                               classroomData.professor?._id === user.uid;
+            const isEnrolledStudent = classroomData.students?.some(
+                student => student._id === user.uid || student.uid === user.uid
+            );
+
+            if (!isInstructor && !isEnrolledStudent) {
+                setError('You are not authorized to view this classroom. You must be either the instructor or an enrolled student.');
+                setAuthorized(false);
+                setLoading(false);
+                return;
+            }
+
+            setClassroom(classroomData);
+            setAuthorized(true);
+        } catch (err) {
+            console.error('Error fetching classroom:', err);
+            // Fall back to dummy data on error
+            setClassroom(dummyClassroomData);
+            setAuthorized(true);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const sendGlobalMessage = (text) => {
         const newMsg = {
@@ -293,15 +408,47 @@ export default function ClassroomPage() {
         }));
     };
 
+    useEffect(() => {
+        if (!requestedTab) {
+            return;
+        }
+        const lowerTab = requestedTab.toLowerCase();
+        const validTabs = ['stream', 'announcements', 'assignments', 'chat', 'people'];
+        if (validTabs.includes(lowerTab)) {
+            setActiveTab(lowerTab);
+        }
+    }, [requestedTab]);
+
     const renderContent = () => {
         switch (activeTab) {
-            case 'stream':
+            case 'announcements':
                 return (
-                    <div>
-                        {classroom.posts && classroom.posts.length > 0 ? (
-                            classroom.posts.map(post => <Post key={post._id} post={post} />)
-                        ) : (
-                            <p className="text-gray-600">No posts in this classroom yet.</p>
+                    <div className="space-y-6">
+                        {/* Show create form only for admins/faculty */}
+                        {isAdmin && user && classroom && (
+                            <CreateAnnouncement
+                                classroomId={classroom.classroomId || classroom._id || classroom.id || classroomId}
+                                subject={classroom.subjectName || classroom.name || classroom.subject}
+                                authorName={username}
+                                authorRole={userRole}
+                                onAnnouncementCreated={() => {
+                                    // Refresh list is handled by the list component
+                                }}
+                            />
+                        )}
+                        
+                        {/* Show announcements list for everyone */}
+                        {classroom && (
+                            <AnnouncementList
+                                classroomId={classroom.classroomId || classroom._id || classroom.id || classroomId}
+                                isAdmin={isAdmin}
+                                                        currentUser={user ? {
+                                                            uid: user.uid,
+                                                            displayName: username,
+                                                            email: user.email,
+                                                            role: userRole
+                                                        } : null}
+                            />
                         )}
                     </div>
                 );
@@ -331,25 +478,50 @@ export default function ClassroomPage() {
 
     return (
         <div className="container mx-auto">
-            <ClassroomHeader
-                subjectName={classroom.subjectName}
-                courseCode={classroom.courseCode}
-                professorName={classroom.professor?.name}
-                classCode={classroom.classCode}
-            />
+            {loading ? (
+                <div className="flex items-center justify-center min-h-screen">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
+            ) : !authorized ? (
+                <div className="flex items-center justify-center min-h-screen">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
+                        <h2 className="text-xl font-bold text-red-900 mb-2">Access Denied</h2>
+                        <p className="text-red-700">{error || 'You are not authorized to view this classroom.'}</p>
+                        <button 
+                            onClick={() => router.push('/')}
+                            className="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                        >
+                            Go to Home
+                        </button>
+                    </div>
+                </div>
+            ) : !classroom ? (
+                <div className="flex items-center justify-center min-h-screen">
+                    <p className="text-gray-600">Classroom not found.</p>
+                </div>
+            ) : (
+                <>
+                    <ClassroomHeader
+                        subjectName={classroom.subjectName || classroom.name}
+                        courseCode={classroom.courseCode || classroom.code}
+                        professorName={classroom.professor?.name || classroom.instructorName}
+                        classCode={classroom.classCode || classroom.code}
+                    />
 
-            {/* Tabs: Stream → Assignments → Chat → People */}
-            <div className="bg-white rounded-lg shadow-sm mb-6">
-                <div className="flex justify-center border-b border-gray-200 space-x-1">
-                    <TabButton tabName="stream" label="Stream" />
-                    <TabButton tabName="assignments" label="Assignments" />
-                    <TabButton tabName="chat" label="Chat" />
-                    <TabButton tabName="people" label="People" />
-                </div>
-                <div className="p-4">
-                    {renderContent()}
-                </div>
-            </div>
+                    {/* Tabs: Stream → Announcements → Assignments → Chat → People */}
+                    <div className="bg-white rounded-lg shadow-sm mb-6">
+                        <div className="flex justify-center border-b border-gray-200 space-x-1">
+                            <TabButton tabName="announcements" label="Announcements" />
+                            <TabButton tabName="assignments" label="Assignments" />
+                            <TabButton tabName="chat" label="Chat" />
+                            <TabButton tabName="people" label="People" />
+                        </div>
+                        <div className="p-4">
+                            {renderContent()}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

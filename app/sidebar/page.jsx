@@ -1,10 +1,15 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Home, Calendar, Book, ChevronDown, Layers, Menu } from "lucide-react";
-import axios from "axios";
+import { Calendar, ChevronDown, Layers, Menu } from "lucide-react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function Sidebar() {
-  const [pathname, setPathname] = useState("/dashboard");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCoursesOpen, setIsCoursesOpen] = useState(true);
   const [isPinned, setIsPinned] = useState(true);
@@ -12,15 +17,26 @@ export default function Sidebar() {
   const [isResizing, setIsResizing] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState("student");
   const sidebarRef = useRef(null);
   const toggleRef = useRef(null);
 
   const minWidth = 64; // minimum width (w-16)
   const maxWidth = 400; // maximum width
+  const colorPalette = [
+    "bg-blue-500",
+    "bg-green-500",
+    "bg-purple-500",
+    "bg-amber-500",
+    "bg-rose-500",
+    "bg-teal-500",
+  ];
+  const activeClassId = pathname === "/classroom" ? searchParams.get("classId") : null;
 
   const navigate = (path) => {
-    setPathname(path);
-    console.log("Navigating to:", path);
+    router.push(path);
   };
 
   const handleToggle = () => {
@@ -103,29 +119,79 @@ export default function Sidebar() {
     };
   }, [isResizing]);
 
-  useEffect(() => {
-    // Hardcoded sample courses for demonstration
-    const sampleCourses = [
-      { id: 1, name: 'Software Engineering', color: 'bg-blue-500' },
-      { id: 2, name: 'Computer Networks', color: 'bg-green-500' },
-    ];
-    
-    // Uncomment the following code when you want to fetch real data
-    /*
-    const fetchCourses = async () => {
-      try {
-        const response = await axios.get("/api/classroom/courses");
-        setCourses(response.data);
-      } catch (error) {
-        console.error("Error fetching courses:", error);
+  const fetchClassrooms = async (currentUser, role) => {
+    setCoursesLoading(true);
+    try {
+      const params = new URLSearchParams({
+        userId: currentUser.uid,
+        email: currentUser.email || "",
+        role,
+      });
+      const response = await fetch(`/api/classrooms?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load classrooms (${response.status})`);
       }
-    };
-    fetchCourses();
-    */
-    
-    // Set the sample courses
-    setCourses(sampleCourses);
+
+      const payload = await response.json();
+      const classroomDocs = Array.isArray(payload.classrooms) ? payload.classrooms : [];
+
+      const normalized = classroomDocs.map((cls, index) => {
+        const rawId = cls.classroomId || cls.id || cls._id;
+        const id = rawId?.toString ? rawId.toString() : String(rawId || "");
+        return {
+          id,
+          name: cls.subjectName || cls.name || cls.courseCode || "Untitled Course",
+          color: colorPalette[index % colorPalette.length],
+        };
+      });
+
+      setCourses(normalized);
+    } catch (error) {
+      console.error("Error loading classrooms:", error);
+      setCourses([]);
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        try {
+          const res = await fetch(`/api/users/${currentUser.uid}`);
+          if (res.ok) {
+            const data = await res.json();
+            setUserRole(data.user.role === "instructor" ? "instructor" : "student");
+          } else {
+            const isInstructorEmail =
+              currentUser.email?.includes("@instructor.com") ||
+              currentUser.email?.includes("@admin.com");
+            setUserRole(isInstructorEmail ? "instructor" : "student");
+          }
+        } catch (error) {
+          console.error("Error loading user role:", error);
+          const isInstructorEmail =
+            currentUser.email?.includes("@instructor.com") ||
+            currentUser.email?.includes("@admin.com");
+          setUserRole(isInstructorEmail ? "instructor" : "student");
+        }
+      } else {
+        setUser(null);
+        setUserRole("student");
+        setCourses([]);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    fetchClassrooms(user, userRole);
+  }, [user, userRole]);
 
   return (
     <div
@@ -220,20 +286,33 @@ export default function Sidebar() {
 
                 {isCoursesOpen && !isCollapsed && (
                   <ul className="mt-1 space-y-1 pl-6">
-                    {courses.map((course) => (
-                      <li
-                        key={course.id}
-                        onClick={() => navigate(`/course/${course.id}`)}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
-                          pathname === `/course/${course.id}` ? "bg-gray-100" : ""
-                        }`}
-                      >
-                        <div
-                          className={`w-3 h-3 rounded-full flex-shrink-0 ${course.color}`}
-                        ></div>
-                        <span className="truncate">{course.name}</span>
+                    {coursesLoading ? (
+                      <li className="text-xs text-muted-foreground px-3 py-1">
+                        Loading classrooms…
                       </li>
-                    ))}
+                    ) : courses.length === 0 ? (
+                      <li className="text-xs text-muted-foreground px-3 py-1">
+                        No classrooms yet.
+                      </li>
+                    ) : (
+                      courses.map((course) => {
+                        const isActive = pathname === "/classroom" && activeClassId === course.id;
+                        return (
+                          <li
+                            key={course.id}
+                            onClick={() => navigate(`/classroom?classId=${course.id}&tab=announcements`)}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
+                              isActive ? "bg-gray-100" : ""
+                            }`}
+                          >
+                            <div
+                              className={`w-3 h-3 rounded-full flex-shrink-0 ${course.color}`}
+                            ></div>
+                            <span className="truncate">{course.name}</span>
+                          </li>
+                        );
+                      })
+                    )}
                   </ul>
                 )}
               </li>
