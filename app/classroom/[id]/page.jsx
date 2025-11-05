@@ -28,13 +28,15 @@ export default function ClassroomPage() {
     try {
       const res = await fetch(`/api/classroom/${id}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load classroom");
+      console.log("Classroom API response:", data, "Status:", res.status);
+      if (!res.ok) throw new Error(data.error || `Failed with status ${res.status}`);
       setClassroom(data.classroom);
     } catch (err) {
       console.error("Error fetching classroom:", err);
-      setError("Failed to load classroom details.");
+      setError("Failed to load classroom details: " + err.message);
     }
   };
+  
 
   // fetch stream posts for this classroom
   const fetchStreamPosts = async () => {
@@ -261,4 +263,6 @@ export default function ClassroomPage() {
       </div>
     </div>
   );
+
 }
+

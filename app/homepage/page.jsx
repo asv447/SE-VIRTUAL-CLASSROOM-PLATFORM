@@ -56,11 +56,22 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 export default function ClassyncDashboard() {
   // User state
   const [user, setUser] = useState(null)
+  const router = useRouter();
   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [pdfs, setPdfs] = useState([])
+  const [courses, setCourses] = useState([]);
+
   
+  useEffect(() => {
+    fetch("/api/courses")
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Courses from API:", data);
+        setCourses(data);
+      });
+  }, []);
   // Whiteboard state
   const { isOpen, currentFile, setCurrentFile, closeWhiteboard } = useWhiteboardStore()
 
@@ -149,19 +160,7 @@ export default function ClassyncDashboard() {
   }
 
   // Courses state
-  const [courses, setCourses] = useState([
-    {
-      id: "1",
-      title: "Software Engineering",
-      description:
-        "It's the discipline of applying engineering principles to build, test, and maintain large, complex software systems efficiently and reliably.",
-      instructor: "Prof. Saurabh Tiwari",
-      students: 250,
-      progress: 80,
-      assignments: 10,
-      nextClass: "Tomorrow, 8:00 AM",
-    },
-  ]);
+ 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
     title: "",
@@ -422,19 +421,23 @@ export default function ClassyncDashboard() {
                   open={isCreateDialogOpen}
                   onOpenChange={setIsCreateDialogOpen}
                 >
-                  <DialogTrigger asChild>
-                    <Button className=" cursor-pointer bg-primary hover:bg-primary/90">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Course
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Create New Course</DialogTitle>
-                      <DialogDescription>
-                        Set up a new classroom for your students
-                      </DialogDescription>
-                    </DialogHeader>
+                  {/* Only show the create button to non-students */}
+{isAdmin && (
+  <DialogTrigger asChild>
+    <Button className="cursor-pointer bg-primary hover:bg-primary/90">
+      <Plus className="w-4 h-4 mr-2" />
+      Create Course
+    </Button>
+  </DialogTrigger>
+)}
+
+<DialogContent className="sm:max-w-[425px]">
+  <DialogHeader>
+    <DialogTitle>Create New Course</DialogTitle>
+    <DialogDescription>
+      Set up a new classroom for your students
+    </DialogDescription>
+  </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
                         <Label htmlFor="title">Course Title</Label>
@@ -528,9 +531,9 @@ export default function ClassyncDashboard() {
                 <div className="max-w-md">
                   {courses.map((course) => (
                     <Card
-                      key={course.id}
+                      key={course._id}
                       className="hover:shadow-lg transition-shadow cursor-pointer group"
-                      onClick={() => router.push("/classroom")}
+                      onClick={() => router.push(`/classroom/${course._id}`)}
                     >
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
