@@ -52,36 +52,13 @@ export default function Login({ onBackToHome }) {
         setShowVerifyButton(true);
         return;
       }
-
-      // Check if email is instructor domain
-
       // Check user's role from the database
       try {
         const res = await fetch(`/api/users?uid=${user.uid}`);
         if (res.ok) {
           const data = await res.json();
-          const isInstructorRole = data.user?.role === "instructor";
-          const isInstructorEmail =
-            user.email?.endsWith("@instructor.com") ||
-            user.email?.endsWith("@admin.com");
-
-          // Redirect based on role or email
-          if (isInstructorRole || isInstructorEmail) {
-            router.push("/admin");
-          } else {
-            router.push("/homepage");
-          }
-        } else {
-          // If API fails, fallback to email check
-          const isInstructorEmail =
-            user.email?.endsWith("@instructor.com") ||
-            user.email?.endsWith("@admin.com");
-          if (isInstructorEmail) {
-            router.push("/admin");
-          } else {
-            router.push("/homepage");
-          }
-        }
+          router.push("/");
+         } 
       } catch (err) {
         console.error("Error verifying user role:", err);
         // Fallback to email check if database check fails
@@ -89,6 +66,7 @@ export default function Login({ onBackToHome }) {
     } catch (err) {
       setError(err.message);
     }
+    onBackToHome && onBackToHome();
   };
 
   const checkVeri = async () => {
@@ -98,6 +76,7 @@ export default function Login({ onBackToHome }) {
       setError("");
       setShowVerifyButton(false);
       router.push("/homepage");
+
     } else {
       setError("Email still not verified. Please check your inbox.");
     }
