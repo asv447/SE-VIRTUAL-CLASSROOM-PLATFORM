@@ -1,9 +1,16 @@
-"use client"
+"use client";
 
-import { useRef, useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useRef, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -43,8 +50,8 @@ import {
   Edit3,
 } from "lucide-react"
 
-import { auth } from "../../lib/firebase"
-import { onAuthStateChanged, signOut } from "firebase/auth"
+import { auth } from "../../lib/firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 
 export default function ClassyncDashboard() {
   // User state
@@ -145,68 +152,73 @@ export default function ClassyncDashboard() {
   const [courses, setCourses] = useState([
     {
       id: "1",
-      title: "Advanced Machine Learning",
-      description: "Deep dive into neural networks and AI algorithms",
-      instructor: "Dr. Sarah Chen",
-      students: 24,
-      progress: 68,
-      assignments: 3,
-      nextClass: "Today, 2:00 PM",
+      title: "Software Engineering",
+      description:
+        "It's the discipline of applying engineering principles to build, test, and maintain large, complex software systems efficiently and reliably.",
+      instructor: "Prof. Saurabh Tiwari",
+      students: 250,
+      progress: 80,
+      assignments: 10,
+      nextClass: "Tomorrow, 8:00 AM",
     },
-  ])
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [newCourse, setNewCourse] = useState({ title: "", description: "", subject: "" })
+  ]);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newCourse, setNewCourse] = useState({
+    title: "",
+    description: "",
+    subject: "",
+  });
 
   // Hover dropdown state
-  const [menuOpen, setMenuOpen] = useState(false)
-  const closeTimerRef = useRef(null)
-  const [isLoginOpen, setIsLoginOpen] = useState(false)
-  const [isRegisterOpen, setIsRegisterOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeTimerRef = useRef(null);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        setUser(currentUser)
-        setLoading(true)
-        
+        setUser(currentUser);
+        setLoading(true);
+
         try {
           // Fetch user data from MongoDB API
-          const res = await fetch(`/api/users/${currentUser.uid}`)
+          const res = await fetch(`/api/users/${currentUser.uid}`);
           if (res.ok) {
-            const data = await res.json()
-            setUsername(data.user.username || currentUser.email.split("@")[0])
-            setIsAdmin(data.user.role === "instructor")
+            const data = await res.json();
+            setUsername(data.user.username || currentUser.email.split("@")[0]);
+            setIsAdmin(data.user.role === "instructor");
           } else {
             // User not found in database, use defaults
-            setUsername(currentUser.email.split("@")[0])
-            setIsAdmin(false)
+            setUsername(currentUser.email.split("@")[0]);
+            setIsAdmin(false);
           }
         } catch (err) {
-          console.error("Error fetching user data:", err)
-          setUsername(currentUser.email.split("@")[0])
-          setIsAdmin(false)
+          console.error("Error fetching user data:", err);
+          setUsername(currentUser.email.split("@")[0]);
+          setIsAdmin(false);
         } finally {
-          setLoading(false)
+          setLoading(false);
         }
       } else {
-        setUser(null)
-        setUsername("")
-        setIsAdmin(false)
-        setLoading(false)
+        setUser(null);
+        setUsername("");
+        setIsAdmin(false);
+        setLoading(false);
       }
-    })
-    return () => unsubscribe()
-  }, [])
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Prevent background scroll when modal is open
   useEffect(() => {
     if (isLoginOpen || isRegisterOpen) {
-      document.body.style.overflow = "hidden"
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = ""
+      document.body.style.overflow = "";
     }
-  }, [isLoginOpen, isRegisterOpen])
+  }, [isLoginOpen, isRegisterOpen]);
 
   // Create course
   const handleCreateCourse = () => {
@@ -218,14 +230,14 @@ export default function ClassyncDashboard() {
       students: 0,
       progress: 0,
       assignments: 0,
-    }
-    setCourses([...courses, course])
-    setNewCourse({ title: "", description: "", subject: "" })
-    setIsCreateDialogOpen(false)
-  }
+    };
+    setCourses([...courses, course]);
+    setNewCourse({ title: "", description: "", subject: "" });
+    setIsCreateDialogOpen(false);
+  };
 
   // Commented out original navbar - now using shared navbar with same register/login functionality
-/*
+  /*
 // Original header - now using shared navbar from layout
 <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
   <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -272,25 +284,74 @@ export default function ClassyncDashboard() {
           <div className="lg:col-span-3 space-y-6">
             {/* Buttons row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {isAdmin  ? (
+              {isAdmin ? (
                 <>
-                  <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild>
-                    <a href="/admin"><FileText className="w-6 h-6" /><span className="text-sm">Admin Dashboard</span></a>
+                  <Button
+                    variant="outline"
+                    className="h-20 flex-col gap-2 bg-transparent"
+                    asChild
+                  >
+                    <a href="/admin">
+                      <FileText className="w-6 h-6" />
+                      <span className="text-sm">Admin Dashboard</span>
+                    </a>
                   </Button>
-                  <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild>
-                    <a href="/assignments"><Upload className="w-6 h-6" /><span className="text-sm">Create Assignment</span></a>
+                  <Button
+                    variant="outline"
+                    className="h-20 flex-col gap-2 bg-transparent"
+                    asChild
+                  >
+                    <a href="/assignments">
+                      <Upload className="w-6 h-6" />
+                      <span className="text-sm">Create Assignment</span>
+                    </a>
                   </Button>
                 </>
               ) : (
-                <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild>
-                  <a href="/student"><FileText className="w-6 h-6" /><span className="text-sm">Student Dashboard</span></a>
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col gap-2 bg-transparent"
+                  asChild
+                >
+                  <a href="/student">
+                    <FileText className="w-6 h-6" />
+                    <span className="text-sm">Student Dashboard</span>
+                  </a>
                 </Button>
               )}
-              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><BarChart3 className="w-6 h-6" /><span className="text-sm">View Analytics</span></Button>
-              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><MessageSquare className="w-6 h-6" /><span className="text-sm">Send Announcement</span></Button>
-              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent" asChild><a href="/ai-tools/chatbot"><Sparkles className="w-6 h-6" /><span className="text-sm">AI Tools</span></a></Button>
-              {user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com") ? (
-                <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><Users className="w-6 h-6" /><span className="text-sm">Manage Classroom</span></Button>
+              <Button
+                variant="outline"
+                className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+              >
+                <BarChart3 className="w-6 h-6" />
+                <span className="text-sm">View Analytics</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex-col gap-2 bg-transparent cursor-pointer"
+              >
+                <MessageSquare className="w-6 h-6" />
+                <span className="text-sm">Send Announcement</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex-col gap-2 bg-transparent"
+                asChild
+              >
+                <a href="/ai-tools/chatbot">
+                  <Sparkles className="w-6 h-6" />
+                  <span className="text-sm">AI Tools</span>
+                </a>
+              </Button>
+              {user?.email?.includes("@instructor.com") ||
+              user?.email?.includes("@admin.com") ? (
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col gap-2 bg-transparent"
+                >
+                  <Users className="w-6 h-6" />
+                  <span className="text-sm">Manage Classroom</span>
+                </Button>
               ) : null}
             </div>
 
@@ -350,38 +411,83 @@ export default function ClassyncDashboard() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-foreground">My Course</h1>
-                  <p className="text-muted-foreground mt-1">Manage your class and track progress</p>
+                  <h1 className="text-3xl font-bold text-foreground">
+                    My Course
+                  </h1>
+                  <p className="text-muted-foreground mt-1">
+                    Manage your class and track progress
+                  </p>
                 </div>
-                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <Dialog
+                  open={isCreateDialogOpen}
+                  onOpenChange={setIsCreateDialogOpen}
+                >
                   <DialogTrigger asChild>
-                    <Button className="bg-primary hover:bg-primary/90"><Plus className="w-4 h-4 mr-2" />Create Course</Button>
+                    <Button className=" cursor-pointer bg-primary hover:bg-primary/90">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Course
+                    </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                       <DialogTitle>Create New Course</DialogTitle>
-                      <DialogDescription>Set up a new classroom for your students</DialogDescription>
+                      <DialogDescription>
+                        Set up a new classroom for your students
+                      </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
                         <Label htmlFor="title">Course Title</Label>
-                        <Input id="title" value={newCourse.title} onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })} placeholder="e.g., Introduction to Python" />
+                        <Input
+                          id="title"
+                          value={newCourse.title}
+                          onChange={(e) =>
+                            setNewCourse({
+                              ...newCourse,
+                              title: e.target.value,
+                            })
+                          }
+                          placeholder="e.g., Introduction to Python"
+                        />
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="description">Description</Label>
-                        <Textarea id="description" value={newCourse.description} onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })} placeholder="Brief description of the course" />
+                        <Textarea
+                          id="description"
+                          value={newCourse.description}
+                          onChange={(e) =>
+                            setNewCourse({
+                              ...newCourse,
+                              description: e.target.value,
+                            })
+                          }
+                          placeholder="Brief description of the course"
+                        />
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="subject">Subject</Label>
-                        <Select value={newCourse.subject} onValueChange={(value) => setNewCourse({ ...newCourse, subject: value })}>
-                          <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                        <Select
+                          value={newCourse.subject}
+                          onValueChange={(value) =>
+                            setNewCourse({ ...newCourse, subject: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select subject" />
+                          </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="computer-science">Computer Science</SelectItem>
-                            <SelectItem value="mathematics">Mathematics</SelectItem>
+                            <SelectItem value="computer-science">
+                              Computer Science
+                            </SelectItem>
+                            <SelectItem value="mathematics">
+                              Mathematics
+                            </SelectItem>
                             <SelectItem value="physics">Physics</SelectItem>
                             <SelectItem value="chemistry">Chemistry</SelectItem>
                             <SelectItem value="biology">Biology</SelectItem>
-                            <SelectItem value="literature">Literature</SelectItem>
+                            <SelectItem value="literature">
+                              Literature
+                            </SelectItem>
                             <SelectItem value="history">History</SelectItem>
                             <SelectItem value="other">Other</SelectItem>
                           </SelectContent>
@@ -389,8 +495,18 @@ export default function ClassyncDashboard() {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-                      <Button onClick={handleCreateCourse} disabled={!newCourse.title}>Create Course</Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsCreateDialogOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleCreateCourse}
+                        disabled={!newCourse.title}
+                      >
+                        Create Course
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -400,44 +516,74 @@ export default function ClassyncDashboard() {
                 <Card className="p-12 text-center">
                   <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-xl font-semibold mb-2">No courses yet</h3>
-                  <p className="text-muted-foreground mb-4">Create your first course to get started</p>
-                  <Button onClick={() => setIsCreateDialogOpen(true)}><Plus className="w-4 h-4 mr-2" />Create Course</Button>
+                  <p className="text-muted-foreground mb-4">
+                    Create your first course to get started
+                  </p>
+                  <Button onClick={() => setIsCreateDialogOpen(true)}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Course
+                  </Button>
                 </Card>
               ) : (
                 <div className="max-w-md">
                   {courses.map((course) => (
-                    <Card key={course.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
+                    <Card
+                      key={course.id}
+                      className="hover:shadow-lg transition-shadow cursor-pointer group"
+                      onClick={() => router.push("/classroom")}
+                    >
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
                           <BookOpen className="w-8 h-8 text-foreground" />
                         </div>
-                        <CardTitle className="text-lg group-hover:text-primary transition-colors">{course.title}</CardTitle>
-                        <CardDescription className="text-sm">{course.description}</CardDescription>
+                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                          {course.title}
+                        </CardTitle>
+                        <CardDescription className="text-sm">
+                          {course.description}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">Instructor: {course.instructor}</Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              Instructor: {course.instructor}
+                            </Badge>
                           </div>
                           <div className="flex items-center gap-1 text-muted-foreground">
-                            <Users className="w-4 h-4" /><span>{course.students}</span>
+                            <Users className="w-4 h-4" />
+                            <span>{course.students}</span>
                           </div>
                         </div>
                         {course.progress > 0 && (
                           <div className="space-y-2">
                             <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Progress</span>
-                              <span className="font-medium">{course.progress}%</span>
+                              <span className="text-muted-foreground">
+                                Progress
+                              </span>
+                              <span className="font-medium">
+                                {course.progress}%
+                              </span>
                             </div>
                             <div className="w-full bg-secondary rounded-full h-2">
-                              <div className="bg-foreground h-2 rounded-full transition-all duration-300" style={{ width: `${course.progress}%` }} />
+                              <div
+                                className="bg-foreground h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${course.progress}%` }}
+                              />
                             </div>
                           </div>
                         )}
                         <div className="flex items-center justify-between pt-2">
                           <div className="flex gap-2">
-                            {course.assignments > 0 && <Badge variant="secondary" className="text-xs">{course.assignments} assignments</Badge>}
-                            <Badge variant="outline" className="text-xs"><Brain className="w-3 h-3 mr-1" />AI Enhanced</Badge>
+                            {course.assignments > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {course.assignments} assignments
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              <Brain className="w-3 h-3 mr-1" />
+                              AI Enhanced
+                            </Badge>
                           </div>
                         </div>
                         {course.nextClass && (
@@ -459,5 +605,5 @@ export default function ClassyncDashboard() {
         </div>
       </main>
     </div>
-  )
+  );
 }

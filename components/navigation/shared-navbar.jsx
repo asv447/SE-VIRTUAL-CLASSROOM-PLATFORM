@@ -6,6 +6,13 @@ import NotificationBell from "./notification-bell";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import {
+  onAuthStateChanged,
+  signOut,
+  sendPasswordResetEmail,
+} from "firebase/auth";
+import ResetPasswordModal from "../auth/ResetPass";
 
 // Dynamically import Login/Register to avoid SSR issues
 const Login = dynamic(() => import("../auth/Login"), {
@@ -18,9 +25,6 @@ const Register = dynamic(() => import("../auth/Register"), {
   loading: () => <div>Loading...</div>,
 });
 
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-
 export default function SharedNavbar() {
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
@@ -29,6 +33,28 @@ export default function SharedNavbar() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [loadingReset, setLoadingReset] = useState(false);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      setResetMessage("Please enter your registered email.");
+      return;
+    }
+
+    setLoadingReset(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetMessage("Password reset email sent! Check your inbox.");
+    } catch (err) {
+      setResetMessage(err.message);
+    } finally {
+      setLoadingReset(false);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -109,12 +135,13 @@ export default function SharedNavbar() {
             <button
               onClick={() => {
                 setIsProfileOpen(false);
-                router.push("/change-password");
+                setIsChangePasswordOpen(true);
               }}
               className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
             >
               Change password
             </button>
+
             <button
               onClick={() => {
                 setIsProfileOpen(false);
@@ -125,6 +152,13 @@ export default function SharedNavbar() {
               Logout
             </button>
           </div>
+        )}
+
+        {isChangePasswordOpen && mounted && (
+          <ResetPasswordModal
+            defaultEmail={user?.email || ""}
+            onClose={() => setIsChangePasswordOpen(false)}
+          />
         )}
       </div>
     );

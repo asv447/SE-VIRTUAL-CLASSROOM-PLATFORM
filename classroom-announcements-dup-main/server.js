@@ -4,20 +4,20 @@ require('dotenv').config();
 
 const connectDB = require('./config/database');
 const announcementRoutes = require('./routes/announcements');
+const logger = require('./utils/logger');
+const morgan = require('morgan');
 
 const app = express();
 
-// Connect to MongoDB
 connectDB();
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// API routes
+app.use(morgan('combined', { stream: logger.stream }));
+
 app.use('/api/announcements', announcementRoutes);
 
-// Health check route (optional but helpful)
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
@@ -26,9 +26,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err);
   res.status(500).json({
     success: false,
     message: "Internal server error",
@@ -36,7 +35,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Handle 404
 app.use('*', (req, res) => {
   res.status(404).json({
     success: false,
@@ -45,6 +43,17 @@ app.use('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection:', reason);
+  process.exit(1);
+});
+
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  logger.info(`Server running on port ${PORT}`);
 });

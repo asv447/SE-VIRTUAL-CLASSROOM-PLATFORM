@@ -1,8 +1,3 @@
-/**
- * Startup script to initialize MongoDB connection and seed initial data if needed
- * Run this once before starting the server for the first time
- */
-
 const mongoose = require('mongoose');
 const Announcement = require('./models/Announcements');
 const sampleAnnouncements = [
@@ -60,29 +55,30 @@ const sampleAnnouncements = [
 ];
 
 async function initializeDatabase() {
+  const logger = require('./utils/logger');
   try {
-    console.log('🔄 Initializing database...');
+    logger.info('Initializing database...');
     await mongoose.connect('mongodb://localhost:27017/announcement-system', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log('✅ MongoDB connected');
+    logger.info('MongoDB connected');
 
     const count = await Announcement.countDocuments();
     
     if (count === 0) {
-      console.log('📝 Database is empty. Seeding initial data...');
+      logger.info('Database is empty. Seeding initial data...');
       await Announcement.insertMany(sampleAnnouncements);
-      console.log('✅ Initial sample data inserted successfully');
+      logger.info('Initial sample data inserted successfully');
     } else {
-      console.log(`✅ Database already contains ${count} announcements`);
+      logger.info(`Database already contains ${count} announcements`);
     }
 
     await mongoose.connection.close();
-    console.log('✅ Database initialization complete!');
+    logger.info('Database initialization complete');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Error during initialization:', error.message);
+    logger.error('Error during initialization:', error.message);
     process.exit(1);
   }
 }

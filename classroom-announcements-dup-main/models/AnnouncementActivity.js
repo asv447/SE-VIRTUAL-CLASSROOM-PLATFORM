@@ -16,9 +16,8 @@ const announcementActivitySchema = new mongoose.Schema({
   performedBy: {
     name: { type: String, required: true },
     role: { type: String, required: true }
-    // You can expand this to include userID or email if you implement authentication later!
   },
-  meta: {}, // Any additional detail for the action
+  meta: {},
   timestamp: {
     type: Date,
     default: Date.now
