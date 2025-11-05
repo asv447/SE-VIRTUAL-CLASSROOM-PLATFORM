@@ -5,6 +5,10 @@ import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Copy } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea"; // [NEW] Import Textarea
+import { toast } from "sonner"; // [NEW] Import toast
+import { auth } from "../../../lib/firebase"; // [NEW] Import auth (fixed path)
+import { onAuthStateChanged } from "firebase/auth"; // [NEW] Import onAuthStateChanged
 
 /**
  * Classroom page
@@ -20,14 +24,20 @@ export default function ClassroomPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("stream");
 
+  // [NEW] State for logged-in user
+  const [user, setUser] = useState(null);
+  const [username, setUsername] = useState("Student");
+  const [isInstructor, setIsInstructor] = useState(false);
+
   // Stream posts from /api/stream?classId=<id>
   const [streamPosts, setStreamPosts] = useState([]);
+  const [postContent, setPostContent] = useState(""); // [NEW] State for new post input
 
   // fetch classroom details
   const fetchClassroom = async () => {
     try {
-      // [FIXED] Use 'id' from useParams(), not 'course._id'
-      const res = await fetch(`/api/classroom/${id}`); 
+      // [FIX] Use `id` from params, not `course._id`
+      const res = await fetch(`/api/classroom/${id}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load classroom");
       setClassroom(data.classroom);
@@ -54,6 +64,31 @@ export default function ClassroomPage() {
     }
   };
 
+  // [NEW] Get user role and name
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        // Fetch user data from MongoDB API to get role
+        try {
+          const res = await fetch(`/api/users/${currentUser.uid}`);
+          if (res.ok) {
+            const data = await res.json();
+            setUsername(data.user.username || "User");
+            setIsInstructor(data.user.role === "instructor");
+          }
+        } catch (err) {
+          console.error("Error fetching user details:", err);
+        }
+      } else {
+        setUser(null);
+        setUsername("Student");
+        setIsInstructor(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     if (!id) return;
     fetchClassroom();
@@ -69,10 +104,61 @@ export default function ClassroomPage() {
     }
   };
 
+  // [NEW] Function to create a new post
+  const handleCreatePost = async () => {
+    if (!postContent.trim() || !user) return;
+
+    const postContentTrimmed = postContent.trim();
+
+    // 1. Create the new post for the UI immediately (Optimistic Update)
+    const optimisticPost = {
+      id: `temp-${Date.now()}`, // Temporary ID
+      classId: id,
+      content: postContentTrimmed,
+      createdAt: new Date().toISOString(),
+      author: {
+        name: username, // Use the 'username' from state
+        id: user.uid,
+      },
+      comments: [],
+    };
+
+    // 2. Add it to the top of the stream
+    setStreamPosts([optimisticPost, ...streamPosts]);
+    setPostContent("");
+
+    // 3. Send the *real* data to the database
+    try {
+      const response = await fetch("/api/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: id,
+          authorId: user.uid, // The API expects authorId
+          content: postContentTrimmed,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save post");
+      }
+      
+      // On success, re-fetch to get the real data from DB
+      toast.success("Post created!");
+      fetchStreamPosts(); // This will replace the temp post with the real one
+    
+    } catch (err) {
+      toast.error(`Error: ${err.message}`);
+      // If it fails, roll back the optimistic update
+      setStreamPosts(streamPosts.filter(p => p.id !== optimisticPost.id));
+    }
+  };
+
+
   // Submit comment when user presses Enter inside a post input
   // optimistic update + send to /api/comments
   const handleCommentSubmit = async (e, post) => {
-    if (e.key !== "Enter") return;
+    if (e.key !== "Enter" || !user) return;
     const text = e.target.value.trim();
     if (!text) return;
 
@@ -80,11 +166,17 @@ export default function ClassroomPage() {
     const postId = post._id ?? post.id;
     if (!postId) return console.error("Missing post id");
 
-    // optimistic update
+    // [FIX] optimistic update with new comment object
+    const newComment = {
+      author: { name: username }, // [FIX] Use the username from state
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
     setStreamPosts((prev) =>
       prev.map((p) =>
         (p._id === post._id || p.id === post.id)
-          ? { ...p, comments: [...(p.comments || []), { author: "You", text, createdAt: new Date().toISOString() }] }
+          ? { ...p, comments: [...(p.comments || []), newComment] }
           : p
       )
     );
@@ -99,7 +191,7 @@ export default function ClassroomPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           postId: postId.toString(),
-          author: "You",
+          author: { name: username, id: user.uid }, // Send the author object
           text,
         }),
       });
@@ -107,12 +199,14 @@ export default function ClassroomPage() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         console.error("Failed to save comment:", body);
-        // Optionally: refetch the posts to get canonical data
+        toast.error("Failed to save comment.");
+        // Rollback on failure
         fetchStreamPosts();
       }
     } catch (err) {
       console.error("Error sending comment:", err);
-      // Optionally: refetch
+      toast.error("Error sending comment.");
+      // Rollback on failure
       fetchStreamPosts();
     }
   };
@@ -136,16 +230,14 @@ export default function ClassroomPage() {
 
             <div className="text-sm text-gray-700 space-y-1">
               <p>
-                {/* [FIXED] Use the 'instructor' field from the API response */}
-                <span className="font-semibold">Instructor:</span> {classroom.instructor}
+                <span className="font-semibold">Instructor:</span> {classroom.instructorName}
               </p>
 
               <div className="flex items-center gap-3">
                 <p>
                   <span className="font-semibold">Class Code:</span>{" "}
-                  {/* [FIXED] Use the 'classCode' field from the API response */}
                   <span className="bg-gray-100 border px-3 py-1 rounded-md text-black">
-                    {classroom.classCode}
+                    {classroom.courseCode}
                   </span>
                 </p>
 
@@ -184,7 +276,34 @@ export default function ClassroomPage() {
         <div className="mt-6">
           {/* STREAM */}
           {activeTab === "stream" && (
-            <div>
+            <div className="space-y-4">
+              {/* [NEW] "Create Post" card for instructors */}
+              {isInstructor && (
+                <Card className="border border-gray-300 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Create a new post</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Textarea
+                      placeholder={`Announce something to your class, ${username}...`}
+                      className="min-h-[80px] border-gray-300 focus:ring-gray-400"
+                      value={postContent}
+                      onChange={(e) => setPostContent(e.target.value)}
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={handleCreatePost}
+                        disabled={!postContent.trim()}
+                        className="bg-black text-white hover:bg-gray-800"
+                      >
+                        Post
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Stream Posts List */}
               {streamPosts.length === 0 ? (
                 <Card className="border border-gray-300 p-6 text-center text-gray-600">
                   No posts yet.
@@ -202,7 +321,8 @@ export default function ClassroomPage() {
                       >
                         <div className="flex justify-between items-center mb-2">
                           <span className="font-semibold text-gray-800">
-                            {post.author?.name ?? post.author?.username ?? post.author ?? "Unknown"}
+                            {/* [FIX] Safer render for author name, prevents crash */}
+                            {post.author?.name || "Unknown"}
                           </span>
                           <span className="text-sm text-gray-500">{createdAt}</span>
                         </div>
@@ -217,7 +337,10 @@ export default function ClassroomPage() {
                             ) : (
                               (post.comments || []).map((c, idx) => (
                                 <div key={idx} className="text-left">
-                                  <p className="text-sm font-semibold text-gray-800">{c.author ?? c.name}</p>
+                                  <p className="text-sm font-semibold text-gray-800">
+                                    {/* [FIX] Safer render for comment author */}
+                                    {c.author?.name || c.author || "Unknown"}
+                                  </p>
                                   <p className="text-xs text-gray-600">{c.text}</p>
                                 </div>
                               ))
