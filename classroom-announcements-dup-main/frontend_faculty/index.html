@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Page Header -->
     <header class="page-header">
         <div class="container">
             <div class="header-content">
@@ -17,7 +16,7 @@
                 </div>
             </div>
             
-            <!-- Navigation Tabs -->
+            
             <nav class="nav-tabs">
                 <a href="#" class="tab-link">Stream</a>
                 <a href="#" class="tab-link active">Announcements</a>
@@ -27,12 +26,12 @@
         </div>
     </header>
 
-    <!-- Main Content -->
+            
     <main class="main-content">
         <div class="container">
             <!-- Create Announcement Section -->
             <section class="create-section">
-                <h2 class="section-title">✍️ Create New Announcement</h2>
+                <h2 class="section-title">Create New Announcement</h2>
                 <form id="announcementForm" class="create-form">
                     <div class="form-group">
                         <label for="title" class="form-label">Title *</label>
@@ -47,7 +46,7 @@
                     <div class="form-group">
                         <label for="tags" class="form-label">Tags (comma-separated)</label>
                         <input type="text" id="tags" placeholder="e.g., Assignment, Exam, General" class="form-input">
-                        <small class="form-hint">📌 Available: Assignment, Exam, General, Database, Important, Urgent</small>
+                        <small class="form-hint">Available: Assignment, Exam, General, Database, Important, Urgent</small>
                     </div>
 
                     <div class="form-row-2">
@@ -64,25 +63,23 @@
                     <div class="form-checkboxes">
                         <label class="checkbox-label">
                             <input type="checkbox" id="isImportant">
-                            <span>⭐ Mark as Important</span>
+                            <span>Mark as Important</span>
                         </label>
                         <label class="checkbox-label">
                             <input type="checkbox" id="isUrgent">
-                            <span>🔴 Mark as Urgent</span>
+                            <span>Mark as Urgent</span>
                         </label>
                         <label class="checkbox-label">
                             <input type="checkbox" id="isPinned">
-                            <span>📌 Pin to Top</span>
+                            <span>Pin to Top</span>
                         </label>
                     </div>
 
-                    <button type="submit" class="btn-primary btn-post">📢 Post Announcement</button>
+                    <button type="submit" class="btn-primary btn-post">Post Announcement</button>
                 </form>
             </section>
-
-            <!-- Announcements Section -->
-            <section class="announcements-section">
-                <h2 class="section-title">📋 Manage Announcements</h2>
+                <section class="announcements-section">
+                <h2 class="section-title">Manage Announcements</h2>
                 
                 <!-- Search and Filter Bar -->
                 <div class="toolbar">
@@ -103,7 +100,7 @@
                     <button onclick="clearFilters()" class="clear-btn" type="button">Clear Filters</button>
                 </div>
 
-                <!-- Loading State -->
+                
                 <div id="loading" class="loading" style="display: none;">
                     <div class="spinner"></div>
                     <p>Loading announcements...</p>

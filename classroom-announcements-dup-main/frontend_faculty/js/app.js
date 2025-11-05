@@ -6,7 +6,6 @@ let currentSearch = '';
 let importantFilterActive = false;
 let urgentFilterActive = false;
 
-// Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadAnnouncements();
     
@@ -57,9 +56,9 @@ function displayAnnouncements(announcements) {
                 <div>
                     <h3 class="announcement-title">${ann.title}</h3>
                     <div class="badges">
-                        ${ann.isPinned ? '<span class="badge badge-pinned">📌 PINNED</span>' : ''}
-                        ${ann.isUrgent ? '<span class="badge badge-urgent">🔴 URGENT</span>' : ''}
-                        ${ann.isImportant ? '<span class="badge badge-important">⭐ IMPORTANT</span>' : ''}
+                        ${ann.isPinned ? '<span class="badge badge-pinned">PINNED</span>' : ''}
+                        ${ann.isUrgent ? '<span class="badge badge-urgent">URGENT</span>' : ''}
+                        ${ann.isImportant ? '<span class="badge badge-important">IMPORTANT</span>' : ''}
                     </div>
                 </div>
             </div>
@@ -67,21 +66,21 @@ function displayAnnouncements(announcements) {
                 ${ann.authorName} • ${ann.authorRole} • ${formatDate(ann.createdAt)}
             </div>
             <div class="announcement-content">${ann.content}</div>
-            
+
             ${ann.tags && ann.tags.length ? `
                 <div class="tags">
                     ${ann.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
                 </div>
             ` : ''}
-            
+
             ${ann.link && ann.link.url ? `
                 <div class="announcement-link">
                     <a href="${ann.link.url}" target="_blank" class="link-button">
-                        ${ann.link.text || 'View Link'} →
+                        ${ann.link.text || 'View Link'} >
                     </a>
                 </div>
             ` : ''}
-            
+
             <div class="action-buttons">
                 <button class="action-btn" onclick="editInPlace('${ann._id}')">Edit</button>
                 <button class="action-btn" onclick="togglePin('${ann._id}', ${ann.isPinned})">${ann.isPinned ? 'Unpin' : 'Pin'}</button>

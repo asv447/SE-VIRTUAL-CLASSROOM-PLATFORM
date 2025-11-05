@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 
-// Define the schema for announcements
 const announcementSchema = new mongoose.Schema({
-  // Basic announcement info
   title: {
     type: String,
     required: true,
@@ -12,8 +10,6 @@ const announcementSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  
-  // Author information
   authorName: {
     type: String,
     required: true
@@ -23,8 +19,6 @@ const announcementSchema = new mongoose.Schema({
     required: true,
     enum: ['Professor', 'TA', 'Instructor']
   },
-  
-  // Classroom association
   classroomId: {
     type: String,
     required: true
@@ -33,8 +27,6 @@ const announcementSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  
-  // Status flags
   isImportant: {
     type: Boolean,
     default: false
@@ -47,14 +39,10 @@ const announcementSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  
-  // Tags for categorization
   tags: [{
     type: String,
     trim: true
   }],
-  
-  // Link to assignment/quiz (simplified attachment)
   link: {
     url: {
       type: String,
@@ -66,8 +54,6 @@ const announcementSchema = new mongoose.Schema({
       default: 'View Link'
     }
   },
-  
-  // Edit History for undo functionality
   editHistory: [{
     title: String,
     content: String,
@@ -84,8 +70,6 @@ const announcementSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-  
-  // Timestamps
   createdAt: {
     type: Date,
     default: Date.now
@@ -98,7 +82,6 @@ const announcementSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for performance
 announcementSchema.index({ classroomId: 1, isPinned: -1, createdAt: -1 });
 announcementSchema.index({ classroomId: 1, isUrgent: -1, createdAt: -1 });
 announcementSchema.index({ tags: 1 });

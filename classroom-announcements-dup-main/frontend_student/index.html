@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Page Header -->
     <header class="page-header">
         <div class="container">
             <div class="header-content">
@@ -17,7 +16,7 @@
                 </div>
             </div>
             
-            <!-- Navigation Tabs -->
+            
             <nav class="nav-tabs">
                 <a href="#" class="tab-link">Stream</a>
                 <a href="#" class="tab-link active">Announcements</a>
@@ -33,7 +32,7 @@
             <div class="content-header">
                 <h2 class="section-title">Recent Announcements</h2>
                 
-                <!-- Search and Filter Bar -->
+                
                 <div class="toolbar">
                     <div class="search-box">
                         <input type="text" id="searchInput" placeholder="Search announcements..." class="search-input">
@@ -53,18 +52,17 @@
                 </div>
             </div>
 
-            <!-- Loading State -->
+            
             <div id="loading" class="loading" style="display: none;">
                 <div class="spinner"></div>
                 <p>Loading announcements...</p>
             </div>
 
-            <!-- Error State -->
             <div id="error" class="error-message" style="display: none;">
-                <p>⚠️ Failed to load announcements. Please refresh the page.</p>
+                <p>Failed to load announcements. Please refresh the page.</p>
             </div>
-
-            <!-- Announcements List -->
+            
+            
             <div id="announcements" class="announcements-grid"></div>
         </div>
     </main>

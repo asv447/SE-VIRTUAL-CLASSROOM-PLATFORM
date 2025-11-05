@@ -59,7 +59,9 @@ export default function NotificationBell() {
         body: JSON.stringify({ id }),
       });
       if (res.ok) {
-        setNotifications((prev) => prev.map((p) => (p.id === id ? { ...p, read: true } : p)));
+        setNotifications((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, read: true } : p))
+        );
       }
     } catch (err) {
       console.error("markAsRead error:", err);
@@ -85,16 +87,30 @@ export default function NotificationBell() {
   function renderNotification(n) {
     const id = n.id;
     return (
-      <div key={id} className={`p-3 border-b last:border-b-0 ${n.read ? 'bg-white/50' : 'bg-white'} `}>
+      <div
+        key={id}
+        className={`p-3 border-b last:border-b-0 ${
+          n.read ? "bg-white/50" : "bg-white"
+        } `}
+      >
         <div className="flex justify-between items-start">
           <div>
-            <div className="font-medium text-sm">{n.title || 'Notification'}</div>
+            <div className="font-medium text-sm">
+              {n.title || "Notification"}
+            </div>
             <div className="text-xs text-muted-foreground">{n.message}</div>
-            <div className="text-xs text-muted-foreground mt-1">{n.createdAt ? formatDistanceToNow(new Date(n.createdAt)) + ' ago' : ''}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {n.createdAt
+                ? formatDistanceToNow(new Date(n.createdAt)) + " ago"
+                : ""}
+            </div>
           </div>
           <div className="ml-3 text-right">
             {!n.read && (
-              <button onClick={() => markAsRead(id)} className="rounded-full text-sm px-1.5 py-1.5 bg-primary text-white rounded">
+              <button
+                onClick={() => markAsRead(id)}
+                className="rounded-full text-sm px-1.5 py-1.5 bg-primary text-white rounded"
+              >
                 <Check className="w-3 h-3" />
               </button>
             )}
@@ -111,10 +127,10 @@ export default function NotificationBell() {
         className="relative w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-medium"
         title="Notifications"
       >
-        <Bell className="w-5 h-5" />
+        <Bell className="w-5 h-5 cursor-pointer" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 w-4 h-4 bg-foreground rounded-full text-[10px] flex items-center justify-center text-background">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
@@ -124,18 +140,23 @@ export default function NotificationBell() {
           <div className="flex items-center justify-between px-3 py-2 border-b">
             <div className="font-medium">Notifications</div>
             <div className="flex items-center gap-2">
-              <button onClick={markAllAsRead} className="text-xs text-muted-foreground hover:underline">
-                Mark all
+              <button
+                onClick={markAllAsRead}
+                className="text-xs text-muted-foreground hover:underline cursor-pointer"
+              >
+                Mark all as read
               </button>
               <button onClick={() => setOpen(false)} className="p-1">
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 cursor-pointer" />
               </button>
             </div>
           </div>
 
           <div className="max-h-72 overflow-auto">
             {loading && <div className="p-3 text-sm">Loading...</div>}
-            {!loading && notifications.length === 0 && <div className="p-3 text-sm">No notifications</div>}
+            {!loading && notifications.length === 0 && (
+              <div className="p-3 text-sm">No notifications</div>
+            )}
             {!loading && notifications.map((n) => renderNotification(n))}
           </div>
         </div>
