@@ -57,11 +57,33 @@ export default function ClassyncDashboard() {
   const router = useRouter();
   // User state
   const [user, setUser] = useState(null)
+  const router = useRouter();
   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [pdfs, setPdfs] = useState([])
+  const [courses, setCourses] = useState([]);
+
   
+  // [NEW] Extracted course fetching logic
+  const fetchCourses = async () => {
+    try {
+      const res = await fetch("/api/courses");
+      if (!res.ok) throw new Error("Failed to fetch courses");
+      const data = await res.json();
+      console.log("Courses from API:", data);
+      setCourses(data);
+    } catch (error) {
+      console.error("Error fetching courses:", error);
+      toast.error("Could not load courses.");
+    }
+  };
+
+  // Fetches courses on mount
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
   // Whiteboard state
   const { isOpen, currentFile, setCurrentFile, closeWhiteboard } = useWhiteboardStore()
 
@@ -150,19 +172,7 @@ export default function ClassyncDashboard() {
   }
 
   // Courses state
-  const [courses, setCourses] = useState([
-    {
-      id: "1",
-      title: "Software Engineering",
-      description:
-        "It's the discipline of applying engineering principles to build, test, and maintain large, complex software systems efficiently and reliably.",
-      instructor: "Prof. Saurabh Tiwari",
-      students: 250,
-      progress: 80,
-      assignments: 10,
-      nextClass: "Tomorrow, 8:00 AM",
-    },
-  ]);
+  
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
     title: "",
@@ -221,61 +231,57 @@ export default function ClassyncDashboard() {
     }
   }, [isLoginOpen, isRegisterOpen]);
 
-  // Create course
-  const handleCreateCourse = () => {
-    const course = {
-      id: Date.now().toString(),
-      title: newCourse.title,
-      description: newCourse.description,
-      instructor: "You",
-      students: 0,
-      progress: 0,
-      assignments: 0,
-    };
-    setCourses([...courses, course]);
-    setNewCourse({ title: "", description: "", subject: "" });
-    setIsCreateDialogOpen(false);
+  // [FIXED] Create course - This now saves to the database
+  const handleCreateCourse = async () => {
+    if (!user) {
+      toast.error("You must be logged in to create a course.");
+      return;
+    }
+
+    const loadingToastId = toast.loading("Creating course...");
+
+    try {
+      // We will also generate a course code here
+      const courseCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      const courseData = {
+        title: newCourse.title,
+        description: newCourse.description,
+        subject: newCourse.subject,
+        instructorName: username, // Send instructor's name
+        instructorId: user.uid,   // Send instructor's ID
+        courseCode: courseCode, // Send the new code
+        students: [], // Start with an empty student list
+      };
+
+      const response = await fetch("/api/courses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(courseData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create course on server");
+      }
+
+      // Success
+      toast.success("Course created successfully!", { id: loadingToastId });
+      setNewCourse({ title: "", description: "", subject: "" });
+      setIsCreateDialogOpen(false);
+      
+      // Refresh the courses list from the server
+      await fetchCourses();
+
+    } catch (error) {
+      console.error("Error creating course:", error);
+      toast.error(`Error: ${error.message || "Failed to create"}`, { id: loadingToastId });
+    }
   };
 
-  // Commented out original navbar - now using shared navbar with same register/login functionality
-  /*
-// Original header - now using shared navbar from layout
-<header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-  <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-    <div className="flex items-center space-x-2">
-      <div className="w-8 h-8 flex items-center justify-center">
-        <img src="/classync-logo.png" alt="Classync Logo" className="w-8 h-8 object-contain" />
-      </div>
-      <span className="text-xl font-bold text-foreground">Classync</span>
-    </div>
-    <nav className="hidden md:flex items-center space-x-8">
-      <a href="#" className="text-foreground hover:text-primary transition-colors font-medium">Home</a>
-      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Courses</a>
-      <a href="../assignments" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</a>
-      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">Progress</a>
-      <a href="#" className="text-muted-foreground hover:text-primary transition-colors font-medium">AI Tools</a>
-    </nav>
-    <div className="flex items-center space-x-4">
-      <Button variant="ghost" size="icon" className="relative">
-        <Bell className="w-5 h-5" />
-        <span className="absolute -top-1 -right-1 w-3 h-3 bg-foreground rounded-full text-xs flex items-center justify-center text-background">2</span>
-      </Button>
-      <div className="relative">
-        {user ? (
-          <div className="flex items-center gap-2">
-            <span className="text-foreground font-medium">{username}</span>
-            <Button size="sm" variant="outline" onClick={() => signOut(auth)}>
-              Logout
-            </Button>
-          </div>
-        ) : (
-          <Button variant="outline" onClick={() => setIsRegisterOpen(true)}>Register / Login</Button>
-        )}
-      </div>
-    </div>
-  </div>
-</header>
-*/
+  // ... (Commented out navbar remains) ...
+
   return (
     <div className="min-h-screen bg-background relative">
       {/* Main Content */}
@@ -423,12 +429,16 @@ export default function ClassyncDashboard() {
                   open={isCreateDialogOpen}
                   onOpenChange={setIsCreateDialogOpen}
                 >
+                  {/* Only show the create button to non-students */}
+                  {isAdmin && (
                   <DialogTrigger asChild>
-                    <Button className=" cursor-pointer bg-primary hover:bg-primary/90">
+                    <Button className="cursor-pointer bg-primary hover:bg-primary/90">
                       <Plus className="w-4 h-4 mr-2" />
                       Create Course
                     </Button>
                   </DialogTrigger>
+                  )}
+
                   <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                       <DialogTitle>Create New Course</DialogTitle>
@@ -518,27 +528,45 @@ export default function ClassyncDashboard() {
                   <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-xl font-semibold mb-2">No courses yet</h3>
                   <p className="text-muted-foreground mb-4">
-                    Create your first course to get started
+                    { isAdmin ? "Create your first course to get started" : "You are not enrolled in any courses yet." }
                   </p>
-                  <Button onClick={() => setIsCreateDialogOpen(true)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Course
-                  </Button>
+                  { /* Only show create button on empty list if user is admin */ }
+                  { isAdmin && (
+                    <Button onClick={() => setIsCreateDialogOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Course
+                    </Button>
+                  )}
                 </Card>
               ) : (
                 <div className="max-w-md">
                   {courses.map((course) => (
                     <Card
-                      key={course.id}
+                      // [FIX 1] Use course.id for the key
+                      key={course.id} 
                       className="hover:shadow-lg transition-shadow cursor-pointer group"
+<<<<<<< HEAD
                       onClick={() => router.push("../classroom")}
+=======
+                      onClick={() => {
+                        // [FIX 2] Use course.id in the click handler
+                        console.log("Navigating with id:", course.id); 
+                        if (course.id) {
+                          // [FIX 3] Use course.id to navigate
+                          router.push(`/classroom/${course.id}`);
+                        } else {
+                          toast.error("Error: This course has no ID.");
+                        }
+                      }}
+>>>>>>> 86d653ff18849bd4276b0756f8221e55858a7c5d
                     >
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
                           <BookOpen className="w-8 h-8 text-foreground" />
                         </div>
                         <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                          {course.title}
+                          {/* [FIXED] Use 'name' from API response */ }
+                          {course.name || course.title} 
                         </CardTitle>
                         <CardDescription className="text-sm">
                           {course.description}
@@ -548,12 +576,14 @@ export default function ClassyncDashboard() {
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-xs">
-                              Instructor: {course.instructor}
+                              {/* [FIXED] Show instructorName from course data */}
+                              Instructor: {course.instructorName || course.instructor}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Users className="w-4 h-4" />
-                            <span>{course.students}</span>
+                            {/* [FIXED] Show student count from course data */}
+                            <span>{course.students?.length || 0}</span>
                           </div>
                         </div>
                         {course.progress > 0 && (
@@ -608,3 +638,4 @@ export default function ClassyncDashboard() {
     </div>
   );
 }
+
