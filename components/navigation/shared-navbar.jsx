@@ -174,18 +174,25 @@ export default function SharedNavbar() {
 
     return (
       <div className="relative" ref={profileRef}>
-        <button
-          onClick={() => setIsProfileOpen((s) => !s)}
-          aria-expanded={isProfileOpen}
-          aria-haspopup="true"
-          className="cursor-pointer w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-medium uppercase"
-          title={username || "User"}
-        >
-          {(username && username[0]) || "U"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsProfileOpen((s) => !s)}
+            aria-expanded={isProfileOpen}
+            aria-haspopup="true"
+            className="cursor-pointer w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-medium uppercase"
+            title={username || "User"}
+          >
+            {(username && username[0]) || "U"}
+          </button>
+        </div>
 
         {isProfileOpen && (
           <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 z-50 ring-1 ring-black/5">
+            <div className="flex flex-col justify-center items-left w-full text-left px-4 py-2 text-sm text-muted-foreground border-b border-border gap-0.5">
+              <p>{username}</p>
+              <p className="text-xs">{user?.email}</p>
+            </div>
+
             <button
               onClick={() => {
                 setIsProfileOpen(false);
