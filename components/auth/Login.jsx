@@ -4,10 +4,13 @@ import { useRouter } from "next/navigation";
 import Register from "./Register";
 import { auth } from "../../lib/firebase";
 import {
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
 } from "firebase/auth";
+import ResetPasswordModal from "./ResetPass";
+
 export default function Login({ onBackToHome }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,6 +18,22 @@ export default function Login({ onBackToHome }) {
   const [showRegister, setShowRegister] = useState(false);
   const [showVerifyButton, setShowVerifyButton] = useState(false);
   const router = useRouter();
+  const [showForgot, setShowForgot] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+
+  const handleForgotPassword = async () => {
+    if (!resetEmail) {
+      setResetMessage("Please enter your email.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetMessage("Password reset email sent! Check your inbox.");
+    } catch (error) {
+      setResetMessage(error.message);
+    }
+  };
 
   const handleEmailLogin = async (e) => {
     //manual
@@ -191,7 +210,18 @@ export default function Login({ onBackToHome }) {
             </button>
           )}
 
-          <div className="text-center space-y-2 pt-2">
+          <div className="flex flex-col text-center space-y-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowForgot(true)}
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium cursor-pointer"
+            >
+              Forgot password?
+            </button>
+            {showForgot && (
+              <ResetPasswordModal onClose={() => setShowForgot(false)} />
+            )}
+
             <button
               type="button"
               onClick={() => setShowRegister(true)}
@@ -199,6 +229,7 @@ export default function Login({ onBackToHome }) {
             >
               Don&apos;t have an account? Sign up
             </button>
+
             {onBackToHome && (
               <button
                 type="button"
