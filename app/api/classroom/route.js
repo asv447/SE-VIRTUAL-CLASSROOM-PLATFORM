@@ -1,53 +1,56 @@
-import { NextResponse } from 'next/server';
-import { getClassroomsCollection, getAssignmentsCollection } from '@/lib/mongodb';  // Your file
+import { NextResponse } from "next/server";
+import clientPromise from "@/lib/mongodb";
 
-export async function GET(request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const classId = searchParams.get('classId') || '1';  // From query param
+    const client = await clientPromise;
+    const db = client.db();
+    const classrooms = await db.collection("classrooms").find({}).toArray();
 
-    const classrooms = await getClassroomsCollection();
-    const assignments = await getAssignmentsCollection();
-
-    const classroom = await classrooms.findOne({ _id: classId });
-    if (!classroom) {
-      return NextResponse.json({ error: 'Class not found' }, { status: 404 });
-    }
-
-    // Fetch related posts/assignments
-    classroom.posts = await assignments.find({ classId }).toArray();
-
-    return NextResponse.json(classroom);
+    return NextResponse.json({ classrooms }, { status: 200 });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error("Error fetching classrooms:", error);
+    return NextResponse.json({ error: "Failed to fetch classrooms" }, { status: 500 });
   }
 }
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { action, classId, data } = body;
+    const { title, description, subject, instructor, instructorEmail, classCode, students, createdAt } = body;
 
-    if (action === 'addComment') {
-      // data: { postId, text }
-      const assignments = await getAssignmentsCollection();
-      await assignments.updateOne(
-        { _id: data.postId, classId },
-        { $push: { chats: { author: { name: 'You', uid: 'currentUserUid' }, text: data.text, timestamp: new Date() } } }  // Replace 'currentUserUid' with Firebase auth
-      );
-    } else if (action === 'addGlobalChat') {
-      // Add to classrooms.classroomChat or separate collection
-      const classrooms = await getClassroomsCollection();
-      await classrooms.updateOne(
-        { _id: classId },
-        { $push: { classroomChat: { author: { name: 'You', uid: 'currentUserUid' }, text: data.text, timestamp: new Date() } } }
-      );
+    // Validate required fields
+    if (!title || !instructor || !instructorEmail || !classCode) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true });
+    const client = await clientPromise;
+    const db = client.db();
+
+    // Create classroom object
+    const newClassroom = {
+      title,
+      description,
+      subject,
+      instructor,
+      instructorEmail,
+      classCode,
+      students: students || [],
+      assignments: [],
+      posts: [],
+      chat: [],
+      createdAt: createdAt || new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await db.collection("classrooms").insertOne(newClassroom);
+
+    return NextResponse.json(
+      { message: "Classroom created successfully", classroom: { _id: result.insertedId, ...newClassroom } },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error("Error creating classroom:", error);
+    return NextResponse.json({ error: "Failed to create classroom" }, { status: 500 });
   }
 }
