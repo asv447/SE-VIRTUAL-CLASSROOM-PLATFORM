@@ -67,3 +67,24 @@ export async function PATCH(request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+// DELETE: remove a notification by id
+export async function DELETE(request) {
+  try {
+    const payload = await request.json();
+    if (!payload || !payload.id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    const col = await getNotificationsCollection();
+    const _id = new ObjectId(payload.id);
+    const result = await col.deleteOne({ _id });
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ error: "Notification not found" }, { status: 404 });
+    }
+    return NextResponse.json({ message: "Deleted" }, { status: 200 });
+  } catch (err) {
+    console.error("[API /api/notifications] DELETE error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
