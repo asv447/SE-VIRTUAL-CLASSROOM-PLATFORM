@@ -49,7 +49,13 @@ export async function POST(request) {
     const instructorId = formData.get("instructorId");
     const instructorName = formData.get("instructorName");
     
-    if (!courseId || !title || !description || !deadline || !instructorId || !instructorName) {
+    // Allow two modes:
+    // 1) Full assignment creation (courseId, title, description, deadline, instructorId, instructorName)
+    // 2) File-only upload (used by whiteboard) - accept when only a file is provided
+    const isFullCreate = courseId && title && description && deadline && instructorId && instructorName;
+    const isFileOnly = file && file.size > 0 && !(courseId && title && description && deadline && instructorId && instructorName);
+
+    if (!isFullCreate && !isFileOnly) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -66,14 +72,15 @@ export async function POST(request) {
         console.error("File processing failed:", uploadError);
       }
     }
-    
+
+    // Build assignment object. For file-only uploads, fill minimal metadata.
     const newAssignment = {
       _id: new ObjectId(assignmentId),
-      classId: courseId,
-      courseId: courseId,
-      title,
-      description,
-      deadline,
+      classId: courseId || null,
+      courseId: courseId || null,
+      title: title || (fileData ? fileData.name : 'Uploaded File'),
+      description: description || (fileData ? 'Uploaded via whiteboard editor' : ''),
+      deadline: deadline || null,
       fileUrl,
       fileData,
       createdAt: new Date(),
