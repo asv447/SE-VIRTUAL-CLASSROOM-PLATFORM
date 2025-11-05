@@ -17,7 +17,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload } from "lucide-react";
+import { Upload } from "lucide-react"
+import dynamic from 'next/dynamic'
+import useWhiteboardStore from '@/hooks/use-whiteboard'
+
+const WhiteboardViewer = dynamic(() => import('@/components/whiteboard/WhiteboardViewer'), {
+  ssr: false,
+  loading: () => <p>Loading whiteboard...</p>
+});
+import { toast } from "sonner"
 
 import {
   LogIn as LogInIcon,
@@ -32,6 +40,7 @@ import {
   BarChart3,
   MessageSquare,
   Sparkles,
+  Edit3,
 } from "lucide-react"
 
 import { auth } from "../../lib/firebase"
@@ -43,6 +52,94 @@ export default function ClassyncDashboard() {
   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [pdfs, setPdfs] = useState([])
+  
+  // Whiteboard state
+  const { isOpen, currentFile, setCurrentFile, closeWhiteboard } = useWhiteboardStore()
+
+  const handleCloseWhiteboard = () => {
+    try {
+      if (currentFile && String(currentFile._id).startsWith('local-')) {
+        // Revoke object URL for locally uploaded file to free memory
+        URL.revokeObjectURL(currentFile.fileUrl)
+      }
+    } catch (e) {
+      // ignore
+    }
+    closeWhiteboard()
+  }
+
+  // Fetch PDFs on component mount
+  useEffect(() => {
+    fetchPDFs()
+  }, [])
+
+  // Function to fetch PDFs
+  const fetchPDFs = async () => {
+    try {
+      const response = await fetch('/api/assignments')
+      if (!response.ok) throw new Error('Failed to fetch PDFs')
+      const data = await response.json()
+      // Filter only PDF files
+      const pdfFiles = data.filter(file => file.fileUrl?.toLowerCase().endsWith('.pdf'))
+      setPdfs(pdfFiles)
+    } catch (error) {
+      console.error('Error fetching PDFs:', error)
+      toast.error('Failed to load PDF documents')
+    }
+  }
+
+  // Function to handle saving edited PDF
+  const handleSave = async (imageData, filename) => {
+    try {
+      // Convert base64 to blob
+      const base64Response = await fetch(imageData)
+      const blob = await base64Response.blob()
+
+      // Create FormData
+      const formData = new FormData()
+      formData.append('file', blob, filename)
+
+      // Upload the edited file
+      const response = await fetch('/api/assignments', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) throw new Error('Failed to save file')
+      
+      toast.success('Edited file saved successfully')
+      closeWhiteboard()
+      fetchPDFs() // Refresh the list
+    } catch (error) {
+      console.error('Error saving edited file:', error)
+      toast.error('Failed to save edited file')
+    }
+  }
+
+  // Upload/open local PDF file state
+  const [selectedFile, setSelectedFile] = useState(null)
+
+  const handleFileChange = (e) => {
+    const f = e.target.files && e.target.files[0]
+    if (f && f.type === 'application/pdf') {
+      setSelectedFile(f)
+    } else if (f) {
+      toast.error('Please select a PDF file')
+    }
+  }
+
+  const openLocalFileInWhiteboard = () => {
+    if (!selectedFile) {
+      toast.error('No file selected')
+      return
+    }
+
+    // Create an object URL for local preview and editing
+    const url = URL.createObjectURL(selectedFile)
+    // Use setCurrentFile to open whiteboard. Keep a small local id.
+    setCurrentFile({ fileUrl: url, fileName: selectedFile.name, _id: `local-${Date.now()}` })
+  }
 
   // Courses state
   const [courses, setCourses] = useState([
@@ -196,6 +293,58 @@ export default function ClassyncDashboard() {
                 <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent"><Users className="w-6 h-6" /><span className="text-sm">Manage Classroom</span></Button>
               ) : null}
             </div>
+
+            {/* PDFs for Whiteboard */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground">PDF Documents</h2>
+                  <p className="text-muted-foreground mt-1">Open and edit PDF documents with whiteboard tools</p>
+                </div>
+              </div>
+              {/* Upload local PDF and open in whiteboard */}
+              <div className="flex items-center gap-2">
+                <input
+                  id="local-pdf-input"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <label htmlFor="local-pdf-input">
+                  <Button variant="outline" asChild>
+                    <span className="flex items-center gap-2"><Upload className="w-4 h-4" /> Upload & Open</span>
+                  </Button>
+                </label>
+                <Button disabled={!selectedFile} onClick={openLocalFileInWhiteboard}>Open Selected</Button>
+                {selectedFile && <span className="text-sm text-muted-foreground">{selectedFile.name}</span>}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pdfs.map((pdf) => (
+                  <Card 
+                    key={pdf._id} 
+                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setCurrentFile(pdf)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm truncate">{pdf.fileName}</CardTitle>
+                        <Edit3 className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <CardDescription>Click to edit with whiteboard</CardDescription>
+                    </CardHeader>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {isOpen && currentFile && (
+              <WhiteboardViewer
+                pdfUrl={currentFile.fileUrl}
+                onSave={handleSave}
+                onClose={handleCloseWhiteboard}
+              />
+            )}
 
             {/* Courses List */}
             <div className="space-y-6">
