@@ -57,8 +57,7 @@ export default function ClassyncDashboard() {
   const router = useRouter();
   // User state
   const [user, setUser] = useState(null)
-  const router = useRouter();
-  const [username, setUsername] = useState("")
+   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [pdfs, setPdfs] = useState([])
@@ -545,9 +544,6 @@ export default function ClassyncDashboard() {
                       // [FIX 1] Use course.id for the key
                       key={course.id} 
                       className="hover:shadow-lg transition-shadow cursor-pointer group"
-<<<<<<< HEAD
-                      onClick={() => router.push("../classroom")}
-=======
                       onClick={() => {
                         // [FIX 2] Use course.id in the click handler
                         console.log("Navigating with id:", course.id); 
@@ -557,9 +553,8 @@ export default function ClassyncDashboard() {
                         } else {
                           toast.error("Error: This course has no ID.");
                         }
-                      }}
->>>>>>> 86d653ff18849bd4276b0756f8221e55858a7c5d
-                    >
+                      }}>
+                    
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
                           <BookOpen className="w-8 h-8 text-foreground" />
