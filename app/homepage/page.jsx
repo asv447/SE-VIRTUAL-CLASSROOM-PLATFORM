@@ -240,8 +240,15 @@ export default function ClassyncDashboard() {
     const loadingToastId = toast.loading("Creating course...");
 
     try {
-      // We will also generate a course code here
-      const courseCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      // [NEW CODE] Generate a 6-digit code based on prof and course name
+      // Get initials from username (e.g., "johnsmith" -> "JO")
+      const profInitials = username.substring(0, 2).toUpperCase();
+      // Get initials from course title (e.g., "Intro to CS" -> "IN")
+      const courseInitials = newCourse.title.substring(0, 2).toUpperCase();
+      // Get 2 random chars
+      const randomChars = Math.random().toString(36).substring(2, 4).toUpperCase();
+      // Combine them: e.g. JO-IN-A9
+      const courseCode = `${profInitials}${courseInitials}${randomChars}`;
       
       const courseData = {
         title: newCourse.title,
@@ -249,7 +256,7 @@ export default function ClassyncDashboard() {
         subject: newCourse.subject,
         instructorName: username, // Send instructor's name
         instructorId: user.uid,   // Send instructor's ID
-        courseCode: courseCode, // Send the new code
+        courseCode: courseCode, // [NEW CODE] Send the new code
         students: [], // Start with an empty student list
       };
 
