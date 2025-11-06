@@ -19,20 +19,30 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload } from "lucide-react"
-import dynamic from 'next/dynamic'
-import useWhiteboardStore from '@/hooks/use-whiteboard'
+  DialogClose, // [NEW] Added DialogClose
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Upload } from "lucide-react";
+import dynamic from "next/dynamic";
+import useWhiteboardStore from "@/hooks/use-whiteboard";
 
-const WhiteboardViewer = dynamic(() => import('@/components/whiteboard/WhiteboardViewer'), {
-  ssr: false,
-  loading: () => <p>Loading whiteboard...</p>
-});
-import { toast } from "sonner"
+const WhiteboardViewer = dynamic(
+  () => import("@/components/whiteboard/WhiteboardViewer"),
+  {
+    ssr: false,
+    loading: () => <p>Loading whiteboard...</p>,
+  }
+);
+import { toast } from "sonner";
 
 import {
   LogIn as LogInIcon,
@@ -48,26 +58,40 @@ import {
   MessageSquare,
   Sparkles,
   Edit3,
-} from "lucide-react"
+} from "lucide-react";
 
 import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 export default function ClassyncDashboard() {
-  const router = useRouter();
   // User state
-  const [user, setUser] = useState(null)
-   const [username, setUsername] = useState("")
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [pdfs, setPdfs] = useState([])
+  const [user, setUser] = useState(null);
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [pdfs, setPdfs] = useState([]);
   const [courses, setCourses] = useState([]);
 
-  
-  // [NEW] Extracted course fetching logic
-  const fetchCourses = async () => {
+  // [NEW] State for student joining a course
+  const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
+  const [joinCourseCode, setJoinCourseCode] = useState("");
+
+  // NEW: Extracted course fetching logic
+  const fetchCourses = async (role, uid) => {
+    let url = "/api/courses";
+    // If the user is an instructor, only fetch their courses
+    if (role === "instructor" && uid) {
+      url = `/api/courses?role=instructor&userId=${uid}`;
+    }
+    // [NEW] If user is a student, fetch courses they are enrolled in
+    else if (role === "student" && uid) {
+      url = `/api/courses?role=student&userId=${uid}`;
+    }
+    // else (not logged in), fetch all courses
+    
     try {
-      const res = await fetch("/api/courses");
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch courses");
       const data = await res.json();
       console.log("Courses from API:", data);
@@ -78,100 +102,101 @@ export default function ClassyncDashboard() {
     }
   };
 
-  // Fetches courses on mount
-  useEffect(() => {
-    fetchCourses();
-  }, []);
-
   // Whiteboard state
-  const { isOpen, currentFile, setCurrentFile, closeWhiteboard } = useWhiteboardStore()
+  const { isOpen, currentFile, setCurrentFile, closeWhiteboard } =
+    useWhiteboardStore();
 
   const handleCloseWhiteboard = () => {
     try {
-      if (currentFile && String(currentFile._id).startsWith('local-')) {
+      if (currentFile && String(currentFile._id).startsWith("local-")) {
         // Revoke object URL for locally uploaded file to free memory
-        URL.revokeObjectURL(currentFile.fileUrl)
+        URL.revokeObjectURL(currentFile.fileUrl);
       }
     } catch (e) {
       // ignore
     }
-    closeWhiteboard()
-  }
+    closeWhiteboard();
+  };
 
   // Fetch PDFs on component mount
   useEffect(() => {
-    fetchPDFs()
-  }, [])
+    fetchPDFs();
+  }, []);
 
   // Function to fetch PDFs
   const fetchPDFs = async () => {
     try {
-      const response = await fetch('/api/assignments')
-      if (!response.ok) throw new Error('Failed to fetch PDFs')
-      const data = await response.json()
+      const response = await fetch("/api/assignments");
+      if (!response.ok) throw new Error("Failed to fetch PDFs");
+      const data = await response.json();
       // Filter only PDF files
-      const pdfFiles = data.filter(file => file.fileUrl?.toLowerCase().endsWith('.pdf'))
-      setPdfs(pdfFiles)
+      const pdfFiles = data.filter((file) =>
+        file.fileUrl?.toLowerCase().endsWith(".pdf")
+      );
+      setPdfs(pdfFiles);
     } catch (error) {
-      console.error('Error fetching PDFs:', error)
-      toast.error('Failed to load PDF documents')
+      console.error("Error fetching PDFs:", error);
+      toast.error("Failed to load PDF documents");
     }
-  }
+  };
 
   // Function to handle saving edited PDF
   const handleSave = async (imageData, filename) => {
     try {
       // Convert base64 to blob
-      const base64Response = await fetch(imageData)
-      const blob = await base64Response.blob()
+      const base64Response = await fetch(imageData);
+      const blob = await base64Response.blob();
 
       // Create FormData
-      const formData = new FormData()
-      formData.append('file', blob, filename)
+      const formData = new FormData();
+      formData.append("file", blob, filename);
 
       // Upload the edited file
-      const response = await fetch('/api/assignments', {
-        method: 'POST',
+      const response = await fetch("/api/assignments", {
+        method: "POST",
         body: formData,
-      })
+      });
 
-      if (!response.ok) throw new Error('Failed to save file')
-      
-      toast.success('Edited file saved successfully')
-      closeWhiteboard()
-      fetchPDFs() // Refresh the list
+      if (!response.ok) throw new Error("Failed to save file");
+
+      toast.success("Edited file saved successfully");
+      closeWhiteboard();
+      fetchPDFs(); // Refresh the list
     } catch (error) {
-      console.error('Error saving edited file:', error)
-      toast.error('Failed to save edited file')
+      console.error("Error saving edited file:", error);
+      toast.error("Failed to save edited file");
     }
-  }
+  };
 
   // Upload/open local PDF file state
-  const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const handleFileChange = (e) => {
-    const f = e.target.files && e.target.files[0]
-    if (f && f.type === 'application/pdf') {
-      setSelectedFile(f)
+    const f = e.target.files && e.target.files[0];
+    if (f && f.type === "application/pdf") {
+      setSelectedFile(f);
     } else if (f) {
-      toast.error('Please select a PDF file')
+      toast.error("Please select a PDF file");
     }
-  }
+  };
 
   const openLocalFileInWhiteboard = () => {
     if (!selectedFile) {
-      toast.error('No file selected')
-      return
+      toast.error("No file selected");
+      return;
     }
 
     // Create an object URL for local preview and editing
-    const url = URL.createObjectURL(selectedFile)
+    const url = URL.createObjectURL(selectedFile);
     // Use setCurrentFile to open whiteboard. Keep a small local id.
-    setCurrentFile({ fileUrl: url, fileName: selectedFile.name, _id: `local-${Date.now()}` })
-  }
+    setCurrentFile({
+      fileUrl: url,
+      fileName: selectedFile.name,
+      _id: `local-${Date.now()}`,
+    });
+  };
 
   // Courses state
-  
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
     title: "",
@@ -187,39 +212,50 @@ export default function ClassyncDashboard() {
 
   // Listen for auth state changes
   useEffect(() => {
+    setLoading(true); // Start loading
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        setLoading(true);
-
         try {
           // Fetch user data from MongoDB API
           const res = await fetch(`/api/users/${currentUser.uid}`);
           if (res.ok) {
             const data = await res.json();
+            const userRole =
+              data.user.role === "instructor" ? "instructor" : "student";
             setUsername(data.user.username || currentUser.email.split("@")[0]);
-            setIsAdmin(data.user.role === "instructor");
+            setIsAdmin(userRole === "instructor");
+
+            // [CHANGE] Call fetchCourses *after* we know the user's role
+            await fetchCourses(userRole, currentUser.uid);
           } else {
-            // User not found in database, use defaults
+            // User not found
             setUsername(currentUser.email.split("@")[0]);
             setIsAdmin(false);
+            // [CHANGE] Fetch all courses for non-instructors
+            await fetchCourses("student", currentUser.uid); // Pass uid even if student
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
           setUsername(currentUser.email.split("@")[0]);
           setIsAdmin(false);
+          // [CHANGE] Fetch all courses on error
+          await fetchCourses("student", currentUser.uid); // Pass uid even if student
         } finally {
-          setLoading(false);
+          setLoading(false); // Stop loading
         }
       } else {
+        // Not logged in
         setUser(null);
         setUsername("");
         setIsAdmin(false);
-        setLoading(false);
+        // [CHANGE] Fetch all courses for a logged-out user
+        await fetchCourses(null, null); // No role, no uid
+        setLoading(false); // Stop loading
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, []); // The empty dependency array is correct!
 
   // Prevent background scroll when modal is open
   useEffect(() => {
@@ -230,34 +266,33 @@ export default function ClassyncDashboard() {
     }
   }, [isLoginOpen, isRegisterOpen]);
 
-  // [FIXED] Create course - This now saves to the database
+  // [NEW] Helper to generate the 6-digit class code
+  const generateCourseCode = (prof, course) => {
+    const p = (prof || "USER").slice(0, 2).toUpperCase();
+    const c = (course || "COURSE").slice(0, 2).toUpperCase();
+    const r = Math.random().toString(36).substring(2, 4).toUpperCase();
+    return `${p}${c}${r}`;
+  };
+
+  // Create course - UPDATED TO POST TO API
   const handleCreateCourse = async () => {
     if (!user) {
       toast.error("You must be logged in to create a course.");
       return;
     }
 
+    // [NEW] Generate the course code
+    const uniqueCourseCode = generateCourseCode(username, newCourse.title);
     const loadingToastId = toast.loading("Creating course...");
 
     try {
-      // [NEW CODE] Generate a 6-digit code based on prof and course name
-      // Get initials from username (e.g., "johnsmith" -> "JO")
-      const profInitials = username.substring(0, 2).toUpperCase();
-      // Get initials from course title (e.g., "Intro to CS" -> "IN")
-      const courseInitials = newCourse.title.substring(0, 2).toUpperCase();
-      // Get 2 random chars
-      const randomChars = Math.random().toString(36).substring(2, 4).toUpperCase();
-      // Combine them: e.g. JO-IN-A9
-      const courseCode = `${profInitials}${courseInitials}${randomChars}`;
-      
       const courseData = {
         title: newCourse.title,
         description: newCourse.description,
         subject: newCourse.subject,
         instructorName: username, // Send instructor's name
-        instructorId: user.uid,   // Send instructor's ID
-        courseCode: courseCode, // [NEW CODE] Send the new code
-        students: [], // Start with an empty student list
+        instructorId: user.uid, // Send instructor's ID
+        courseCode: uniqueCourseCode, // [NEW] Send the code
       };
 
       const response = await fetch("/api/courses", {
@@ -268,21 +303,63 @@ export default function ClassyncDashboard() {
         body: JSON.stringify(courseData),
       });
 
+      // [CHANGE] Get the response data to check for errors
+      const responseData = await response.json();
+
       if (!response.ok) {
-        throw new Error("Failed to create course on server");
+        // [CHANGE] Show the specific error from the API
+        throw new Error(
+          responseData.error || "Failed to create course on server"
+        );
       }
 
       // Success
       toast.success("Course created successfully!", { id: loadingToastId });
       setNewCourse({ title: "", description: "", subject: "" });
       setIsCreateDialogOpen(false);
-      
-      // Refresh the courses list from the server
-      await fetchCourses();
 
+      // [CHANGE] Refresh the courses list using the new function
+      await fetchCourses(isAdmin ? "instructor" : "student", user.uid);
     } catch (error) {
       console.error("Error creating course:", error);
-      toast.error(`Error: ${error.message || "Failed to create"}`, { id: loadingToastId });
+      // [CHANGE] Show the specific error.message
+      toast.error(`Error: ${error.message}`, { id: loadingToastId });
+    }
+  };
+
+  // [NEW] Function to handle student enrolling in a course
+  const handleEnrollInCourse = async () => {
+    if (!joinCourseCode.trim() || !user) {
+      toast.error("Please enter a course code.");
+      return;
+    }
+
+    const loadingToastId = toast.loading("Enrolling in course...");
+
+    try {
+      const response = await fetch("/api/courses/enroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseCode: joinCourseCode.trim().toUpperCase(),
+          userId: user.uid,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to enroll in course");
+      }
+
+      toast.success("Enrolled successfully!", { id: loadingToastId });
+      setIsJoinDialogOpen(false);
+      setJoinCourseCode("");
+
+      // Refresh the course list to show the newly joined course
+      await fetchCourses(isAdmin ? "instructor" : "student", user.uid);
+    } catch (err) {
+      toast.error(`Error: ${err.message}`, { id: loadingToastId });
     }
   };
 
@@ -372,8 +449,12 @@ export default function ClassyncDashboard() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">PDF Documents</h2>
-                  <p className="text-muted-foreground mt-1">Open and edit PDF documents with whiteboard tools</p>
+                  <h2 className="text-2xl font-bold text-foreground">
+                    PDF Documents
+                  </h2>
+                  <p className="text-muted-foreground mt-1">
+                    Open and edit PDF documents with whiteboard tools
+                  </p>
                 </div>
               </div>
               {/* Upload local PDF and open in whiteboard */}
@@ -387,25 +468,40 @@ export default function ClassyncDashboard() {
                 />
                 <label htmlFor="local-pdf-input">
                   <Button variant="outline" asChild>
-                    <span className="flex items-center gap-2"><Upload className="w-4 h-4" /> Upload & Open</span>
+                    <span className="flex items-center gap-2">
+                      <Upload className="w-4 h-4" /> Upload & Open
+                    </span>
                   </Button>
                 </label>
-                <Button disabled={!selectedFile} onClick={openLocalFileInWhiteboard}>Open Selected</Button>
-                {selectedFile && <span className="text-sm text-muted-foreground">{selectedFile.name}</span>}
+                <Button
+                  disabled={!selectedFile}
+                  onClick={openLocalFileInWhiteboard}
+                >
+                  Open Selected
+                </Button>
+                {selectedFile && (
+                  <span className="text-sm text-muted-foreground">
+                    {selectedFile.name}
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {pdfs.map((pdf) => (
-                  <Card 
-                    key={pdf._id} 
+                  <Card
+                    key={pdf._id}
                     className="cursor-pointer hover:bg-gray-50 transition-colors"
                     onClick={() => setCurrentFile(pdf)}
                   >
                     <CardHeader>
                       <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm truncate">{pdf.fileName}</CardTitle>
+                        <CardTitle className="text-sm truncate">
+                          {pdf.fileName}
+                        </CardTitle>
                         <Edit3 className="w-4 h-4 text-muted-foreground" />
                       </div>
-                      <CardDescription>Click to edit with whiteboard</CardDescription>
+                      <CardDescription>
+                        Click to edit with whiteboard
+                      </CardDescription>
                     </CardHeader>
                   </Card>
                 ))}
@@ -431,113 +527,168 @@ export default function ClassyncDashboard() {
                     Manage your class and track progress
                   </p>
                 </div>
-                <Dialog
-                  open={isCreateDialogOpen}
-                  onOpenChange={setIsCreateDialogOpen}
-                >
-                  {/* Only show the create button to non-students */}
+
+                {/* [NEW] Wrapper for the two dialog buttons */}
+                <div className="flex gap-2">
+                  {/* "Create Course" Dialog for Instructors */}
                   {isAdmin && (
-                  <DialogTrigger asChild>
-                    <Button className="cursor-pointer bg-primary hover:bg-primary/90">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Course
-                    </Button>
-                  </DialogTrigger>
+                    <Dialog
+                      open={isCreateDialogOpen}
+                      onOpenChange={setIsCreateDialogOpen}
+                    >
+                      <DialogTrigger asChild>
+                        <Button className="cursor-pointer bg-primary hover:bg-primary/90">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Course
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[425px]">
+                        <DialogHeader>
+                          <DialogTitle>Create New Course</DialogTitle>
+                          <DialogDescription>
+                            Set up a new classroom for your students
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="title">Course Title</Label>
+                            <Input
+                              id="title"
+                              value={newCourse.title}
+                              onChange={(e) =>
+                                setNewCourse({
+                                  ...newCourse,
+                                  title: e.target.value,
+                                })
+                              }
+                              placeholder="e.g., Introduction to Python"
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Textarea
+                              id="description"
+                              value={newCourse.description}
+                              onChange={(e) =>
+                                setNewCourse({
+                                  ...newCourse,
+                                  description: e.target.value,
+                                })
+                              }
+                              placeholder="Brief description of the course"
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="subject">Subject</Label>
+                            <Select
+                              value={newCourse.subject}
+                              onValueChange={(value) =>
+                                setNewCourse({ ...newCourse, subject: value })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select subject" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="computer-science">
+                                  Computer Science
+                                </SelectItem>
+                                <SelectItem value="mathematics">
+                                  Mathematics
+                                </SelectItem>
+                                <SelectItem value="physics">Physics</SelectItem>
+                                <SelectItem value="chemistry">
+                                  Chemistry
+                                </SelectItem>
+                                <SelectItem value="biology">Biology</SelectItem>
+                                <SelectItem value="literature">
+                                  Literature
+                                </SelectItem>
+                                <SelectItem value="history">History</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsCreateDialogOpen(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleCreateCourse}
+                            disabled={!newCourse.title}
+                          >
+                            Create Course
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   )}
 
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Create New Course</DialogTitle>
-                      <DialogDescription>
-                        Set up a new classroom for your students
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="title">Course Title</Label>
-                        <Input
-                          id="title"
-                          value={newCourse.title}
-                          onChange={(e) =>
-                            setNewCourse({
-                              ...newCourse,
-                              title: e.target.value,
-                            })
-                          }
-                          placeholder="e.g., Introduction to Python"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea
-                          id="description"
-                          value={newCourse.description}
-                          onChange={(e) =>
-                            setNewCourse({
-                              ...newCourse,
-                              description: e.target.value,
-                            })
-                          }
-                          placeholder="Brief description of the course"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="subject">Subject</Label>
-                        <Select
-                          value={newCourse.subject}
-                          onValueChange={(value) =>
-                            setNewCourse({ ...newCourse, subject: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select subject" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="computer-science">
-                              Computer Science
-                            </SelectItem>
-                            <SelectItem value="mathematics">
-                              Mathematics
-                            </SelectItem>
-                            <SelectItem value="physics">Physics</SelectItem>
-                            <SelectItem value="chemistry">Chemistry</SelectItem>
-                            <SelectItem value="biology">Biology</SelectItem>
-                            <SelectItem value="literature">
-                              Literature
-                            </SelectItem>
-                            <SelectItem value="history">History</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsCreateDialogOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleCreateCourse}
-                        disabled={!newCourse.title}
-                      >
-                        Create Course
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                  {/* [NEW] "Join Course" Dialog for Students */}
+                  {!isAdmin && user && ( // Only show if logged in and *not* an admin
+                    <Dialog
+                      open={isJoinDialogOpen}
+                      onOpenChange={setIsJoinDialogOpen}
+                    >
+                      <DialogTrigger asChild>
+                        <Button className="cursor-pointer bg-primary hover:bg-primary/90">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Join Course
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[425px]">
+                        <DialogHeader>
+                          <DialogTitle>Join a New Course</DialogTitle>
+                          <DialogDescription>
+                            Enter the 6-digit course code from your instructor.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="course-code">Course Code</Label>
+                            <Input
+                              id="course-code"
+                              value={joinCourseCode}
+                              onChange={(e) =>
+                                setJoinCourseCode(e.target.value)
+                              }
+                              placeholder="e.g., JDCS5R"
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsJoinDialogOpen(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button onClick={handleEnrollInCourse}>Join</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
               </div>
 
-              {courses.length === 0 ? (
+              {loading ? (
+                <Card className="p-12 text-center">
+                  <p className="text-muted-foreground">Loading courses...</p>
+                </Card>
+              ) : courses.length === 0 ? (
                 <Card className="p-12 text-center">
                   <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-xl font-semibold mb-2">No courses yet</h3>
                   <p className="text-muted-foreground mb-4">
-                    { isAdmin ? "Create your first course to get started" : "You are not enrolled in any courses yet." }
+                    {isAdmin
+                      ? "Create your first course to get started"
+                      : "Click 'Join Course' to enroll"}
                   </p>
-                  { /* Only show create button on empty list if user is admin */ }
-                  { isAdmin && (
+                  {isAdmin && (
                     <Button onClick={() => setIsCreateDialogOpen(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Create Course
@@ -548,27 +699,23 @@ export default function ClassyncDashboard() {
                 <div className="max-w-md">
                   {courses.map((course) => (
                     <Card
-                      // [FIX 1] Use course.id for the key
-                      key={course.id} 
+                      key={course.id}
                       className="hover:shadow-lg transition-shadow cursor-pointer group"
                       onClick={() => {
-                        // [FIX 2] Use course.id in the click handler
-                        console.log("Navigating with id:", course.id); 
+                        console.log("Navigating with id:", course.id);
                         if (course.id) {
-                          // [FIX 3] Use course.id to navigate
                           router.push(`/classroom/${course.id}`);
                         } else {
                           toast.error("Error: This course has no ID.");
                         }
-                      }}>
-                    
+                      }}
+                    >
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
                           <BookOpen className="w-8 h-8 text-foreground" />
                         </div>
                         <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                          {/* [FIXED] Use 'name' from API response */ }
-                          {course.name || course.title} 
+                          {course.name}
                         </CardTitle>
                         <CardDescription className="text-sm">
                           {course.description}
@@ -578,13 +725,11 @@ export default function ClassyncDashboard() {
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-xs">
-                              {/* [FIXED] Show instructorName from course data */}
-                              Instructor: {course.instructorName || course.instructor}
+                              Instructor: {course.instructorName}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Users className="w-4 h-4" />
-                            {/* [FIXED] Show student count from course data */}
                             <span>{course.students?.length || 0}</span>
                           </div>
                         </div>

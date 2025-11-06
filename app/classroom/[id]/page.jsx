@@ -5,10 +5,10 @@ import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Copy } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea"; // [NEW] Import Textarea
-import { toast } from "sonner"; // [NEW] Import toast
-import { auth } from "../../../lib/firebase"; // [NEW] Import auth (fixed path)
-import { onAuthStateChanged } from "firebase/auth"; // [NEW] Import onAuthStateChanged
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { auth } from "../../../lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 /**
  * Classroom page
@@ -142,18 +142,16 @@ export default function ClassroomPage() {
       if (!response.ok) {
         throw new Error("Failed to save post");
       }
-      
+
       // On success, re-fetch to get the real data from DB
       toast.success("Post created!");
       fetchStreamPosts(); // This will replace the temp post with the real one
-    
     } catch (err) {
       toast.error(`Error: ${err.message}`);
       // If it fails, roll back the optimistic update
-      setStreamPosts(streamPosts.filter(p => p.id !== optimisticPost.id));
+      setStreamPosts(streamPosts.filter((p) => p.id !== optimisticPost.id));
     }
   };
-
 
   // Submit comment when user presses Enter inside a post input
   // optimistic update + send to /api/comments
@@ -175,7 +173,7 @@ export default function ClassroomPage() {
 
     setStreamPosts((prev) =>
       prev.map((p) =>
-        (p._id === post._id || p.id === post.id)
+        p._id === post._id || p.id === post.id
           ? { ...p, comments: [...(p.comments || []), newComment] }
           : p
       )
@@ -216,7 +214,9 @@ export default function ClassroomPage() {
   }
 
   if (!classroom) {
-    return <p className="text-center text-gray-500 mt-10">Loading classroom...</p>;
+    return (
+      <p className="text-center text-gray-500 mt-10">Loading classroom...</p>
+    );
   }
 
   return (
@@ -225,12 +225,15 @@ export default function ClassroomPage() {
         {/* Header - description box (left-aligned) */}
         <Card className="border border-gray-300 shadow-sm">
           <CardHeader className="text-left space-y-3">
-            <CardTitle className="text-3xl font-semibold">{classroom.title}</CardTitle>
+            <CardTitle className="text-3xl font-semibold">
+              {classroom.title}
+            </CardTitle>
             <p className="text-gray-700 max-w-2xl">{classroom.description}</p>
 
             <div className="text-sm text-gray-700 space-y-1">
               <p>
-                <span className="font-semibold">Instructor:</span> {classroom.instructorName}
+                <span className="font-semibold">Instructor:</span>{" "}
+                {classroom.instructorName}
               </p>
 
               <div className="flex items-center gap-3">
@@ -247,7 +250,8 @@ export default function ClassroomPage() {
                   className="border-gray-400 text-gray-800 hover:bg-gray-200"
                   onClick={handleCopy}
                 >
-                  <Copy className="w-4 h-4 mr-1" /> {copied ? "Copied!" : "Copy"}
+                  <Copy className="w-4 h-4 mr-1" />{" "}
+                  {copied ? "Copied!" : "Copy"}
                 </Button>
               </div>
             </div>
@@ -313,7 +317,9 @@ export default function ClassroomPage() {
                   {streamPosts.map((post) => {
                     // handle id field name
                     const pid = post._id ?? post.id;
-                    const createdAt = post.createdAt ? new Date(post.createdAt).toLocaleString() : "";
+                    const createdAt = post.createdAt
+                      ? new Date(post.createdAt).toLocaleString()
+                      : "";
                     return (
                       <div
                         key={pid}
@@ -324,16 +330,22 @@ export default function ClassroomPage() {
                             {/* [FIX] Safer render for author name, prevents crash */}
                             {post.author?.name || "Unknown"}
                           </span>
-                          <span className="text-sm text-gray-500">{createdAt}</span>
+                          <span className="text-sm text-gray-500">
+                            {createdAt}
+                          </span>
                         </div>
 
-                        <p className="text-gray-700 mb-3 text-left">{post.content}</p>
+                        <p className="text-gray-700 mb-3 text-left">
+                          {post.content}
+                        </p>
 
                         {/* Post-specific comments */}
                         <div className="border-t border-gray-100 pt-3 mt-3">
                           <div className="space-y-2 max-h-36 overflow-y-auto pr-2">
                             {(post.comments || []).length === 0 ? (
-                              <p className="text-sm text-gray-500 italic">No comments yet</p>
+                              <p className="text-sm text-gray-500 italic">
+                                No comments yet
+                              </p>
                             ) : (
                               (post.comments || []).map((c, idx) => (
                                 <div key={idx} className="text-left">
@@ -341,7 +353,9 @@ export default function ClassroomPage() {
                                     {/* [FIX] Safer render for comment author */}
                                     {c.author?.name || c.author || "Unknown"}
                                   </p>
-                                  <p className="text-xs text-gray-600">{c.text}</p>
+                                  <p className="text-xs text-gray-600">
+                                    {c.text}
+                                  </p>
                                 </div>
                               ))
                             )}
@@ -379,9 +393,53 @@ export default function ClassroomPage() {
 
           {/* PEOPLE */}
           {activeTab === "people" && (
-            <Card className="border border-gray-300 p-6 text-center text-gray-600">
-              No students enrolled yet.
-            </Card>
+            // [NEW] Updated "People" tab to show instructor and student list
+            <div className="space-y-6">
+              {/* Instructor List */}
+              <Card className="border border-gray-300">
+                <CardHeader>
+                  <CardTitle className="text-xl">Instructor</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-600 text-white flex items-center justify-center text-lg font-semibold">
+                      {/* Get first letter of instructor name */}
+                      {classroom.instructorName
+                        ? classroom.instructorName[0].toUpperCase()
+                        : "I"}
+                    </div>
+                    <span className="font-medium text-gray-800">
+                      {classroom.instructorName}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Student List */}
+              <Card className="border border-gray-300">
+                <CardHeader>
+                  <CardTitle className="text-xl">
+                    Students ({classroom.students?.length || 0})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!classroom.students || classroom.students.length === 0 ? (
+                    <p className="text-gray-600">No students enrolled yet.</p>
+                  ) : (
+                    classroom.students.map((student) => (
+                      <div key={student.userId} className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-500 text-white flex items-center justify-center text-lg font-semibold">
+                          {student.name ? student.name[0].toUpperCase() : "S"}
+                        </div>
+                        <span className="font-medium text-gray-800">
+                          {student.name}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
       </div>

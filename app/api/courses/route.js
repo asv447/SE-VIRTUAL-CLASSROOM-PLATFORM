@@ -5,24 +5,30 @@ import { getCoursesCollection } from "../../../lib/mongodb";
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const role = searchParams.get('role');
+    const userId = searchParams.get("userId");
+    const role = searchParams.get("role");
 
     const coursesCollection = await getCoursesCollection();
     let query = {};
-    
-    // If user is instructor, only show their courses
-    if (role === 'instructor') {
+
+    // [NEW] Updated logic
+    if (role === "instructor" && userId) {
+      // Instructors see courses they created
       query.instructorId = userId;
+    } else if (role === "student" && userId) {
+      // Students see courses they are enrolled in
+      query["students.userId"] = userId; // Check if userId is in the 'students' array
+    } else if (!userId) {
+      // Logged-out users see no courses
+      query = { _id: null }; // Return no courses
     }
-    
+    // Else (student but no userId?) just return empty query
+
     const courses = await coursesCollection.find(query).toArray();
-    
-    // [FIX] I've seen your homepage uses 'id' (not '_id'),
-    // so this formatting is correct.
+
     const formattedCourses = courses.map((course) => ({
       id: course._id.toString(),
-      name: course.title, // [FIX] Send 'name' as 'title' to match frontend expectation
+      name: course.title, // [FIX] Map title to name for the frontend
       ...course,
       _id: undefined,
     }));
@@ -36,55 +42,65 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    // [FIX] Updated to match the exact fields from your homepage's handleCreateCourse
-    const { 
-      title, 
-      description, 
-      subject, 
-      instructorId, 
-      instructorName, 
-      courseCode 
+    // [FIX] Updated fields to match homepage 'handleCreateCourse'
+    const {
+      title,
+      description,
+      subject,
+      instructorId,
+      instructorName,
+      courseCode,
     } = await request.json();
-    
+
+    // [FIX] Updated validation
     if (!title || !courseCode || !instructorId || !instructorName) {
-      return NextResponse.json({ 
-        error: "Missing required fields: title, courseCode, instructorId, and instructorName" 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "Missing required fields: title, courseCode, instructorId, and instructorName",
+        },
+        { status: 400 }
+      );
     }
 
     const coursesCollection = await getCoursesCollection();
-    
-    // Check if course code already exists
+
+    // [FIX] Check using 'courseCode'
     const existingCourse = await coursesCollection.findOne({ courseCode });
     if (existingCourse) {
-      return NextResponse.json({ error: "Course code already exists" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Course code already exists" },
+        { status: 400 }
+      );
     }
-    
+
+    // [FIX] Save using fields from frontend
     const newCourse = {
-      title, // [FIX] Save as 'title'
-      courseCode, // [FIX] Save as 'courseCode'
+      title,
       description: description || "",
       subject: subject || "",
       instructorId,
       instructorName,
+      courseCode,
       createdAt: new Date(),
       updatedAt: new Date(),
-      students: [],
+      students: [], // Start with an empty array of students
     };
 
     const result = await coursesCollection.insertOne(newCourse);
     
-    // Send back an ID the frontend can use
+    // Send back the created course
     const createdCourse = {
       id: result.insertedId.toString(),
+      name: newCourse.title, // Map title to name for frontend consistency
       ...newCourse,
     };
-    delete createdCourse._id; // Clean up the response
+    delete createdCourse._id;
 
     return NextResponse.json(createdCourse, { status: 201 });
-
   } catch (err) {
     console.error("[API /api/courses] Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
