@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getStreamsCollection } from "../../../lib/mongodb";
+import {
+  getStreamsCollection,
+  getUsersCollection,
+} from "../../../lib/mongodb";
+import { ObjectId } from "mongodb";
 
 export async function GET(request) {
   try {
@@ -11,9 +15,56 @@ export async function GET(request) {
     }
 
     const streamsCollection = await getStreamsCollection();
-    const posts = await streamsCollection.find({ classId }).sort({ createdAt: -1 }).toArray();
 
-    return NextResponse.json(posts, { status: 200 });
+    const posts = await streamsCollection
+      .aggregate([
+        { $match: { classId: classId } },
+        { $sort: { createdAt: -1 } },
+        {
+          $lookup: {
+            from: "users",
+            localField: "authorId",
+            foreignField: "uid", // This matches your user screenshot
+            as: "authorDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$authorDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            // [UPDATE] Add all the new fields
+            _id: 1,
+            classId: 1,
+            title: 1,
+            content: 1,
+            isImportant: 1,
+            isUrgent: 1,
+            link: 1,
+            assignment: 1,
+            comments: 1,
+            createdAt: 1,
+            author: {
+              name: {
+                $ifNull: ["$authorDetails.username", "$authorDetails.name"],
+              },
+              id: "$authorId",
+            },
+          },
+        },
+      ])
+      .toArray();
+
+    const formattedPosts = posts.map((post) => ({
+      ...post,
+      id: post._id.toString(),
+      _id: undefined,
+    }));
+
+    return NextResponse.json(formattedPosts, { status: 200 });
   } catch (err) {
     console.error("Error fetching stream posts:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -22,17 +73,37 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { classId, author, content, assignment } = await request.json();
+    // [UPDATE] Get all the new fields from the request
+    const { 
+      classId, 
+      authorId, 
+      title, 
+      content, 
+      isImportant, 
+      isUrgent, 
+      link, 
+      assignment 
+    } = await request.json();
 
-    if (!classId || !author || !content) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    // [UPDATE] Validate title and content
+    if (!classId || !authorId || !title || !content) {
+      return NextResponse.json(
+        { error: "Missing required fields: classId, authorId, title, content" },
+        { status: 400 }
+      );
     }
 
     const streamsCollection = await getStreamsCollection();
+
+    // [UPDATE] Save all the new fields to the database
     const newPost = {
       classId,
-      author,
+      authorId,
+      title,
       content,
+      isImportant: isImportant || false,
+      isUrgent: isUrgent || false,
+      link: link || null,
       assignment: assignment || null,
       comments: [],
       createdAt: new Date(),
@@ -49,3 +120,4 @@ export async function POST(request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
