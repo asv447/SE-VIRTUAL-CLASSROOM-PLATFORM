@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-// [ADD] Import 'getUsersCollection' and 'ObjectId'
 import {
   getStreamsCollection,
   getUsersCollection,
@@ -17,41 +16,38 @@ export async function GET(request) {
 
     const streamsCollection = await getStreamsCollection();
 
-    // [BIG CHANGE] Replace your old 'streamsCollection.find(...)' with this 'aggregate'
-    // This code joins 'streams' with 'users' to get the author's name
     const posts = await streamsCollection
       .aggregate([
-        { $match: { classId: classId } }, // Find posts for this class
-        { $sort: { createdAt: -1 } }, // Sort by newest first
+        { $match: { classId: classId } },
+        { $sort: { createdAt: -1 } },
         {
           $lookup: {
-            from: "users", // The collection to join
-            localField: "authorId", // Field from 'streams' (the Firebase UID string)
-
-            // [FIX] Changed to 'uid' to match your database screenshot
-            foreignField: "uid",
-
-            as: "authorDetails", // Put the joined user data in an array
+            from: "users",
+            localField: "authorId",
+            foreignField: "uid", // This matches your user screenshot
+            as: "authorDetails",
           },
         },
         {
           $unwind: {
-            // Unpack the array
             path: "$authorDetails",
-            preserveNullAndEmptyArrays: true, // Keep posts if author is deleted
+            preserveNullAndEmptyArrays: true,
           },
         },
         {
           $project: {
-            // Clean up the final output
+            // [UPDATE] Add all the new fields
             _id: 1,
             classId: 1,
+            title: 1,
             content: 1,
+            isImportant: 1,
+            isUrgent: 1,
+            link: 1,
             assignment: 1,
             comments: 1,
             createdAt: 1,
             author: {
-              // [FIX] Check for both 'username' and 'name'
               name: {
                 $ifNull: ["$authorDetails.username", "$authorDetails.name"],
               },
@@ -62,7 +58,6 @@ export async function GET(request) {
       ])
       .toArray();
 
-    // Format the _id to id for the frontend
     const formattedPosts = posts.map((post) => ({
       ...post,
       id: post._id.toString(),
@@ -78,23 +73,37 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    // [CHANGE] Update to match fields from classroom 'handleCreatePost'
-    const { classId, authorId, content, assignment } = await request.json();
+    // [UPDATE] Get all the new fields from the request
+    const { 
+      classId, 
+      authorId, 
+      title, 
+      content, 
+      isImportant, 
+      isUrgent, 
+      link, 
+      assignment 
+    } = await request.json();
 
-    // [CHANGE] Validate the new fields
-    if (!classId || !authorId || !content) {
+    // [UPDATE] Validate title and content
+    if (!classId || !authorId || !title || !content) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields: classId, authorId, title, content" },
         { status: 400 }
       );
     }
 
     const streamsCollection = await getStreamsCollection();
 
+    // [UPDATE] Save all the new fields to the database
     const newPost = {
-      classId, // The ID of the course
-      authorId, // The Firebase UID of the author
+      classId,
+      authorId,
+      title,
       content,
+      isImportant: isImportant || false,
+      isUrgent: isUrgent || false,
+      link: link || null,
       assignment: assignment || null,
       comments: [],
       createdAt: new Date(),
@@ -106,7 +115,7 @@ export async function POST(request) {
       { message: "Post added to stream", id: result.insertedId },
       { status: 201 }
     );
-  } catch (err) { // [FIXED] Added the missing opening brace '{'
+  } catch (err) {
     console.error("Error adding stream post:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
