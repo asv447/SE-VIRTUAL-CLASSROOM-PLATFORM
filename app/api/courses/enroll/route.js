@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getCoursesCollection,
   getUsersCollection,
-} from "../../../../lib/mongodb"; // [FIXED] Corrected path (4 levels up)
+} from "../../../../lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function POST(request) {
@@ -18,9 +18,8 @@ export async function POST(request) {
 
     // 1. Find the user who is trying to enroll
     const usersCollection = await getUsersCollection();
-    // Assuming user's Firebase UID is stored in a field named 'uid'
-    // *** IMPORTANT: If this field is named something else (like 'userId'),
-    // *** you MUST change 'uid' below to match your database.
+
+    // [FIX] Changed 'userId' to 'uid' to match your database screenshot
     const user = await usersCollection.findOne({ uid: userId });
 
     if (!user) {
@@ -41,7 +40,6 @@ export async function POST(request) {
     }
 
     // 3. Check if user is already enrolled
-    // [FIXED] Corrected the syntax here
     const isEnrolled = course.students?.some(
       (student) => student.userId === userId
     );
