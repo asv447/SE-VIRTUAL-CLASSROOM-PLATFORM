@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Copy, Link as LinkIcon } from "lucide-react"; // [NEW] Import LinkIcon
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { auth } from "../../../lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-
-// [NEW] Imports for the advanced post form
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "@/components/ui/card";
+import { Copy, Plus, Link as LinkIcon, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,68 +24,49 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge"; // [NEW] Import Badge
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { auth } from "../../../lib/firebase"; // Corrected path
+import { onAuthStateChanged } from "firebase/auth";
+// [DELETED] All socket.io imports are gone
 
 export default function ClassroomPage() {
-  const { id } = useParams();
+  const { id } = useParams(); // This is the Course ID
   const [classroom, setClassroom] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("stream");
 
+  // User state
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("Student");
   const [isInstructor, setIsInstructor] = useState(false);
 
+  // Stream state
   const [streamPosts, setStreamPosts] = useState([]);
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
+  const [newPostData, setNewPostData] = useState({
+    title: "",
+    content: "",
+    linkUrl: "",
+    linkText: "",
+    isImportant: false,
+    isUrgent: false,
+  });
 
-  // [NEW] State for the advanced post form
-  const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
-  const [postTitle, setPostTitle] = useState("");
-  const [postContent, setPostContent] = useState("");
-  const [isImportant, setIsImportant] = useState(false);
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkText, setLinkText] = useState("");
+  // [NEW] Chat state (back to simple version)
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(true);
+  const messagesEndRef = useRef(null); // For auto-scrolling chat
 
-  // ... (fetchClassroom, fetchStreamPosts, and auth useEffect are all perfect, no changes) ...
-  // fetch classroom details
-  const fetchClassroom = async () => {
-    try {
-      // [FIX] Use `id` from params, not `course._id`
-      const res = await fetch(`/api/classroom/${id}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load classroom");
-      setClassroom(data.classroom);
-    } catch (err) {
-      console.error("Error fetching classroom:", err);
-      setError("Failed to load classroom details.");
-    }
-  };
+  // --- Data Fetching ---
 
-  // fetch stream posts for this classroom
-  const fetchStreamPosts = async () => {
-    try {
-      const res = await fetch(`/api/stream?classId=${id}`);
-      if (!res.ok) {
-        console.error("fetchStreamPosts failed", await res.text());
-        return setStreamPosts([]);
-      }
-      const data = await res.json();
-      // Expect data to be an array of posts
-      setStreamPosts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Error fetching stream posts:", err);
-      setStreamPosts([]);
-    }
-  };
-
-  // [NEW] Get user role and name
+  // Get user role and name
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        // Fetch user data from MongoDB API to get role
         try {
           const res = await fetch(`/api/users/${currentUser.uid}`);
           if (res.ok) {
@@ -105,173 +86,244 @@ export default function ClassroomPage() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
+  // Fetch classroom details
+  const fetchClassroom = async () => {
+    try {
+      const res = await fetch(`/api/classroom/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load classroom");
+      setClassroom(data.classroom);
+    } catch (err) {
+      console.error("Error fetching classroom:", err);
+      setError("Failed to load classroom details.");
+    }
+  };
+
+  // Fetch stream posts
+  const fetchStreamPosts = async () => {
+    try {
+      const res = await fetch(`/api/stream?classId=${id}`);
+      if (!res.ok) {
+        console.error("fetchStreamPosts failed", await res.text());
+        return setStreamPosts([]);
+      }
+      const data = await res.json();
+      setStreamPosts(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching stream posts:", err);
+      setStreamPosts([]);
+    }
+  };
+
+  // [NEW] Fetch chat messages
+  const fetchChatMessages = async () => {
     if (!id) return;
+    setIsChatLoading(true);
+    try {
+      const res = await fetch(`/api/chat?classId=${id}`);
+      if (!res.ok) {
+        throw new Error("Failed to load chat");
+      }
+      const data = await res.json();
+      setChatMessages(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching chat:", err);
+      toast.error(err.message);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+  
+  // [REMOVED] All socket.io logic
+  
+  // [NEW] Main useEffect to fetch data based on tab
+  useEffect(() => {
+    if (!id || !user) return; // Wait for user and id
+
+    // Fetch classroom details (always needed)
     fetchClassroom();
-    fetchStreamPosts();
+
+    if (activeTab === "stream") {
+      fetchStreamPosts();
+    } else if (activeTab === "chat") {
+      fetchChatMessages();
+    }
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, user, activeTab]); // Re-run when tab, user, or class ID changes
+
+
+  // [NEW] useEffect for chat polling (auto-refresh)
+  useEffect(() => {
+    if (activeTab === 'chat' && id) {
+      // Fetch messages every 10 seconds
+      const interval = setInterval(fetchChatMessages, 10000);
+      
+      // Clear interval on cleanup
+      return () => clearInterval(interval);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, id]);
+
+  // useEffect for auto-scrolling chat
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  // --- Handlers ---
 
   const handleCopy = () => {
-    if (classroom?.classCode) {
-      navigator.clipboard.writeText(classroom.classCode);
+    if (classroom?.courseCode) {
+      navigator.clipboard.writeText(classroom.courseCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  // [MAJOR UPDATE] This function now collects all form data
+  // Handler for creating a new advanced post (stream)
   const handleCreatePost = async () => {
-    const postContentTrimmed = postContent.trim();
-    const postTitleTrimmed = postTitle.trim();
-
-    if (!postContentTrimmed || !postTitleTrimmed || !user) {
-      toast.error("Title and Content are required to make a post.");
+    if (!newPostData.title.trim() || !newPostData.content.trim() || !user) {
+      toast.error("Title and Content are required.");
       return;
     }
-    
-    // 1. Create the new post for the UI immediately (Optimistic Update)
+    const loadingToastId = toast.loading("Creating post...");
     const optimisticPost = {
+      id: `temp-${Date.now()}`, classId: id, ...newPostData,
+      link: newPostData.linkUrl ? { url: newPostData.linkUrl, text: newPostData.linkText || "View Link" } : null,
+      createdAt: new Date().toISOString(),
+      author: { name: username, id: user.uid }, comments: [],
+    };
+    setStreamPosts([optimisticPost, ...streamPosts]);
+    setIsCreatePostOpen(false);
+    setNewPostData({
+      title: "", content: "", linkUrl: "", linkText: "",
+      isImportant: false, isUrgent: false,
+    });
+    try {
+      const response = await fetch("/api/stream", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: id, authorId: user.uid, title: newPostData.title,
+          content: newPostData.content, isImportant: newPostData.isImportant,
+          isUrgent: newPostData.isUrgent,
+          link: newPostData.linkUrl ? { url: newPostData.linkUrl, text: newPostData.linkText || "View Link" } : null,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to save post");
+      toast.success("Post created!", { id: loadingToastId });
+      fetchStreamPosts(); 
+    } catch (err) {
+      toast.error(`Error: ${err.message}`, { id: loadingToastId });
+      setStreamPosts(streamPosts.filter(p => p.id !== optimisticPost.id));
+    }
+  };
+
+  // Handler for submitting a new comment
+  const handleCommentSubmit = async (e, post) => {
+    if (e.key !== "Enter" || !user) return;
+    const text = e.target.value.trim();
+    if (!text) return;
+    const postId = post._id ?? post.id;
+    if (!postId) return console.error("Missing post id");
+    const newComment = {
+      _id: `temp-${Date.now()}`,
+      author: { name: username, id: user.uid },
+      text, createdAt: new Date().toISOString(),
+    };
+    setStreamPosts((prevStreamPosts) =>
+      prevStreamPosts.map((p) => {
+        const pId = p._id ?? p.id;
+        if (pId === postId) {
+          return { ...p, comments: [...(p.comments || []), newComment] };
+        }
+        return p;
+      })
+    );
+    e.target.value = "";
+    try {
+      const res = await fetch("/api/comments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId: postId.toString(),
+          author: { name: username, id: user.uid }, text,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save comment");
+      fetchStreamPosts();
+    } catch (err) {
+      console.error("Error sending comment:", err);
+      toast.error("Error sending comment.");
+      fetchStreamPosts();
+    }
+  };
+
+  // [NEW] Handler for sending a new chat message
+  const handleSendChatMessage = async (e) => {
+    if (e) e.preventDefault();
+    const text = chatInput.trim();
+    if (!text || !user) return;
+
+    const optimisticMessage = {
       id: `temp-${Date.now()}`,
       classId: id,
-      title: postTitleTrimmed, // [NEW]
-      content: postContentTrimmed,
-      isImportant: isImportant, // [NEW]
-      isUrgent: isUrgent, // [NEW]
-      link: linkUrl.trim() ? { url: linkUrl.trim(), text: linkText.trim() || "View Link" } : null, // [NEW]
+      text: text,
       createdAt: new Date().toISOString(),
       author: {
         name: username,
         id: user.uid,
       },
-      comments: [],
     };
 
-    // 2. Add it to the top of the stream
-    setStreamPosts([optimisticPost, ...streamPosts]);
-    
-    // 3. Reset form and close dialog
-    setPostTitle("");
-    setPostContent("");
-    setIsImportant(false);
-    setIsUrgent(false);
-    setLinkUrl("");
-    setLinkText("");
-    setIsPostDialogOpen(false);
+    // Optimistic update
+    setChatMessages([...chatMessages, optimisticMessage]);
+    setChatInput("");
 
-    // 4. Send the *real* data to the database
     try {
-      const response = await fetch("/api/stream", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId: id,
-          authorId: user.uid,
-          title: postTitleTrimmed,
-          content: postContentTrimmed,
-          isImportant: isImportant,
-          isUrgent: isUrgent,
-          link: optimisticPost.link, // Send the link object
+          author: { id: user.uid, name: username },
+          text: text,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to save post");
-      }
+      if (!res.ok) throw new Error("Failed to send message");
       
-      toast.success("Post created!");
-      fetchStreamPosts(); // This will replace the temp post with the real one
-    
+      // On success, refetch to sync
+      fetchChatMessages();
+
     } catch (err) {
-      toast.error(`Error: ${err.message}`);
-      // If it fails, roll back the optimistic update
-      setStreamPosts(streamPosts.filter(p => p.id !== optimisticPost.id));
+      console.error("Error sending chat message:", err);
+      toast.error(err.message);
+      // Rollback
+      setChatMessages(chatMessages.filter(m => m.id !== optimisticMessage.id));
     }
   };
 
-  // ... (handleCommentSubmit is perfect, no changes) ...
-  const handleCommentSubmit = async (e, post) => {
-    if (e.key !== "Enter" || !user) return;
-    const text = e.target.value.trim();
-    if (!text) return;
-
-    // resolve post id - different APIs return either _id or id
-    const postId = post._id ?? post.id;
-    if (!postId) return console.error("Missing post id");
-
-    // [FIX] optimistic update with new comment object
-    const newComment = {
-      author: { name: username }, // [FIX] Use the username from state
-      text,
-      createdAt: new Date().toISOString(),
-    };
-
-    setStreamPosts((prev) =>
-      prev.map((p) =>
-        p._id === post._id || p.id === post.id
-          ? { ...p, comments: [...(p.comments || []), newComment] }
-          : p
-      )
-    );
-
-    // clear input UI (we'll clear the specific input by removing its value)
-    e.target.value = "";
-
-    // send to backend
-    try {
-      const res = await fetch("/api/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postId: postId.toString(),
-          author: { name: username, id: user.uid }, // Send the author object
-          text,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        console.error("Failed to save comment:", body);
-        toast.error("Failed to save comment.");
-        // Rollback on failure
-        fetchStreamPosts();
-      }
-    } catch (err) {
-      console.error("Error sending comment:", err);
-      toast.error("Error sending comment.");
-      // Rollback on failure
-      fetchStreamPosts();
-    }
-  };
-
+  // --- Render Logic ---
 
   if (error) {
     return <p className="text-center text-red-500 mt-10">{error}</p>;
   }
 
   if (!classroom) {
-    return (
-      <p className="text-center text-gray-500 mt-10">Loading classroom...</p>
-    );
+    return <p className="text-center text-gray-500 mt-10">Loading classroom...</p>;
   }
 
   return (
     <div className="min-h-screen bg-white text-black px-6 py-10 flex justify-center">
       <div className="w-full max-w-5xl space-y-8">
-        {/* ... (Header Card is fine, no changes) ... */}
+        {/* Header - description box (left-aligned) */}
         <Card className="border border-gray-300 shadow-sm">
           <CardHeader className="text-left space-y-3">
-            <CardTitle className="text-3xl font-semibold">
-              {classroom.title}
-            </CardTitle>
+            <CardTitle className="text-3xl font-semibold">{classroom.title}</CardTitle>
             <p className="text-gray-700 max-w-2xl">{classroom.description}</p>
-
             <div className="text-sm text-gray-700 space-y-1">
               <p>
-                <span className="font-semibold">Instructor:</span>{" "}
-                {classroom.instructorName}
+                <span className="font-semibold">Instructor:</span> {classroom.instructorName}
               </p>
-
               <div className="flex items-center gap-3">
                 <p>
                   <span className="font-semibold">Class Code:</span>{" "}
@@ -279,22 +331,20 @@ export default function ClassroomPage() {
                     {classroom.courseCode}
                   </span>
                 </p>
-
                 <Button
                   size="sm"
                   variant="outline"
                   className="border-gray-400 text-gray-800 hover:bg-gray-200"
                   onClick={handleCopy}
                 >
-                  <Copy className="w-4 h-4 mr-1" />{" "}
-                  {copied ? "Copied!" : "Copy"}
+                  <Copy className="w-4 h-4 mr-1" /> {copied ? "Copied!" : "Copy"}
                 </Button>
               </div>
             </div>
           </CardHeader>
         </Card>
 
-        {/* ... (Tab Buttons are fine, no changes) ... */}
+        {/* Tab Buttons */}
         <div className="flex justify-center gap-4 border-b border-gray-300 pb-2">
           {["stream", "assignments", "chat", "people"].map((tab) => (
             <Button
@@ -317,102 +367,101 @@ export default function ClassroomPage() {
           {/* STREAM */}
           {activeTab === "stream" && (
             <div className="space-y-4">
-              {/* [MAJOR UPDATE] "Create Post" card replaced with a Dialog */}
+              {/* "Create Post" Dialog for instructors */}
               {isInstructor && (
-                <Dialog open={isPostDialogOpen} onOpenChange={setIsPostDialogOpen}>
+                <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full h-20 text-left justify-start p-4 border-gray-300 shadow-sm text-gray-500 hover:bg-gray-50"
+                      className="w-full h-16 border-gray-300 text-gray-600 hover:bg-gray-100"
                     >
-                      Announce something to your class, {username}...
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create a new post...
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-2xl bg-white text-black">
+                  <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
-                      <DialogTitle>Create New Post</DialogTitle>
+                      <DialogTitle>Create Post</DialogTitle>
                       <DialogDescription>
-                        Make an announcement or create a new assignment link.
+                        Make an announcement or post to your class.
                       </DialogDescription>
                     </DialogHeader>
-                    {/* New advanced form */}
-                    <div className="grid gap-6 py-4">
+                    <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="post-title" className="text-left">Title</Label>
+                        <Label htmlFor="post-title">Title</Label>
                         <Input
                           id="post-title"
-                          placeholder="e.g., New Assignment or Welcome!"
-                          value={postTitle}
-                          onChange={(e) => setPostTitle(e.target.value)}
-                          className="border-gray-300"
+                          placeholder="e.g., Welcome to Class!"
+                          value={newPostData.title}
+                          onChange={(e) =>
+                            setNewPostData({ ...newPostData, title: e.target.value })
+                          }
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="post-content" className="text-left">Content</Label>
+                        <Label htmlFor="post-content">Content</Label>
                         <Textarea
                           id="post-content"
                           placeholder="What's on your mind?"
-                          value={postContent}
-                          onChange={(e) => setPostContent(e.target.value)}
-                          className="min-h-[120px] border-gray-300"
+                          className="min-h-[120px]"
+                          value={newPostData.content}
+                          onChange={(e) =>
+                            setNewPostData({ ...newPostData, content: e.target.value })
+                          }
                         />
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                          <Label htmlFor="link-url" className="text-left">Link URL (Optional)</Label>
+                          <Label htmlFor="post-link-url">Link URL (Optional)</Label>
                           <Input
-                            id="link-url"
-                            placeholder="https://google-drive-link.com"
-                            value={linkUrl}
-                            onChange={(e) => setLinkUrl(e.target.value)}
-                            className="border-gray-300"
+                            id="post-link-url"
+                            placeholder="https://example.com"
+                            value={newPostData.linkUrl}
+                            onChange={(e) =>
+                              setNewPostData({ ...newPostData, linkUrl: e.target.value })
+                            }
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="link-text" className="text-left">Link Text (Optional)</Label>
+                          <Label htmlFor="post-link-text">Link Text (Optional)</Label>
                           <Input
-                            id="link-text"
-                            placeholder="e.g., View Assignment 1"
-                            value={linkText}
-                            onChange={(e) => setLinkText(e.target.value)}
-                            className="border-gray-300"
+                            id="post-link-text"
+                            placeholder="e.g., View Resource"
+                            value={newPostData.linkText}
+                            onChange={(e) =>
+                              setNewPostData({ ...newPostData, linkText: e.target.value })
+                            }
                           />
                         </div>
                       </div>
-                      <div className="flex items-center space-x-6">
+                      <div className="flex items-center space-x-6 pt-2">
                         <div className="flex items-center space-x-2">
                           <Checkbox
-                            id="isImportant"
-                            checked={isImportant}
-                            onCheckedChange={setIsImportant}
+                            id="post-important"
+                            checked={newPostData.isImportant}
+                            onCheckedChange={(checked) =>
+                              setNewPostData({ ...newPostData, isImportant: checked })
+                            }
                           />
-                          <Label htmlFor="isImportant">Important</Label>
+                          <Label htmlFor="post-important">Important</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                           <Checkbox
-                            id="isUrgent"
-                            checked={isUrgent}
-                            onCheckedChange={setIsUrgent}
+                            id="post-urgent"
+                            checked={newPostData.isUrgent}
+                            onCheckedChange={(checked) =>
+                              setNewPostData({ ...newPostData, isUrgent: checked })
+                            }
                           />
-                          <Label htmlFor="isUrgent">Urgent</Label>
+                          <Label htmlFor="post-urgent">Urgent</Label>
                         </div>
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsPostDialogOpen(false)}
-                        className="text-black border-gray-400"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleCreatePost}
-                        disabled={!postTitle.trim() || !postContent.trim()}
-                        className="bg-black text-white hover:bg-gray-800"
-                      >
-                        Post
-                      </Button>
+                      <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                      </DialogClose>
+                      <Button onClick={handleCreatePost}>Post</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -427,72 +476,63 @@ export default function ClassroomPage() {
                 <div className="space-y-4">
                   {streamPosts.map((post) => {
                     const pid = post._id ?? post.id;
-                    const createdAt = post.createdAt
-                      ? new Date(post.createdAt).toLocaleString()
-                      : "";
+                    const createdAt = post.createdAt ? new Date(post.createdAt).toLocaleString() : "";
                     return (
                       <div
                         key={pid}
                         className="border border-gray-200 rounded-md p-4 hover:shadow-sm transition"
                       >
-                        {/* [NEW] Updated Post Header */}
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg text-gray-900">
-                              {post.title || "Post"}
-                            </h3>
-                            <span className="text-sm text-gray-500">
-                              {post.author?.name || "Unknown"} • {createdAt}
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-semibold text-gray-800">
+                            {post.author?.name || "Unknown"}
+                          </span>
+                          <span className="text-sm text-gray-500">{createdAt}</span>
+                        </div>
+                        
+                        {/* Post Title & Badges */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-lg font-semibold">{post.title}</h3>
+                          {post.isImportant && (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
+                              IMPORTANT
                             </span>
-                          </div>
-                          <div className="flex gap-2">
-                            {post.isUrgent && (
-                              <Badge variant="destructive">URGENT</Badge>
-                            )}
-                            {post.isImportant && (
-                              <Badge className="bg-yellow-500 text-black">
-                                IMPORTANT
-                              </Badge>
-                            )}
-                          </div>
+                          )}
+                          {post.isUrgent && (
+                            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-medium">
+                              URGENT
+                            </span>
+                          )}
                         </div>
 
-                        <p className="text-gray-700 mb-3 text-left">
-                          {post.content}
-                        </p>
-                        
-                        {/* [NEW] Show Link Button */}
+                        <p className="text-gray-700 mb-3 text-left">{post.content}</p>
+
+                        {/* Post Link */}
                         {post.link?.url && (
-                          <div className="mt-4">
-                            <Button
-                              variant="outline"
-                              asChild
-                              className="border-gray-400 text-gray-800 hover:bg-gray-200"
+                          <div className="mb-3">
+                            <a
+                              href={post.link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
                             >
-                              <a href={post.link.url} target="_blank" rel="noopener noreferrer">
-                                <LinkIcon className="w-4 h-4 mr-2" />
-                                {post.link.text || "View Link"}
-                              </a>
-                            </Button>
+                              <LinkIcon className="w-3 h-3" />
+                              {post.link.text || post.link.url}
+                            </a>
                           </div>
                         )}
 
-                        {/* ... (Comment section is perfect, no changes) ... */}
+                        {/* Post-specific comments */}
                         <div className="border-t border-gray-100 pt-3 mt-3">
                           <div className="space-y-2 max-h-36 overflow-y-auto pr-2">
                             {(post.comments || []).length === 0 ? (
-                              <p className="text-sm text-gray-500 italic">
-                                No comments yet
-                              </p>
+                              <p className="text-sm text-gray-500 italic">No comments yet</p>
                             ) : (
                               (post.comments || []).map((c, idx) => (
-                                <div key={idx} className="text-left">
+                                <div key={c._id || idx} className="text-left">
                                   <p className="text-sm font-semibold text-gray-800">
                                     {c.author?.name || c.author || "Unknown"}
                                   </p>
-                                  <p className="text-xs text-gray-600">
-                                    {c.text}
-                                  </p>
+                                  <p className="text-xs text-gray-600">{c.text}</p>
                                 </div>
                               ))
                             )}
@@ -522,15 +562,79 @@ export default function ClassroomPage() {
 
           {/* CHAT */}
           {activeTab === "chat" && (
-            <Card className="border border-gray-300 p-6 text-center text-gray-600">
-              Chat feature coming soon.
+            <Card className="border border-gray-300">
+              <CardContent className="p-0 flex flex-col" style={{ height: "600px" }}>
+                
+                {/* Chat Message List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {isChatLoading ? (
+                    <p className="text-center text-gray-500">Loading chat...</p>
+                  ) : chatMessages.length === 0 ? (
+                    <p className="text-center text-gray-500">No messages yet. Start the conversation!</p>
+                  ) : (
+                    chatMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex ${
+                          msg.author.id === user?.uid ? "justify-end" : "justify-start"
+                        }`}
+                      >
+                        <div
+                          className={`flex items-end max-w-xs md:max-w-md ${
+                            msg.author.id === user?.uid ? "flex-row-reverse" : "flex-row"
+                          }`}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-gray-400 text-white flex items-center justify-center text-sm font-semibold mx-2 flex-shrink-0">
+                            {msg.author.name ? msg.author.name[0].toUpperCase() : "?"}
+                          </div>
+                          <div
+                            className={`p-3 rounded-lg ${
+                              msg.author.id === user?.uid
+                                ? "bg-black text-white"
+                                : "bg-gray-200 text-black"
+                            }`}
+                          >
+                            <span className="text-xs font-semibold block mb-1">
+                              {msg.author.name || "Unknown"}
+                            </span>
+                            <p className="text-sm">{msg.text}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Chat Input Box */}
+                <div className="border-t border-gray-300 p-4 bg-white">
+                  <form 
+                    className="flex items-center gap-2"
+                    onSubmit={handleSendChatMessage} 
+                  >
+                    <Input
+                      type="text"
+                      placeholder="Type a message..."
+                      className="flex-1 border-gray-300 focus:ring-gray-400"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                    />
+                    <Button 
+                      type="submit" 
+                      className="bg-black text-white hover:bg-gray-800"
+                      disabled={!chatInput.trim()}
+                    >
+                      Send
+                    </Button>
+                  </form>
+                </div>
+              </CardContent>
             </Card>
           )}
 
-          {/* ... (People tab is perfect from last time, no changes) ... */}
+          {/* PEOPLE */}
           {activeTab === "people" && (
             <div className="space-y-6">
-              {/* Instructor List */}
               <Card className="border border-gray-300">
                 <CardHeader>
                   <CardTitle className="text-xl">Instructor</CardTitle>
@@ -538,9 +642,7 @@ export default function ClassroomPage() {
                 <CardContent>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gray-600 text-white flex items-center justify-center text-lg font-semibold">
-                      {classroom.instructorName
-                        ? classroom.instructorName[0].toUpperCase()
-                        : "I"}
+                      {classroom.instructorName ? classroom.instructorName[0].toUpperCase() : "I"}
                     </div>
                     <span className="font-medium text-gray-800">
                       {classroom.instructorName}
@@ -549,11 +651,10 @@ export default function ClassroomPage() {
                 </CardContent>
               </Card>
 
-              {/* Student List */}
               <Card className="border border-gray-300">
                 <CardHeader>
                   <CardTitle className="text-xl">
-                    Students ({classroom.students?.length || 0})
+                    Classmates ({classroom.students?.length || 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -580,4 +681,3 @@ export default function ClassroomPage() {
     </div>
   );
 }
-
