@@ -54,10 +54,10 @@ import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 export default function ClassyncDashboard() {
+  const router = useRouter();
   // User state
   const [user, setUser] = useState(null)
-  const router = useRouter();
-  const [username, setUsername] = useState("")
+   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [pdfs, setPdfs] = useState([])
@@ -560,8 +560,8 @@ export default function ClassyncDashboard() {
                         } else {
                           toast.error("Error: This course has no ID.");
                         }
-                      }}
-                    >
+                      }}>
+                    
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
                           <BookOpen className="w-8 h-8 text-foreground" />

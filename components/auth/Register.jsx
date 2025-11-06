@@ -75,8 +75,7 @@ export default function Register({ onBackToHome }) {
       return;
     }
 
-    // Check if email is instructor domain
-
+ 
     // Validate instructor credentials
     if (role === "instructor") {
       if (instructorPassword !== "instructor") {
