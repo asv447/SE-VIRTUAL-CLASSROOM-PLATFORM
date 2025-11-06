@@ -1,7 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Home, Calendar, Book, ChevronDown, Layers, Menu } from "lucide-react";
-import axios from "axios";
 
 export default function Sidebar() {
   const [pathname, setPathname] = useState("/dashboard");
@@ -114,8 +113,9 @@ export default function Sidebar() {
     /*
     const fetchCourses = async () => {
       try {
-        const response = await axios.get("/api/classroom/courses");
-        setCourses(response.data);
+        const response = await fetch("/api/classroom/courses");
+        const data = await response.json();
+        setCourses(data);
       } catch (error) {
         console.error("Error fetching courses:", error);
       }
