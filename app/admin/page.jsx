@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation"; // [FIX] Import useRouter
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
@@ -22,9 +23,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "sonner"; // [FIX] Import toast
 
 export default function AdminDashboard() {
+  const router = useRouter(); // [FIX] Add router
   const [user, setUser] = useState(null);
+  const [username, setUsername] = useState(""); // [FIX] Add username state
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [courses, setCourses] = useState([]);
@@ -32,10 +36,10 @@ export default function AdminDashboard() {
   const [submissions, setSubmissions] = useState([]);
   
   const [formLoading, setFormLoading] = useState(false);
-  const [newCourse, setNewCourse] = useState({ name: "", code: "", description: "" });
-  const [courseName, setCourseName] = useState("");
-  const [courseCode, setCourseCode] = useState("");
+  // [FIX] Changed state names to match what we send to the API
+  const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
+  
   const [newAssignment, setNewAssignment] = useState({
     title: "",
     description: "",
@@ -55,26 +59,28 @@ export default function AdminDashboard() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
       if (usr) {
-
-        // HAVE NAI KARVU AA
-        // const isInstructorEmail = usr.email?.includes("@instructor.com") || 
-        //                         usr.email?.includes("@admin.com");
+        let isInstructorEmail = usr.email?.includes("@instructor.com") || 
+                                usr.email?.includes("@admin.com");
         
-        // Check role from database
         try {
           const res = await fetch(`/api/users/${usr.uid}`);
           if (res.ok) {
             const data = await res.json();
             const isInstructorRole = data.user.role === "instructor";
             
+            // [FIX] Set the username from the database
+            setUsername(data.user.username || usr.email.split("@")[0]);
+
             if (!isInstructorRole) {
               window.location.href = "/student";
               return;
             }
           } else if (!isInstructorEmail) {
-            // If can't verify role, fall back to email check
             window.location.href = "/student";
             return;
+          } else {
+            // [FIX] Fallback for username if DB fetch fails but email is correct
+            setUsername(usr.email.split("@")[0]);
           }
         } catch (err) {
           console.error("Error checking user role:", err);
@@ -82,11 +88,14 @@ export default function AdminDashboard() {
             window.location.href = "/student";
             return;
           }
+          // [FIX] Fallback for username on error
+          setUsername(usr.email.split("@")[0]);
         }
         
         setUser(usr);
       } else {
         setUser(null);
+        setUsername("");
       }
     });
     return () => unsubscribe();
@@ -115,8 +124,11 @@ export default function AdminDashboard() {
   };
 
   const loadCourses = async () => {
+    // [FIX] Make sure user is available before fetching
+    if (!user) return; 
     try {
-      const res = await fetch("/api/courses");
+      // [FIX] Call the API to get *only* this instructor's courses
+      const res = await fetch(`/api/courses?role=instructor&userId=${user.uid}`);
       if (res.ok) {
         const data = await res.json();
         setCourses(data);
@@ -150,48 +162,57 @@ export default function AdminDashboard() {
     }
   };
 
+  // [FIX] Helper to generate the 6-digit class code (same as homepage)
+  const generateCourseCode = (prof, course) => {
+    const p = (prof || "USER").slice(0, 2).toUpperCase();
+    const c = (course || "COURSE").slice(0, 2).toUpperCase();
+    const r = Math.random().toString(36).substring(2, 4).toUpperCase();
+    return `${p}${c}${r}`;
+  };
+
   const createCourse = async () => {
-    if (!courseName || !courseCode) {
-      alert("Please fill in course name and code");
+    // [FIX] Check for title
+    if (!courseTitle) {
+      toast.error("Please fill in course name");
       return;
     }
 
     setLoading(true);
     try {
-      if (!user) {
-        alert("User not available. Please sign in again.");
+      if (!user || !username) {
+        toast.error("User not available. Please sign in again.");
         setLoading(false);
         return;
       }
 
-      const instructorId = user.uid;
-      const instructorName = (user.email && user.email.split("@")[0]) || instructorId;
+      // [FIX] Generate the code and send the correct fields
+      const uniqueCourseCode = generateCourseCode(username, courseTitle);
+
       const res = await fetch("/api/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: courseName,
-          code: courseCode,
+          title: courseTitle,
+          courseCode: uniqueCourseCode,
           description: courseDescription,
-          instructorId,
-          instructorName,
+          instructorId: user.uid,
+          instructorName: username,
         }),
       });
 
       if (res.ok) {
-        setCourseName("");
-        setCourseCode("");
+        setCourseTitle(""); // [FIX] Use correct state
         setCourseDescription("");
         setIsCreateCourseOpen(false);
         await loadCourses();
-        alert("Course created successfully!");
+        toast.success("Course created successfully!"); // [FIX] Use toast
       } else {
         const error = await res.json();
-        alert("Failed to create course: " + error.error);
+        toast.error("Failed to create course: " + error.error); // [FIX] Use toast
       }
     } catch (err) {
       console.error("Error creating course:", err);
-      alert("Failed to create course");
+      toast.error("Failed to create course"); // [FIX] Use toast
     } finally {
       setLoading(false);
     }
@@ -199,20 +220,20 @@ export default function AdminDashboard() {
 
   const createAssignment = async () => {
     if (!selectedCourse || !assignmentTitle || !assignmentDescription || !assignmentDeadline) {
-      alert("Please fill all required fields");
+      toast.error("Please fill all required fields"); // [FIX] Use toast
       return;
     }
 
     setLoading(true);
     try {
-      if (!user) {
-        alert("User not available. Please sign in again.");
+      if (!user || !username) { // [FIX] Check for username
+        toast.error("User not available. Please sign in again."); // [FIX] Use toast
         setLoading(false);
         return;
       }
 
       const instructorId = user.uid;
-      const instructorName = (user.email && user.email.split("@")[0]) || instructorId;
+      const instructorName = username; // [FIX] Use username from state
       const formData = new FormData();
       formData.append("courseId", selectedCourse);
       formData.append("title", assignmentTitle);
@@ -237,14 +258,14 @@ export default function AdminDashboard() {
         setAssignmentFile(null);
         setIsCreateAssignmentOpen(false);
         await loadAssignments();
-        alert("Assignment created successfully!");
+        toast.success("Assignment created successfully!"); // [FIX] Use toast
       } else {
         const error = await res.json();
-        alert("Failed to create assignment: " + error.error);
+        toast.error("Failed to create assignment: " + error.error); // [FIX] Use toast
       }
     } catch (err) {
       console.error("Error creating assignment:", err);
-      alert("Failed to create assignment");
+      toast.error("Failed to create assignment"); // [FIX] Use toast
     } finally {
       setLoading(false);
     }
@@ -263,14 +284,14 @@ export default function AdminDashboard() {
       
       if (res.ok) {
         await loadAssignments();
-        alert("Assignment deleted successfully!");
+        toast.success("Assignment deleted successfully!"); // [FIX] Use toast
       } else {
         const error = await res.json();
-        alert("Failed to delete assignment: " + error.error);
+        toast.error("Failed to delete assignment: " + error.error); // [FIX] Use toast
       }
     } catch (err) {
       console.error("Error deleting assignment:", err);
-      alert("Failed to delete assignment");
+      toast.error("Failed to delete assignment"); // [FIX] Use toast
     }
   };
 
@@ -303,7 +324,7 @@ export default function AdminDashboard() {
           <BookOpen className="h-8 w-8" />
           Admin Dashboard
         </h1>
-        <p className="text-gray-600">Welcome, {user.displayName || user.email}</p>
+        <p className="text-gray-600">Welcome, {username}</p> {/* [FIX] Use username */}
       </div>
 
       <Tabs defaultValue="assignments" className="space-y-4">
@@ -338,20 +359,14 @@ export default function AdminDashboard() {
                         <Label htmlFor="courseName">Course Name *</Label>
                         <Input
                           id="courseName"
-                          value={courseName}
-                          onChange={(e) => setCourseName(e.target.value)}
+                          value={courseTitle} // [FIX] Use correct state
+                          onChange={(e) => setCourseTitle(e.target.value)} // [FIX] Use correct state
                           placeholder="e.g., Computer Science 101"
                         />
                       </div>
-                      <div>
-                        <Label htmlFor="courseCode">Course Code *</Label>
-                        <Input
-                          id="courseCode"
-                          value={courseCode}
-                          onChange={(e) => setCourseCode(e.target.value)}
-                          placeholder="e.g., CS101"
-                        />
-                      </div>
+                      
+                      {/* [FIX] Removed Course Code input, it's auto-generated */}
+
                       <div>
                         <Label htmlFor="courseDescription">Description</Label>
                         <Textarea
@@ -373,20 +388,25 @@ export default function AdminDashboard() {
               {courses.length === 0 ? (
                 <p className="text-gray-600 text-center py-8">No courses created yet.</p>
               ) : (
-                <div className="grid gap-4">
+                // [FIX] Updated to show clickable cards
+                <div className="grid gap-4 md:grid-cols-2">
                   {courses.map((course) => (
-                    <div key={course.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold text-lg">{course.name}</h3>
-                          <p className="text-sm text-gray-600">Code: {course.code}</p>
-                          <p className="text-sm mt-2">{course.description}</p>
-                        </div>
-                        <div className="text-sm text-gray-500">
+                    <Card 
+                      key={course.id} 
+                      className="hover:shadow-lg transition-shadow cursor-pointer"
+                      onClick={() => router.push(`/classroom/${course.id}`)}
+                    >
+                      <CardHeader>
+                        <CardTitle>{course.name}</CardTitle>
+                        <CardDescription>Code: {course.courseCode}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 truncate">{course.description || "No description."}</p>
+                        <div className="text-sm text-gray-500 mt-4">
                           <p>{format(new Date(course.createdAt), "PPP")}</p>
                         </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
               )}
@@ -424,7 +444,7 @@ export default function AdminDashboard() {
                           <SelectContent>
                             {courses.map((course) => (
                               <SelectItem key={course.id} value={course.id}>
-                                {course.name} ({course.code})
+                                {course.name} ({course.courseCode}) {/* [FIX] Use courseCode */}
                               </SelectItem>
                             ))}
                           </SelectContent>
