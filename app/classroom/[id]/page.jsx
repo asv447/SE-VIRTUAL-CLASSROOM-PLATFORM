@@ -4,18 +4,27 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Copy } from "lucide-react";
+import { Copy, Link as LinkIcon } from "lucide-react"; // [NEW] Import LinkIcon
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { auth } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
-/**
- * Classroom page
- * - loads classroom details
- * - fetches stream posts from /api/stream?classId=<id>
- * - allows adding comments to each post by pressing Enter
- */
+// [NEW] Imports for the advanced post form
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge"; // [NEW] Import Badge
 
 export default function ClassroomPage() {
   const { id } = useParams();
@@ -24,15 +33,22 @@ export default function ClassroomPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("stream");
 
-  // [NEW] State for logged-in user
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("Student");
   const [isInstructor, setIsInstructor] = useState(false);
 
-  // Stream posts from /api/stream?classId=<id>
   const [streamPosts, setStreamPosts] = useState([]);
-  const [postContent, setPostContent] = useState(""); // [NEW] State for new post input
 
+  // [NEW] State for the advanced post form
+  const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
+  const [postTitle, setPostTitle] = useState("");
+  const [postContent, setPostContent] = useState("");
+  const [isImportant, setIsImportant] = useState(false);
+  const [isUrgent, setIsUrgent] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkText, setLinkText] = useState("");
+
+  // ... (fetchClassroom, fetchStreamPosts, and auth useEffect are all perfect, no changes) ...
   // fetch classroom details
   const fetchClassroom = async () => {
     try {
@@ -104,20 +120,28 @@ export default function ClassroomPage() {
     }
   };
 
-  // [NEW] Function to create a new post
+  // [MAJOR UPDATE] This function now collects all form data
   const handleCreatePost = async () => {
-    if (!postContent.trim() || !user) return;
-
     const postContentTrimmed = postContent.trim();
+    const postTitleTrimmed = postTitle.trim();
 
+    if (!postContentTrimmed || !postTitleTrimmed || !user) {
+      toast.error("Title and Content are required to make a post.");
+      return;
+    }
+    
     // 1. Create the new post for the UI immediately (Optimistic Update)
     const optimisticPost = {
-      id: `temp-${Date.now()}`, // Temporary ID
+      id: `temp-${Date.now()}`,
       classId: id,
+      title: postTitleTrimmed, // [NEW]
       content: postContentTrimmed,
+      isImportant: isImportant, // [NEW]
+      isUrgent: isUrgent, // [NEW]
+      link: linkUrl.trim() ? { url: linkUrl.trim(), text: linkText.trim() || "View Link" } : null, // [NEW]
       createdAt: new Date().toISOString(),
       author: {
-        name: username, // Use the 'username' from state
+        name: username,
         id: user.uid,
       },
       comments: [],
@@ -125,36 +149,47 @@ export default function ClassroomPage() {
 
     // 2. Add it to the top of the stream
     setStreamPosts([optimisticPost, ...streamPosts]);
+    
+    // 3. Reset form and close dialog
+    setPostTitle("");
     setPostContent("");
+    setIsImportant(false);
+    setIsUrgent(false);
+    setLinkUrl("");
+    setLinkText("");
+    setIsPostDialogOpen(false);
 
-    // 3. Send the *real* data to the database
+    // 4. Send the *real* data to the database
     try {
       const response = await fetch("/api/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId: id,
-          authorId: user.uid, // The API expects authorId
+          authorId: user.uid,
+          title: postTitleTrimmed,
           content: postContentTrimmed,
+          isImportant: isImportant,
+          isUrgent: isUrgent,
+          link: optimisticPost.link, // Send the link object
         }),
       });
 
       if (!response.ok) {
         throw new Error("Failed to save post");
       }
-
-      // On success, re-fetch to get the real data from DB
+      
       toast.success("Post created!");
       fetchStreamPosts(); // This will replace the temp post with the real one
+    
     } catch (err) {
       toast.error(`Error: ${err.message}`);
       // If it fails, roll back the optimistic update
-      setStreamPosts(streamPosts.filter((p) => p.id !== optimisticPost.id));
+      setStreamPosts(streamPosts.filter(p => p.id !== optimisticPost.id));
     }
   };
 
-  // Submit comment when user presses Enter inside a post input
-  // optimistic update + send to /api/comments
+  // ... (handleCommentSubmit is perfect, no changes) ...
   const handleCommentSubmit = async (e, post) => {
     if (e.key !== "Enter" || !user) return;
     const text = e.target.value.trim();
@@ -209,6 +244,7 @@ export default function ClassroomPage() {
     }
   };
 
+
   if (error) {
     return <p className="text-center text-red-500 mt-10">{error}</p>;
   }
@@ -222,7 +258,7 @@ export default function ClassroomPage() {
   return (
     <div className="min-h-screen bg-white text-black px-6 py-10 flex justify-center">
       <div className="w-full max-w-5xl space-y-8">
-        {/* Header - description box (left-aligned) */}
+        {/* ... (Header Card is fine, no changes) ... */}
         <Card className="border border-gray-300 shadow-sm">
           <CardHeader className="text-left space-y-3">
             <CardTitle className="text-3xl font-semibold">
@@ -258,7 +294,7 @@ export default function ClassroomPage() {
           </CardHeader>
         </Card>
 
-        {/* Tab Buttons */}
+        {/* ... (Tab Buttons are fine, no changes) ... */}
         <div className="flex justify-center gap-4 border-b border-gray-300 pb-2">
           {["stream", "assignments", "chat", "people"].map((tab) => (
             <Button
@@ -281,30 +317,105 @@ export default function ClassroomPage() {
           {/* STREAM */}
           {activeTab === "stream" && (
             <div className="space-y-4">
-              {/* [NEW] "Create Post" card for instructors */}
+              {/* [MAJOR UPDATE] "Create Post" card replaced with a Dialog */}
               {isInstructor && (
-                <Card className="border border-gray-300 shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Create a new post</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Textarea
-                      placeholder={`Announce something to your class, ${username}...`}
-                      className="min-h-[80px] border-gray-300 focus:ring-gray-400"
-                      value={postContent}
-                      onChange={(e) => setPostContent(e.target.value)}
-                    />
-                    <div className="flex justify-end">
+                <Dialog open={isPostDialogOpen} onOpenChange={setIsPostDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full h-20 text-left justify-start p-4 border-gray-300 shadow-sm text-gray-500 hover:bg-gray-50"
+                    >
+                      Announce something to your class, {username}...
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-2xl bg-white text-black">
+                    <DialogHeader>
+                      <DialogTitle>Create New Post</DialogTitle>
+                      <DialogDescription>
+                        Make an announcement or create a new assignment link.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {/* New advanced form */}
+                    <div className="grid gap-6 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="post-title" className="text-left">Title</Label>
+                        <Input
+                          id="post-title"
+                          placeholder="e.g., New Assignment or Welcome!"
+                          value={postTitle}
+                          onChange={(e) => setPostTitle(e.target.value)}
+                          className="border-gray-300"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="post-content" className="text-left">Content</Label>
+                        <Textarea
+                          id="post-content"
+                          placeholder="What's on your mind?"
+                          value={postContent}
+                          onChange={(e) => setPostContent(e.target.value)}
+                          className="min-h-[120px] border-gray-300"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="link-url" className="text-left">Link URL (Optional)</Label>
+                          <Input
+                            id="link-url"
+                            placeholder="https://google-drive-link.com"
+                            value={linkUrl}
+                            onChange={(e) => setLinkUrl(e.target.value)}
+                            className="border-gray-300"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="link-text" className="text-left">Link Text (Optional)</Label>
+                          <Input
+                            id="link-text"
+                            placeholder="e.g., View Assignment 1"
+                            value={linkText}
+                            onChange={(e) => setLinkText(e.target.value)}
+                            className="border-gray-300"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="isImportant"
+                            checked={isImportant}
+                            onCheckedChange={setIsImportant}
+                          />
+                          <Label htmlFor="isImportant">Important</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="isUrgent"
+                            checked={isUrgent}
+                            onCheckedChange={setIsUrgent}
+                          />
+                          <Label htmlFor="isUrgent">Urgent</Label>
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsPostDialogOpen(false)}
+                        className="text-black border-gray-400"
+                      >
+                        Cancel
+                      </Button>
                       <Button
                         onClick={handleCreatePost}
-                        disabled={!postContent.trim()}
+                        disabled={!postTitle.trim() || !postContent.trim()}
                         className="bg-black text-white hover:bg-gray-800"
                       >
                         Post
                       </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               )}
 
               {/* Stream Posts List */}
@@ -315,7 +426,6 @@ export default function ClassroomPage() {
               ) : (
                 <div className="space-y-4">
                   {streamPosts.map((post) => {
-                    // handle id field name
                     const pid = post._id ?? post.id;
                     const createdAt = post.createdAt
                       ? new Date(post.createdAt).toLocaleString()
@@ -325,21 +435,49 @@ export default function ClassroomPage() {
                         key={pid}
                         className="border border-gray-200 rounded-md p-4 hover:shadow-sm transition"
                       >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-semibold text-gray-800">
-                            {/* [FIX] Safer render for author name, prevents crash */}
-                            {post.author?.name || "Unknown"}
-                          </span>
-                          <span className="text-sm text-gray-500">
-                            {createdAt}
-                          </span>
+                        {/* [NEW] Updated Post Header */}
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg text-gray-900">
+                              {post.title || "Post"}
+                            </h3>
+                            <span className="text-sm text-gray-500">
+                              {post.author?.name || "Unknown"} • {createdAt}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            {post.isUrgent && (
+                              <Badge variant="destructive">URGENT</Badge>
+                            )}
+                            {post.isImportant && (
+                              <Badge className="bg-yellow-500 text-black">
+                                IMPORTANT
+                              </Badge>
+                            )}
+                          </div>
                         </div>
 
                         <p className="text-gray-700 mb-3 text-left">
                           {post.content}
                         </p>
+                        
+                        {/* [NEW] Show Link Button */}
+                        {post.link?.url && (
+                          <div className="mt-4">
+                            <Button
+                              variant="outline"
+                              asChild
+                              className="border-gray-400 text-gray-800 hover:bg-gray-200"
+                            >
+                              <a href={post.link.url} target="_blank" rel="noopener noreferrer">
+                                <LinkIcon className="w-4 h-4 mr-2" />
+                                {post.link.text || "View Link"}
+                              </a>
+                            </Button>
+                          </div>
+                        )}
 
-                        {/* Post-specific comments */}
+                        {/* ... (Comment section is perfect, no changes) ... */}
                         <div className="border-t border-gray-100 pt-3 mt-3">
                           <div className="space-y-2 max-h-36 overflow-y-auto pr-2">
                             {(post.comments || []).length === 0 ? (
@@ -350,7 +488,6 @@ export default function ClassroomPage() {
                               (post.comments || []).map((c, idx) => (
                                 <div key={idx} className="text-left">
                                   <p className="text-sm font-semibold text-gray-800">
-                                    {/* [FIX] Safer render for comment author */}
                                     {c.author?.name || c.author || "Unknown"}
                                   </p>
                                   <p className="text-xs text-gray-600">
@@ -361,7 +498,6 @@ export default function ClassroomPage() {
                             )}
                           </div>
 
-                          {/* add comment input (press Enter) */}
                           <input
                             type="text"
                             placeholder="Add class comment..."
@@ -391,9 +527,8 @@ export default function ClassroomPage() {
             </Card>
           )}
 
-          {/* PEOPLE */}
+          {/* ... (People tab is perfect from last time, no changes) ... */}
           {activeTab === "people" && (
-            // [NEW] Updated "People" tab to show instructor and student list
             <div className="space-y-6">
               {/* Instructor List */}
               <Card className="border border-gray-300">
@@ -403,7 +538,6 @@ export default function ClassroomPage() {
                 <CardContent>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gray-600 text-white flex items-center justify-center text-lg font-semibold">
-                      {/* Get first letter of instructor name */}
                       {classroom.instructorName
                         ? classroom.instructorName[0].toUpperCase()
                         : "I"}
