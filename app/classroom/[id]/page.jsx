@@ -60,6 +60,9 @@ export default function ClassroomPage() {
   const [isChatLoading, setIsChatLoading] = useState(true);
   const messagesEndRef = useRef(null); // For auto-scrolling chat
 
+  const [assignments, setAssignments] = useState([]);
+  const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
+
   // --- Data Fetching ---
 
   // Get user role and name
@@ -115,7 +118,7 @@ export default function ClassroomPage() {
     }
   };
 
-  // [NEW] Fetch chat messages
+  // Fetch chat messages
   const fetchChatMessages = async () => {
     if (!id) return;
     setIsChatLoading(true);
@@ -133,10 +136,26 @@ export default function ClassroomPage() {
       setIsChatLoading(false);
     }
   };
-  
-  // [REMOVED] All socket.io logic
-  
-  // [NEW] Main useEffect to fetch data based on tab
+
+  const fetchAssignments = async () => {
+    if (!id) return;
+    setIsAssignmentsLoading(true);
+    try {
+      const res = await fetch(`/api/assignments?classId=${id}`);
+      if (!res.ok) {
+        setAssignments([]);
+        return;
+      }
+      const data = await res.json();
+      setAssignments(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setAssignments([]);
+    } finally {
+      setIsAssignmentsLoading(false);
+    }
+  };
+
+  // Main useEffect to fetch data based on tab
   useEffect(() => {
     if (!id || !user) return; // Wait for user and id
 
@@ -147,18 +166,18 @@ export default function ClassroomPage() {
       fetchStreamPosts();
     } else if (activeTab === "chat") {
       fetchChatMessages();
+    } else if (activeTab === "assignments") {
+      fetchAssignments();
     }
-    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user, activeTab]); // Re-run when tab, user, or class ID changes
-
 
   // [NEW] useEffect for chat polling (auto-refresh)
   useEffect(() => {
     if (activeTab === 'chat' && id) {
       // Fetch messages every 10 seconds
       const interval = setInterval(fetchChatMessages, 10000);
-      
+
       // Clear interval on cleanup
       return () => clearInterval(interval);
     }
@@ -191,7 +210,7 @@ export default function ClassroomPage() {
       id: `temp-${Date.now()}`, classId: id, ...newPostData,
       link: newPostData.linkUrl ? { url: newPostData.linkUrl, text: newPostData.linkText || "View Link" } : null,
       createdAt: new Date().toISOString(),
-      author: { name: username, id: user.uid }, comments: [],
+      author: { name: user.username, id: user.uid }, comments: [],
     };
     setStreamPosts([optimisticPost, ...streamPosts]);
     setIsCreatePostOpen(false);
@@ -211,7 +230,7 @@ export default function ClassroomPage() {
       });
       if (!response.ok) throw new Error("Failed to save post");
       toast.success("Post created!", { id: loadingToastId });
-      fetchStreamPosts(); 
+      fetchStreamPosts();
     } catch (err) {
       toast.error(`Error: ${err.message}`, { id: loadingToastId });
       setStreamPosts(streamPosts.filter(p => p.id !== optimisticPost.id));
@@ -227,7 +246,7 @@ export default function ClassroomPage() {
     if (!postId) return console.error("Missing post id");
     const newComment = {
       _id: `temp-${Date.now()}`,
-      author: { name: username, id: user.uid },
+      author: { name: user.username, id: user.uid },
       text, createdAt: new Date().toISOString(),
     };
     setStreamPosts((prevStreamPosts) =>
@@ -245,7 +264,7 @@ export default function ClassroomPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           postId: postId.toString(),
-          author: { name: username, id: user.uid }, text,
+          author: { name: user.username, id: user.uid }, text,
         }),
       });
       if (!res.ok) throw new Error("Failed to save comment");
@@ -269,7 +288,7 @@ export default function ClassroomPage() {
       text: text,
       createdAt: new Date().toISOString(),
       author: {
-        name: username,
+        name: user.username,
         id: user.uid,
       },
     };
@@ -284,13 +303,13 @@ export default function ClassroomPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId: id,
-          author: { id: user.uid, name: username },
+          author: { id: user.uid, name: user.username },
           text: text,
         }),
       });
 
       if (!res.ok) throw new Error("Failed to send message");
-      
+
       // On success, refetch to sync
       fetchChatMessages();
 
@@ -350,11 +369,10 @@ export default function ClassroomPage() {
             <Button
               key={tab}
               variant={activeTab === tab ? "default" : "outline"}
-              className={`capitalize ${
-                activeTab === tab
-                  ? "bg-black text-white hover:bg-gray-800"
-                  : "text-gray-800 border-gray-400 hover:bg-gray-200"
-              }`}
+              className={`capitalize ${activeTab === tab
+                ? "bg-black text-white hover:bg-gray-800"
+                : "text-gray-800 border-gray-400 hover:bg-gray-200"
+                }`}
               onClick={() => setActiveTab(tab)}
             >
               {tab}
@@ -488,10 +506,15 @@ export default function ClassroomPage() {
                           </span>
                           <span className="text-sm text-gray-500">{createdAt}</span>
                         </div>
-                        
+
                         {/* Post Title & Badges */}
                         <div className="flex items-center gap-2 mb-2">
                           <h3 className="text-lg font-semibold">{post.title}</h3>
+                          {(post.type === "assignment" || post.assignmentRef) && (
+                            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-medium">
+                              ASSIGNMENT
+                            </span>
+                          )}
                           {post.isImportant && (
                             <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
                               IMPORTANT
@@ -555,16 +578,56 @@ export default function ClassroomPage() {
 
           {/* ASSIGNMENTS */}
           {activeTab === "assignments" && (
-            <Card className="border border-gray-300 p-6 text-center text-gray-600">
-              No assignments yet.
-            </Card>
+            <div className="space-y-4">
+              {isAssignmentsLoading ? (
+                <Card className="border border-gray-300 p-6 text-center text-gray-600">
+                  Loading assignments...
+                </Card>
+              ) : assignments.length === 0 ? (
+                <Card className="border border-gray-300 p-6 text-center text-gray-600">
+                  No assignments yet.
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {assignments.map((a) => {
+                    const deadline = a.deadline ? new Date(a.deadline).toLocaleString() : null;
+                    const idKey = a._id || a.id;
+                    return (
+                      <div key={idKey} className="border border-gray-200 rounded-md p-4 text-left">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-gray-800">{a.title}</h3>
+                          {deadline && (
+                            <span className="text-sm text-gray-500">Due: {deadline}</span>
+                          )}
+                        </div>
+                        {a.description && (
+                          <p className="text-gray-700 mt-1">{a.description}</p>
+                        )}
+                        {a.fileUrl && (
+                          <div className="mt-2">
+                            <a
+                              href={a.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              Download attachment
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {/* CHAT */}
           {activeTab === "chat" && (
             <Card className="border border-gray-300">
               <CardContent className="p-0 flex flex-col" style={{ height: "600px" }}>
-                
+
                 {/* Chat Message List */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                   {isChatLoading ? (
@@ -575,24 +638,21 @@ export default function ClassroomPage() {
                     chatMessages.map((msg) => (
                       <div
                         key={msg.id}
-                        className={`flex ${
-                          msg.author.id === user?.uid ? "justify-end" : "justify-start"
-                        }`}
+                        className={`flex ${msg.author.id === user?.uid ? "justify-end" : "justify-start"
+                          }`}
                       >
                         <div
-                          className={`flex items-end max-w-xs md:max-w-md ${
-                            msg.author.id === user?.uid ? "flex-row-reverse" : "flex-row"
-                          }`}
+                          className={`flex items-end max-w-xs md:max-w-md ${msg.author.id === user?.uid ? "flex-row-reverse" : "flex-row"
+                            }`}
                         >
                           <div className="w-8 h-8 rounded-full bg-gray-400 text-white flex items-center justify-center text-sm font-semibold mx-2 flex-shrink-0">
                             {msg.author.name ? msg.author.name[0].toUpperCase() : "?"}
                           </div>
                           <div
-                            className={`p-3 rounded-lg ${
-                              msg.author.id === user?.uid
-                                ? "bg-black text-white"
-                                : "bg-gray-200 text-black"
-                            }`}
+                            className={`p-3 rounded-lg ${msg.author.id === user?.uid
+                              ? "bg-black text-white"
+                              : "bg-gray-200 text-black"
+                              }`}
                           >
                             <span className="text-xs font-semibold block mb-1">
                               {msg.author.name || "Unknown"}
@@ -608,9 +668,9 @@ export default function ClassroomPage() {
 
                 {/* Chat Input Box */}
                 <div className="border-t border-gray-300 p-4 bg-white">
-                  <form 
+                  <form
                     className="flex items-center gap-2"
-                    onSubmit={handleSendChatMessage} 
+                    onSubmit={handleSendChatMessage}
                   >
                     <Input
                       type="text"
@@ -619,8 +679,8 @@ export default function ClassroomPage() {
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                     />
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       className="bg-black text-white hover:bg-gray-800"
                       disabled={!chatInput.trim()}
                     >

@@ -295,6 +295,29 @@ export default function AdminDashboard() {
     }
   };
 
+  const deleteCourse = async (courseId) => {
+    if (!confirm("Delete this course and related data (posts/assignments/submissions)?")) return;
+    try {
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-uid": user?.uid || "",
+        },
+      });
+      if (res.ok) {
+        await loadCourses();
+        toast.success("Course deleted successfully!");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error("Failed to delete course: " + (err.error || res.status));
+      }
+    } catch (e) {
+      console.error("Delete course error:", e);
+      toast.error("Failed to delete course");
+    }
+  };
+
   const viewAssignmentSubmissions = async (assignment) => {
     setViewingSubmissions(assignment);
     await loadSubmissions(assignment.id);
@@ -393,14 +416,23 @@ export default function AdminDashboard() {
                   {courses.map((course) => (
                     <Card 
                       key={course.id} 
-                      className="hover:shadow-lg transition-shadow cursor-pointer"
-                      onClick={() => router.push(`/classroom/${course.id}`)}
+                      className="hover:shadow-lg transition-shadow"
                     >
-                      <CardHeader>
-                        <CardTitle>{course.name}</CardTitle>
-                        <CardDescription>Code: {course.courseCode}</CardDescription>
+                      <CardHeader className="flex flex-row items-start justify-between gap-4">
+                        <div className="cursor-pointer" onClick={() => router.push(`/classroom/${course.id}`)}>
+                          <CardTitle>{course.name}</CardTitle>
+                          <CardDescription>Code: {course.courseCode}</CardDescription>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => deleteCourse(course.id)}
+                          title="Delete course"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="cursor-pointer" onClick={() => router.push(`/classroom/${course.id}`)}>
                         <p className="text-sm text-gray-600 truncate">{course.description || "No description."}</p>
                         <div className="text-sm text-gray-500 mt-4">
                           <p>{format(new Date(course.createdAt), "PPP")}</p>

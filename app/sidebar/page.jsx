@@ -1,9 +1,13 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Home, Calendar, Book, ChevronDown, Layers, Menu } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function Sidebar() {
-  const [pathname, setPathname] = useState("/dashboard");
+  const router = useRouter();
+  const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCoursesOpen, setIsCoursesOpen] = useState(true);
   const [isPinned, setIsPinned] = useState(true);
@@ -11,6 +15,8 @@ export default function Sidebar() {
   const [isResizing, setIsResizing] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [courses, setCourses] = useState([]);
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState("");
   const sidebarRef = useRef(null);
   const toggleRef = useRef(null);
 
@@ -18,8 +24,7 @@ export default function Sidebar() {
   const maxWidth = 400; // maximum width
 
   const navigate = (path) => {
-    setPathname(path);
-    console.log("Navigating to:", path);
+    router.push(path);
   };
 
   const handleToggle = () => {
@@ -103,29 +108,83 @@ export default function Sidebar() {
   }, [isResizing]);
 
   useEffect(() => {
-    // Hardcoded sample courses for demonstration
-    const sampleCourses = [
-      { id: 1, name: 'Software Engineering', color: 'bg-blue-500' },
-      { id: 2, name: 'Computer Networks', color: 'bg-green-500' },
-    ];
-    
-    // Uncomment the following code when you want to fetch real data
-    /*
-    const fetchCourses = async () => {
-      try {
-        const response = await fetch("/api/classroom/courses");
-        const data = await response.json();
-        setCourses(data);
-      } catch (error) {
-        console.error("Error fetching courses:", error);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser || null);
+      if (!currentUser) {
+        setCourses([]);
+        setRole("");
+        return;
       }
-    };
-    fetchCourses();
-    */
-    
-    // Set the sample courses
-    setCourses(sampleCourses);
+
+      try {
+        const res = await fetch(`/api/users?uid=${currentUser.uid}`);
+        if (res.ok) {
+          const data = await res.json();
+          const userRole = data.user?.role || "student";
+          setRole(userRole);
+          await loadCoursesForUser(currentUser.uid, userRole);
+        } else {
+          setRole("student");
+          await loadCoursesForUser(currentUser.uid, "student");
+        }
+      } catch (e) {
+        setRole("student");
+        await loadCoursesForUser(currentUser.uid, "student");
+      }
+    });
+    return () => unsubscribe();
   }, []);
+
+  const colorPool = [
+    "bg-blue-500",
+    "bg-green-500",
+    "bg-purple-500",
+    "bg-yellow-500",
+    "bg-pink-500",
+    "bg-indigo-500",
+    "bg-red-500",
+    "bg-teal-500",
+  ];
+
+  const hashIndex = (str) => {
+    let h = 0;
+    for (let i = 0; i < (str || "").length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return h % colorPool.length;
+  };
+
+  const loadCoursesForUser = async (uid, userRole) => {
+    try {
+      if (userRole === "instructor") {
+        const res = await fetch(`/api/courses?role=instructor&userId=${uid}`);
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = data.map((c) => ({
+            id: c.id,
+            name: c.name || c.title || c.code,
+            color: colorPool[hashIndex(c.code || c.name || c.id)],
+          }));
+          setCourses(mapped);
+        } else {
+          setCourses([]);
+        }
+      } else {
+        const res = await fetch(`/api/courses?role=student&userId=${uid}`);
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = (data || []).map((c) => ({
+            id: c.id,
+            name: c.name || c.title || c.code,
+            color: colorPool[hashIndex(c.code || c.name || c.id)],
+          }));
+          setCourses(mapped);
+        } else {
+          setCourses([]);
+        }
+      }
+    } catch (err) {
+      setCourses([]);
+    }
+  };
 
   return (
     <div
@@ -206,7 +265,9 @@ export default function Sidebar() {
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <Layers size={18} className="flex-shrink-0" />
-                    {!isCollapsed && <span className="truncate">Enrolled</span>}
+                    {!isCollapsed && (
+                      <span className="truncate">{role === "instructor" ? "My Courses" : "Enrolled"}</span>
+                    )}
                   </span>
                   {!isCollapsed && (
                     <ChevronDown
@@ -223,9 +284,9 @@ export default function Sidebar() {
                     {courses.map((course) => (
                       <li
                         key={course.id}
-                        onClick={() => navigate(`/course/${course.id}`)}
+                        onClick={() => navigate(`/classroom/${course.id}`)}
                         className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
-                          pathname === `/course/${course.id}` ? "bg-gray-100" : ""
+                          pathname === `/classroom/${course.id}` ? "bg-gray-100" : ""
                         }`}
                       >
                         <div
