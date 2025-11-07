@@ -43,6 +43,8 @@ export async function GET(request) {
             classId: 1,
             title: 1,
             content: 1,
+            type: 1,
+            assignmentRef: 1,
             isImportant: 1,
             isUrgent: 1,
             link: 1,
@@ -51,7 +53,10 @@ export async function GET(request) {
             createdAt: 1,
             author: {
               name: {
-                $ifNull: ["$authorDetails.username", "$authorDetails.name"],
+                $ifNull: [
+                  "$authorDetails.username",
+                  { $ifNull: ["$authorDetails.name", "$author.name"] }
+                ],
               },
               id: "$authorId",
             },
