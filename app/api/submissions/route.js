@@ -1,6 +1,11 @@
 // API routes for submissions
 import { NextResponse } from "next/server";
-import { getSubmissionsCollection } from "../../../lib/mongodb";
+import { 
+  getSubmissionsCollection,
+  getAssignmentsCollection,
+  getCoursesCollection,
+  getNotificationsCollection,
+} from "../../../lib/mongodb";
 import { prepareFileForStorage } from "../../../lib/file-upload";
 import { ObjectId } from "mongodb";
 
@@ -70,6 +75,49 @@ export async function POST(request) {
     };
 
     const result = await submissionsCollection.insertOne(newSubmission);
+
+    //Notify the course instructor about the new submission
+    try {
+      const assignmentsCollection = await getAssignmentsCollection();
+      const notificationsCollection = await getNotificationsCollection();
+      const coursesCollection = await getCoursesCollection();
+
+      let assignmentDoc = null;
+      try {
+        assignmentDoc = await assignmentsCollection.findOne({ _id: new ObjectId(assignmentId) });
+      } catch (_) {}
+
+      const courseId = assignmentDoc?.courseId || assignmentDoc?.classId || null;
+      let courseDoc = null;
+      if (courseId) {
+        try {
+          courseDoc = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
+        } catch (_) {}
+      }
+
+      const instructorId = courseDoc?.instructorId;
+      const instructorName = courseDoc?.instructorName || "Instructor";
+
+      if (instructorId) {
+        await notificationsCollection.insertOne({
+          userId: instructorId,
+          title: "New submission",
+          message: `${studentName} submitted for assignment ${assignmentDoc?.title || assignmentId}`,
+          read: false,
+          createdAt: new Date(),
+          extra: {
+            type: "submission",
+            courseId: courseId || null,
+            assignmentId,
+            submissionId: result.insertedId.toString(),
+            studentId,
+          },
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to notify instructor on submission:", notifErr);
+      // Do not fail request
+    }
 
     return NextResponse.json({ 
       id: result.insertedId.toString(),
