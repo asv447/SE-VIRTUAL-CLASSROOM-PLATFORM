@@ -26,6 +26,26 @@ export default function NotificationBell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Lightweight polling and refetch on window focus
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 30000); // 30s
+
+    const onFocus = () => fetchNotifications();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchNotifications();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user]);
+
   useEffect(() => {
     function handleOutside(e) {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
@@ -107,9 +127,8 @@ export default function NotificationBell() {
     return (
       <div
         key={id}
-        className={`p-3 border-b last:border-b-0 ${
-          n.read ? "bg-white/50" : "bg-white"
-        } `}
+        className={`p-3 border-b last:border-b-0 ${n.read ? "bg-white/50" : "bg-white"
+          } `}
       >
         <div className="flex justify-between items-start">
           <div>
@@ -125,23 +144,12 @@ export default function NotificationBell() {
           </div>
           <div className="ml-3 text-right flex flex-col items-end gap-2">
             <div>
-              {!n.read && (
-                <button
-                  onClick={() => markAsRead(id)}
-                  className="rounded-full text-sm px-1.5 py-1.5 bg-primary text-white rounded"
-                  title="Mark as read"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-            <div>
               <button
                 onClick={() => deleteNotification(id)}
-                className="rounded-full text-sm px-1.5 py-1.5 bg-red-600 text-white"
+                className="rounded-full text-sm px-1.5 py-1.5 bg-black text-white"
                 title="Delete notification"
               >
-                <Trash2 className="w-3 h-3" />
+                <Check className="w-3 h-3" />
               </button>
             </div>
           </div>

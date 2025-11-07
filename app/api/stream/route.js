@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   getStreamsCollection,
   getUsersCollection,
+  getCoursesCollection,
+  getNotificationsCollection,
 } from "../../../lib/mongodb";
 import { ObjectId } from "mongodb";
 
@@ -41,6 +43,8 @@ export async function GET(request) {
             classId: 1,
             title: 1,
             content: 1,
+            type: 1,
+            assignmentRef: 1,
             isImportant: 1,
             isUrgent: 1,
             link: 1,
@@ -49,7 +53,10 @@ export async function GET(request) {
             createdAt: 1,
             author: {
               name: {
-                $ifNull: ["$authorDetails.username", "$authorDetails.name"],
+                $ifNull: [
+                  "$authorDetails.username",
+                  { $ifNull: ["$authorDetails.name", "$author.name"] }
+                ],
               },
               id: "$authorId",
             },
@@ -110,6 +117,48 @@ export async function POST(request) {
     };
 
     const result = await streamsCollection.insertOne(newPost);
+
+    // ✅ Create notifications for all enrolled students (exclude author if student)
+    try {
+      if (classId) {
+        const coursesCollection = await getCoursesCollection();
+        const notificationsCollection = await getNotificationsCollection();
+
+        let courseDoc = null;
+        try {
+          courseDoc = await coursesCollection.findOne({ _id: new ObjectId(classId) });
+        } catch (_) {
+          // classId might not be an ObjectId; skip fanout safely
+        }
+
+        const students = courseDoc?.students || [];
+        if (students.length > 0) {
+          const notifDocs = students
+            .filter((s) => s?.userId && s.userId !== authorId)
+            .map((s) => ({
+              userId: s.userId,
+              title: title || "New announcement",
+              message: content?.slice(0, 160) || "An update has been posted",
+              read: false,
+              createdAt: new Date(),
+              extra: {
+                type: "announcement",
+                courseId: classId,
+                postId: result.insertedId.toString(),
+                isImportant: !!isImportant,
+                isUrgent: !!isUrgent,
+                link: link || null,
+              },
+            }));
+          if (notifDocs.length > 0) {
+            await notificationsCollection.insertMany(notifDocs, { ordered: false });
+          }
+        }
+      }
+    } catch (notifError) {
+      console.error("Failed to create announcement notifications:", notifError);
+      // Do not fail request
+    }
 
     return NextResponse.json(
       { message: "Post added to stream", id: result.insertedId },

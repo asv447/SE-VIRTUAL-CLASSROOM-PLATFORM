@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStreamsCollection } from "../../../lib/mongodb";
+import { getStreamsCollection, getNotificationsCollection } from "../../../lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function POST(request) {
@@ -31,6 +31,9 @@ export async function POST(request) {
       createdAt: new Date(),
     };
 
+    // Fetch the post to identify participants for notification fanout
+    const postDoc = await streamsCollection.findOne({ _id: new ObjectId(postId) });
+
     // Find the post by its ID and push the new comment into its 'comments' array
     const result = await streamsCollection.updateOne(
       { _id: new ObjectId(postId) },
@@ -51,6 +54,39 @@ export async function POST(request) {
         { error: "Failed to add comment" },
         { status: 500 }
       );
+    }
+
+    // Notify post author and previous commenters (exclude current author)
+    try {
+      if (postDoc) {
+        const notificationsCollection = await getNotificationsCollection();
+        const participants = new Set();
+        if (postDoc.author?.id) participants.add(postDoc.author.id);
+        (postDoc.comments || []).forEach((c) => {
+          if (c?.author?.id) participants.add(c.author.id);
+        });
+        // exclude commenter
+        participants.delete(author.id);
+
+        const notifDocs = Array.from(participants).map((uid) => ({
+          userId: uid,
+          title: "New comment",
+          message: `${author.name} commented: ${text.slice(0, 160)}`,
+          read: false,
+          createdAt: new Date(),
+          extra: {
+            type: "comment",
+            courseId: postDoc.classId || null,
+            postId: postDoc._id.toString(),
+          },
+        }));
+        if (notifDocs.length > 0) {
+          await notificationsCollection.insertMany(notifDocs, { ordered: false });
+        }
+      }
+    } catch (notifErr) {
+      console.error("Failed to create comment notifications:", notifErr);
+      // Do not fail request
     }
 
     // Return the new comment

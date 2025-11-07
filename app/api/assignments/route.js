@@ -1,6 +1,6 @@
 // API routes for assignments
 import { NextResponse } from "next/server";
-import { getAssignmentsCollection, getStreamsCollection } from "../../../lib/mongodb";
+import { getAssignmentsCollection, getStreamsCollection, getCoursesCollection, getNotificationsCollection } from "../../../lib/mongodb";
 import { prepareFileForStorage } from "../../../lib/file-upload";
 import { ObjectId } from "mongodb";
 
@@ -90,7 +90,9 @@ export async function POST(request) {
 
       await streamsCollection.insertOne({
         classId: courseId,
+        authorId: instructorId,
         author: { name: instructorName, id: instructorId, role: "instructor" },
+        title: "New assignment",
         content: `📝 New assignment posted: ${title}`,
         type: "assignment",
         assignmentRef: result.insertedId.toString(),
@@ -98,6 +100,47 @@ export async function POST(request) {
       });
     } catch (streamError) {
       console.error("Failed to sync assignment with stream:", streamError);
+    }
+
+    // ✅ Create notifications for all enrolled students in this course
+    try {
+      if (courseId) {
+        const coursesCollection = await getCoursesCollection();
+        const notificationsCollection = await getNotificationsCollection();
+
+        // Find course by its _id
+        let courseDoc = null;
+        try {
+          courseDoc = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
+        } catch (_) {
+          // If courseId is not an ObjectId, skip notification fanout safely
+        }
+
+        const students = courseDoc?.students || [];
+        if (students.length > 0) {
+          const notifDocs = students
+            .filter((s) => s?.userId && s.userId !== instructorId)
+            .map((s) => ({
+              userId: s.userId,
+              title: "New assignment",
+              message: `${title} has been posted by ${instructorName}`,
+              read: false,
+              createdAt: new Date(),
+              extra: {
+                type: "assignment",
+                courseId,
+                assignmentId: result.insertedId.toString(),
+                deadline: deadline || null,
+              },
+            }));
+          if (notifDocs.length > 0) {
+            await notificationsCollection.insertMany(notifDocs, { ordered: false });
+          }
+        }
+      }
+    } catch (notifError) {
+      console.error("Failed to create assignment notifications:", notifError);
+      // Do not fail the request because of notification fanout issues
     }
 
     return NextResponse.json(
