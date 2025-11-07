@@ -90,7 +90,9 @@ export async function POST(request) {
 
       await streamsCollection.insertOne({
         classId: courseId,
+        authorId: instructorId,
         author: { name: instructorName, id: instructorId, role: "instructor" },
+        title: "New assignment",
         content: `📝 New assignment posted: ${title}`,
         type: "assignment",
         assignmentRef: result.insertedId.toString(),
