@@ -10,7 +10,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon, AlertTriangle } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { auth } from "../../../lib/firebase"; // Corrected path
 import { onAuthStateChanged } from "firebase/auth";
+import { Switch } from "@/components/ui/switch";
+import { Progress } from "@/components/ui/progress";
 // [DELETED] All socket.io imports are gone
+
+const MAX_POLL_OPTIONS = 6;
+
+const createInitialPostState = () => ({
+  title: "",
+  content: "",
+  linkUrl: "",
+  linkText: "",
+  isImportant: false,
+  isUrgent: false,
+  includePoll: false,
+  pollQuestion: "",
+  pollOptions: ["", ""],
+  allowMultiplePollSelections: false,
+});
 
 export default function ClassroomPage() {
   const { id } = useParams(); // This is the Course ID
@@ -45,19 +62,14 @@ export default function ClassroomPage() {
   // Stream state
   const [streamPosts, setStreamPosts] = useState([]);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [newPostData, setNewPostData] = useState({
-    title: "",
-    content: "",
-    linkUrl: "",
-    linkText: "",
-    isImportant: false,
-    isUrgent: false,
-  });
+  const [newPostData, setNewPostData] = useState(createInitialPostState);
 
   // [NEW] Chat state (back to simple version)
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(true);
+  const [pollSelections, setPollSelections] = useState({});
+  const [pollSubmitting, setPollSubmitting] = useState({});
   const messagesEndRef = useRef(null); // For auto-scrolling chat
 
   const [assignments, setAssignments] = useState([]);
@@ -189,6 +201,31 @@ export default function ClassroomPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  useEffect(() => {
+    if (!user) {
+      setPollSelections({});
+      setPollSubmitting({});
+      return;
+    }
+
+    setPollSelections((prev) => {
+      const next = { ...prev };
+      streamPosts.forEach((post) => {
+        if (!post.poll) return;
+        const pid = (post._id ?? post.id)?.toString();
+        if (!pid) return;
+        const serverSelections = (post.poll.options || [])
+          .filter((option) => (option.voterIds || []).includes(user.uid))
+          .map((option) => option.id);
+
+        if (prev[pid] === undefined || prev[pid].length === 0) {
+          next[pid] = serverSelections;
+        }
+      });
+      return next;
+    });
+  }, [streamPosts, user]);
+
   // --- Handlers ---
 
   const handleCopy = () => {
@@ -205,19 +242,61 @@ export default function ClassroomPage() {
       toast.error("Title and Content are required.");
       return;
     }
-    const loadingToastId = toast.loading("Creating post...");
+
+    const pollQuestion = newPostData.includePoll
+      ? newPostData.pollQuestion.trim()
+      : "";
+    const pollOptions = newPostData.includePoll
+      ? newPostData.pollOptions.map((option) => option.trim()).filter(Boolean)
+      : [];
+
+    if (newPostData.includePoll) {
+      if (!pollQuestion) {
+        toast.error("Poll question is required.");
+        return;
+      }
+
+      if (pollOptions.length < 2) {
+        toast.error("Add at least two poll options.");
+        return;
+      }
+    }
+
+    const pollPayload = newPostData.includePoll
+      ? {
+          question: pollQuestion,
+          allowMultiple: newPostData.allowMultiplePollSelections,
+          options: pollOptions.map((text) => ({ text })),
+        }
+      : null;
+
+  const loadingToastId = toast.loading("Creating post...");
     const optimisticPost = {
-      id: `temp-${Date.now()}`, classId: id, ...newPostData,
+      id: `temp-${Date.now()}`,
+      classId: id,
+      title: newPostData.title,
+      content: newPostData.content,
+      isImportant: newPostData.isImportant,
+      isUrgent: newPostData.isUrgent,
       link: newPostData.linkUrl ? { url: newPostData.linkUrl, text: newPostData.linkText || "View Link" } : null,
       createdAt: new Date().toISOString(),
-      author: { name: user.username, id: user.uid }, comments: [],
+      author: { name: username, id: user.uid },
+      comments: [],
+      poll: pollPayload
+        ? {
+            question: pollPayload.question,
+            allowMultiple: pollPayload.allowMultiple,
+            options: pollOptions.map((text, index) => ({
+              id: `temp-${Date.now()}-${index}`,
+              text,
+              voterIds: [],
+            })),
+          }
+        : null,
     };
-    setStreamPosts([optimisticPost, ...streamPosts]);
+  setStreamPosts((prev) => [optimisticPost, ...prev]);
     setIsCreatePostOpen(false);
-    setNewPostData({
-      title: "", content: "", linkUrl: "", linkText: "",
-      isImportant: false, isUrgent: false,
-    });
+    setNewPostData(createInitialPostState());
     try {
       const response = await fetch("/api/stream", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -226,6 +305,7 @@ export default function ClassroomPage() {
           content: newPostData.content, isImportant: newPostData.isImportant,
           isUrgent: newPostData.isUrgent,
           link: newPostData.linkUrl ? { url: newPostData.linkUrl, text: newPostData.linkText || "View Link" } : null,
+          poll: pollPayload,
         }),
       });
       if (!response.ok) throw new Error("Failed to save post");
@@ -233,7 +313,7 @@ export default function ClassroomPage() {
       fetchStreamPosts();
     } catch (err) {
       toast.error(`Error: ${err.message}`, { id: loadingToastId });
-      setStreamPosts(streamPosts.filter(p => p.id !== optimisticPost.id));
+      setStreamPosts((prev) => prev.filter((p) => (p._id ?? p.id) !== optimisticPost.id));
     }
   };
 
@@ -321,6 +401,105 @@ export default function ClassroomPage() {
     }
   };
 
+  const handlePollOptionToggle = (postId, optionId, allowMultiple) => {
+    setPollSelections((prev) => {
+      const current = prev[postId] || [];
+      let nextSelection = [];
+
+      if (allowMultiple) {
+        nextSelection = current.includes(optionId)
+          ? current.filter((id) => id !== optionId)
+          : [...current, optionId];
+      } else {
+        nextSelection = [optionId];
+      }
+
+      return { ...prev, [postId]: nextSelection };
+    });
+  };
+
+  const handlePollSubmit = async (post) => {
+    if (!user) {
+      toast.error("You need to sign in to vote.");
+      return;
+    }
+
+    const pid = (post._id ?? post.id)?.toString();
+    if (!pid) return;
+
+    const selections = pollSelections[pid] || [];
+    if (!selections.length) {
+      toast.error("Select at least one option.");
+      return;
+    }
+
+    setPollSubmitting((prev) => ({ ...prev, [pid]: true }));
+
+    try {
+      console.log("Submitting poll vote", { postId: pid, selections });
+      const res = await fetch("/api/stream/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId: pid,
+          userId: user.uid,
+          selectedOptionIds: selections,
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to submit vote");
+      }
+
+      const payload = await res.json().catch(() => ({}));
+
+      if (payload?.poll) {
+        setStreamPosts((prev) =>
+          prev.map((p) => {
+            const currentId = (p._id ?? p.id)?.toString();
+            if (currentId === pid) {
+              return {
+                ...p,
+                poll: {
+                  ...p.poll,
+                  ...payload.poll,
+                },
+              };
+            }
+            return p;
+          })
+        );
+      }
+
+      toast.success("Vote saved");
+      setPollSelections((prev) => ({ ...prev, [pid]: selections }));
+      fetchStreamPosts();
+    } catch (err) {
+      console.error("Error submitting poll vote:", err);
+      toast.error(err.message);
+    } finally {
+      setPollSubmitting((prev) => ({ ...prev, [pid]: false }));
+    }
+  };
+
+  const addPollOption = () => {
+    setNewPostData((prev) => {
+      if (prev.pollOptions.length >= MAX_POLL_OPTIONS) return prev;
+      return { ...prev, pollOptions: [...prev.pollOptions, ""] };
+    });
+  };
+
+  const removePollOption = (index) => {
+    setNewPostData((prev) => {
+      if (prev.pollOptions.length <= 2) return prev;
+      return {
+        ...prev,
+        pollOptions: prev.pollOptions.filter((_, optionIndex) => optionIndex !== index),
+      };
+    });
+  };
+
   // --- Render Logic ---
 
   if (error) {
@@ -397,7 +576,7 @@ export default function ClassroomPage() {
                       Create a new post...
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px]">
+                  <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Create Post</DialogTitle>
                       <DialogDescription>
@@ -474,6 +653,103 @@ export default function ClassroomPage() {
                           <Label htmlFor="post-urgent">Urgent</Label>
                         </div>
                       </div>
+                      <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                        <div>
+                          <Label htmlFor="include-poll" className="font-medium">Include poll</Label>
+                          <p className="text-xs text-gray-500">Collect responses alongside your announcement.</p>
+                        </div>
+                        <Switch
+                          id="include-poll"
+                          checked={newPostData.includePoll}
+                          onCheckedChange={(checked) =>
+                            setNewPostData((prev) =>
+                              checked
+                                ? { ...prev, includePoll: true }
+                                : {
+                                    ...prev,
+                                    includePoll: false,
+                                    pollQuestion: "",
+                                    pollOptions: ["", ""],
+                                    allowMultiplePollSelections: false,
+                                  }
+                            )
+                          }
+                        />
+                      </div>
+
+                      {newPostData.includePoll && (
+                        <div className="space-y-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="poll-question">Poll question</Label>
+                            <Input
+                              id="poll-question"
+                              placeholder="e.g., Which topic should we review?"
+                              value={newPostData.pollQuestion}
+                              onChange={(e) =>
+                                setNewPostData((prev) => ({
+                                  ...prev,
+                                  pollQuestion: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Options</Label>
+                            {newPostData.pollOptions.map((option, index) => (
+                              <div key={index} className="flex items-center gap-2">
+                                <Input
+                                  placeholder={`Option ${index + 1}`}
+                                  value={option}
+                                  onChange={(e) =>
+                                    setNewPostData((prev) => {
+                                      const nextOptions = [...prev.pollOptions];
+                                      nextOptions[index] = e.target.value;
+                                      return { ...prev, pollOptions: nextOptions };
+                                    })
+                                  }
+                                />
+                                {newPostData.pollOptions.length > 2 && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removePollOption(index)}
+                                  >
+                                    Remove
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={addPollOption}
+                              disabled={newPostData.pollOptions.length >= MAX_POLL_OPTIONS}
+                            >
+                              Add option
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label htmlFor="poll-allow-multiple">Allow multiple selections</Label>
+                              <p className="text-xs text-gray-500">Give students the option to select more than one response.</p>
+                            </div>
+                            <Switch
+                              id="poll-allow-multiple"
+                              checked={newPostData.allowMultiplePollSelections}
+                              onCheckedChange={(checked) =>
+                                setNewPostData((prev) => ({
+                                  ...prev,
+                                  allowMultiplePollSelections: checked,
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
@@ -492,12 +768,13 @@ export default function ClassroomPage() {
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {streamPosts.map((post) => {
-                    const pid = post._id ?? post.id;
+                  {streamPosts.map((post, index) => {
+                    const rawId = post._id ?? post.id;
+                    const pid = typeof rawId === "string" ? rawId : rawId?.toString?.();
                     const createdAt = post.createdAt ? new Date(post.createdAt).toLocaleString() : "";
                     return (
                       <div
-                        key={pid}
+                        key={pid || `post-${index}`}
                         className="border border-gray-200 rounded-md p-4 hover:shadow-sm transition"
                       >
                         <div className="flex justify-between items-center mb-2">
@@ -541,6 +818,107 @@ export default function ClassroomPage() {
                               <LinkIcon className="w-3 h-3" />
                               {post.link.text || post.link.url}
                             </a>
+                          </div>
+                        )}
+
+                        {post.poll && post.poll.options && post.poll.options.length > 0 && (
+                          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                            <div className="mb-3">
+                              <p className="font-semibold text-gray-800">{post.poll.question}</p>
+                              <p className="text-xs text-gray-500">
+                                {post.poll.allowMultiple
+                                  ? "Select all options that apply."
+                                  : "Select one option."}
+                              </p>
+                            </div>
+
+                            {(() => {
+                              const pidString = pid;
+                              if (!pidString) {
+                                return (
+                                  <div className="rounded-md border border-dashed border-gray-300 bg-white px-3 py-2 text-sm text-gray-500">
+                                    Poll responses will be available once this post finishes syncing.
+                                  </div>
+                                );
+                              }
+                              const pollOptions = post.poll?.options || [];
+                              const selectedIds = (pollSelections[pidString] || []).map(String);
+                              const totalSelections = pollOptions.reduce(
+                                (sum, option) => sum + (option.voterIds?.length || 0),
+                                0
+                              );
+                              const participantIds = new Set();
+                              pollOptions.forEach((option) => {
+                                (option.voterIds || []).forEach((voterId) => participantIds.add(voterId));
+                              });
+                              const participantCount = participantIds.size;
+                              const hasVoted = user ? participantIds.has(user.uid) : false;
+                              const allowMultipleSelections = Boolean(post.poll?.allowMultiple);
+                              const buttonDisabled = !selectedIds.length || pollSubmitting[pidString];
+
+                              const selectionSummary = totalSelections === 0
+                                ? "No votes yet"
+                                : allowMultipleSelections
+                                  ? `${totalSelections} selection${totalSelections === 1 ? "" : "s"} • ${participantCount} participant${participantCount === 1 ? "" : "s"}`
+                                  : `${totalSelections} vote${totalSelections === 1 ? "" : "s"}`;
+
+                              return (
+                                <div className="space-y-3">
+                                  {pollOptions.map((option) => {
+                                    const optionVotes = option.voterIds?.length || 0;
+                                    const percentage = totalSelections
+                                      ? Math.round((optionVotes / totalSelections) * 100)
+                                      : 0;
+                                    const isSelected = selectedIds.includes(option.id);
+
+                                    return (
+                                      <div
+                                        key={option.id}
+                                        className={`rounded-md border bg-white px-3 py-2 transition ${
+                                          isSelected ? "border-black shadow-sm" : "border-gray-200"
+                                        }`}
+                                      >
+                                        <label className="flex items-center gap-3 text-sm text-gray-800">
+                                          <input
+                                            type={allowMultipleSelections ? "checkbox" : "radio"}
+                                            name={`poll-${pidString}`}
+                                            checked={isSelected}
+                                            onChange={() => handlePollOptionToggle(pidString, option.id, allowMultipleSelections)}
+                                            className="h-4 w-4"
+                                          />
+                                          <span>{option.text}</span>
+                                        </label>
+                                        <div className="mt-2">
+                                          <Progress value={percentage} />
+                                          <div className="mt-1 flex justify-between text-xs text-gray-500">
+                                            <span>{optionVotes} vote{optionVotes === 1 ? "" : "s"}</span>
+                                            <span>{percentage}%</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+
+                                  <div className="mt-4 flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                                    <span>{selectionSummary}</span>
+                                    {user && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => handlePollSubmit(post)}
+                                        disabled={buttonDisabled}
+                                      >
+                                        {pollSubmitting[pidString]
+                                          ? "Saving..."
+                                          : hasVoted
+                                            ? "Update Vote"
+                                            : "Submit Vote"}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
 

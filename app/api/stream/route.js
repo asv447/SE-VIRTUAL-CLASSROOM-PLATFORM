@@ -50,6 +50,7 @@ export async function GET(request) {
             link: 1,
             assignment: 1,
             comments: 1,
+            poll: 1,
             createdAt: 1,
             author: {
               name: {
@@ -81,15 +82,16 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     // [UPDATE] Get all the new fields from the request
-    const { 
-      classId, 
-      authorId, 
-      title, 
-      content, 
-      isImportant, 
-      isUrgent, 
-      link, 
-      assignment 
+    const {
+      classId,
+      authorId,
+      title,
+      content,
+      isImportant,
+      isUrgent,
+      link,
+      assignment,
+      poll,
     } = await request.json();
 
     // [UPDATE] Validate title and content
@@ -102,6 +104,33 @@ export async function POST(request) {
 
     const streamsCollection = await getStreamsCollection();
 
+    let pollData = null;
+    if (poll && typeof poll === "object") {
+      const question = typeof poll.question === "string" ? poll.question.trim() : "";
+      const allowMultiple = Boolean(poll.allowMultiple);
+      const cleanOptions = Array.isArray(poll.options)
+        ? poll.options
+            .map((option) =>
+              typeof option?.text === "string" ? option.text.trim() : ""
+            )
+            .filter((text, index, self) => text && self.indexOf(text) === index)
+        : [];
+
+      if (question && cleanOptions.length >= 2) {
+        pollData = {
+          question,
+          allowMultiple,
+          options: cleanOptions.map((text) => ({
+            id: new ObjectId().toString(),
+            text,
+            voterIds: [],
+          })),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
+    }
+
     // [UPDATE] Save all the new fields to the database
     const newPost = {
       classId,
@@ -113,6 +142,7 @@ export async function POST(request) {
       link: link || null,
       assignment: assignment || null,
       comments: [],
+      poll: pollData,
       createdAt: new Date(),
     };
 
