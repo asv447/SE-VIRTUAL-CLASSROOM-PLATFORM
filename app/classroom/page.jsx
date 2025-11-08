@@ -2,12 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function ClassroomDetails() {
   const { id } = useParams();
   const [classroom, setClassroom] = useState(null);
   const [activeTab, setActiveTab] = useState("stream");
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState({});
+  const [uploading, setUploading] = useState({});
+  const [editingDeadline, setEditingDeadline] = useState({});
+  const [deadlineInputs, setDeadlineInputs] = useState({});
 
   useEffect(() => {
     const fetchClassroom = async () => {
@@ -22,6 +29,114 @@ export default function ClassroomDetails() {
     };
     fetchClassroom();
   }, [id]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleFileSelect = (assignmentId, file) => {
+    setSelectedFiles((prev) => ({ ...prev, [assignmentId]: file }));
+  };
+
+  const startEditDeadline = (assignmentId, currentDeadline) => {
+    // format to datetime-local: YYYY-MM-DDTHH:mm
+    let v = "";
+    try {
+      const d = new Date(currentDeadline);
+      const pad = (n) => String(n).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const min = pad(d.getMinutes());
+      v = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    } catch (e) {
+      v = currentDeadline || "";
+    }
+    setDeadlineInputs((p) => ({ ...p, [assignmentId]: v }));
+    setEditingDeadline((p) => ({ ...p, [assignmentId]: true }));
+  };
+
+  const cancelEditDeadline = (assignmentId) => {
+    setEditingDeadline((p) => ({ ...p, [assignmentId]: false }));
+    setDeadlineInputs((p) => ({ ...p, [assignmentId]: undefined }));
+  };
+
+  const saveDeadline = async (assignmentId) => {
+    const value = deadlineInputs[assignmentId];
+    if (!value) {
+      alert("Please pick a deadline");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deadline: value }),
+      });
+      if (res.ok) {
+        // update local classroom assignments to reflect new deadline
+        const updated = await res.json();
+        setClassroom((c) => {
+          const newC = { ...c };
+          if (newC.assignments) {
+            newC.assignments = newC.assignments.map((a) =>
+              a.id === assignmentId ? { ...a, deadline: updated.deadline } : a
+            );
+          }
+          return newC;
+        });
+        cancelEditDeadline(assignmentId);
+        alert("Deadline updated");
+      } else {
+        const e = await res.json();
+        alert("Failed to update deadline: " + (e?.error || res.statusText));
+      }
+    } catch (err) {
+      console.error("Error updating deadline:", err);
+      alert("Error updating deadline");
+    }
+  };
+
+  const submitAssignment = async (assignmentId) => {
+    const file = selectedFiles[assignmentId];
+    if (!file) {
+      alert("Please select a file to upload");
+      return;
+    }
+
+    if (!user) {
+      alert("Please sign in to submit assignments");
+      return;
+    }
+
+    setUploading((p) => ({ ...p, [assignmentId]: true }));
+    try {
+      const formData = new FormData();
+      formData.append("assignmentId", assignmentId);
+      formData.append("studentId", user.uid);
+      formData.append("studentName", user.displayName || user.email || "Student");
+      formData.append("file", file);
+
+      const res = await fetch("/api/submissions", { method: "POST", body: formData });
+      if (res.ok) {
+        alert("Submission uploaded successfully");
+        setSelectedFiles((p) => ({ ...p, [assignmentId]: null }));
+      } else {
+        const err = await res.json();
+        alert("Upload failed: " + (err?.error || res.statusText));
+      }
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert("Failed to upload submission");
+    } finally {
+      setUploading((p) => ({ ...p, [assignmentId]: false }));
+    }
+  };
 
   if (error) return <p className="text-center text-red-500">{error}</p>;
   if (!classroom) return <p className="text-center text-gray-500">Loading...</p>;
@@ -86,9 +201,73 @@ export default function ClassroomDetails() {
                 <div key={idx} className="border p-4 rounded-xl mb-3 hover:shadow">
                   <h3 className="font-semibold">{a.title}</h3>
                   <p>{a.description}</p>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Deadline: {new Date(a.deadline).toLocaleString()}
-                  </p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <p className="text-sm text-gray-500">Deadline: {new Date(a.deadline).toLocaleString()}</p>
+                    {/* Show edit control for instructors only */}
+                    {user && (user.uid === classroom.instructorId || user.email === classroom.instructorEmail) && (
+                      <div>
+                        {!editingDeadline[a.id] ? (
+                          <button
+                            onClick={() => startEditDeadline(a.id, a.deadline)}
+                            className="text-sm text-blue-600 underline"
+                          >
+                            Edit deadline
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="datetime-local"
+                              value={deadlineInputs[a.id] || ''}
+                              onChange={(e) => setDeadlineInputs((p) => ({ ...p, [a.id]: e.target.value }))}
+                              className="border px-2 py-1 rounded"
+                            />
+                            <button onClick={() => saveDeadline(a.id)} className="px-3 py-1 bg-green-600 text-white rounded">Save</button>
+                            <button onClick={() => cancelEditDeadline(a.id)} className="px-3 py-1 bg-gray-200 rounded">Cancel</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {a.fileUrl && (
+                    <div className="mt-2">
+                      <a
+                        href={a.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 underline"
+                      >
+                        Download assignment file
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="mt-4">
+                    {user ? (
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          onChange={(e) => handleFileSelect(a.id, e.target.files[0])}
+                          accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png,.py,.js,.java,.cpp"
+                          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                        {selectedFiles[a.id] && (
+                          <p className="text-xs text-gray-600">Selected: {selectedFiles[a.id].name}</p>
+                        )}
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => submitAssignment(a.id)}
+                            disabled={uploading[a.id]}
+                            className="px-4 py-2 bg-black text-white rounded disabled:opacity-50"
+                          >
+                            {uploading[a.id] ? "Uploading..." : "Submit"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600">Please sign in to submit your work.</p>
+                    )}
+                  </div>
                 </div>
               ))
             ) : (

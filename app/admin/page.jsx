@@ -55,6 +55,9 @@ export default function AdminDashboard() {
   const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
   const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
   const [viewingSubmissions, setViewingSubmissions] = useState(null);
+  const [editingDeadline, setEditingDeadline] = useState({});
+  const [deadlineInputs, setDeadlineInputs] = useState({});
+  const [savingDeadline, setSavingDeadline] = useState({});
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
@@ -159,6 +162,17 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error("Error loading submissions:", err);
+    }
+  };
+
+  const safeFormatDate = (date) => {
+    if (!date) return "No date";
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "No date";
+    try {
+      return format(d, "PPP p");
+    } catch (e) {
+      return d.toString();
     }
   };
 
@@ -323,6 +337,64 @@ export default function AdminDashboard() {
     await loadSubmissions(assignment.id);
   };
 
+  const startEditDeadline = (assignmentId, currentDeadline) => {
+    let v = "";
+    try {
+      const d = new Date(currentDeadline);
+      const pad = (n) => String(n).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const min = pad(d.getMinutes());
+      v = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    } catch (e) {
+      v = currentDeadline || "";
+    }
+    setDeadlineInputs((p) => ({ ...p, [assignmentId]: v }));
+    setEditingDeadline((p) => ({ ...p, [assignmentId]: true }));
+  };
+
+  const cancelEditDeadline = (assignmentId) => {
+    setEditingDeadline((p) => ({ ...p, [assignmentId]: false }));
+    setDeadlineInputs((p) => ({ ...p, [assignmentId]: undefined }));
+  };
+
+  const saveDeadline = async (assignmentId) => {
+    const value = deadlineInputs[assignmentId];
+    if (!value) {
+      toast.error("Please pick a deadline");
+      return;
+    }
+
+    setSavingDeadline((p) => ({ ...p, [assignmentId]: true }));
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deadline: value }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setAssignments((assignments) =>
+          assignments.map((a) =>
+            a.id === assignmentId ? { ...a, deadline: updated.deadline } : a
+          )
+        );
+        cancelEditDeadline(assignmentId);
+        toast.success("Deadline updated");
+      } else {
+        const e = await res.json();
+        toast.error("Failed to update deadline: " + (e?.error || res.statusText));
+      }
+    } catch (err) {
+      console.error("Error updating deadline:", err);
+      toast.error("Error updating deadline");
+    } finally {
+      setSavingDeadline((p) => ({ ...p, [assignmentId]: false }));
+    }
+  };
+
   if (!user) {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
@@ -435,7 +507,7 @@ export default function AdminDashboard() {
                       <CardContent className="cursor-pointer" onClick={() => router.push(`/classroom/${course.id}`)}>
                         <p className="text-sm text-gray-600 truncate">{course.description || "No description."}</p>
                         <div className="text-sm text-gray-500 mt-4">
-                          <p>{format(new Date(course.createdAt), "PPP")}</p>
+                          <p>{safeFormatDate(course.createdAt)}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -541,11 +613,33 @@ export default function AdminDashboard() {
                           <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                             <div className="flex items-center gap-1">
                               <BookOpen className="h-4 w-4" />
-                              {courses.find(c => c.id === assignment.courseId)?.name || "Unknown Course"}
+                                  {assignment.courseTitle || courses.find(c => c.id === assignment.courseId || c.id === assignment.classId)?.name || "Unknown Course"}
                             </div>
                             <div className="flex items-center gap-1">
                               <Calendar className="h-4 w-4" />
-                              Due: {format(new Date(assignment.deadline), "PPP p")}
+                              Deadline: {editingDeadline[assignment.id] ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="datetime-local"
+                                    value={deadlineInputs[assignment.id] || ''}
+                                    onChange={(e) => setDeadlineInputs((p) => ({ ...p, [assignment.id]: e.target.value }))}
+                                    className="border px-2 py-1 rounded"
+                                  />
+                                  <Button onClick={() => saveDeadline(assignment.id)} size="sm" disabled={savingDeadline[assignment.id]}>
+                                    {savingDeadline[assignment.id] ? "Saving..." : "Save"}
+                                  </Button>
+                                  <Button onClick={() => cancelEditDeadline(assignment.id)} size="sm" variant="outline" disabled={savingDeadline[assignment.id]}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span 
+                                  onClick={() => startEditDeadline(assignment.id, assignment.deadline)} 
+                                  className="cursor-pointer underline text-blue-600 hover:text-blue-800"
+                                >
+                                  {safeFormatDate(assignment.deadline)}
+                                </span>
+                              )}
                             </div>
                           </div>
                           {assignment.fileUrl && (
@@ -576,6 +670,38 @@ export default function AdminDashboard() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+                      </div>
+                      {/* [NEW] Inline deadline editing */}
+                      <div className="mt-4">
+                        {editingDeadline[assignment.id] ? (
+                          <div className="flex gap-2">
+                            <Input
+                              type="datetime-local"
+                              value={deadlineInputs[assignment.id]}
+                              onChange={(e) => setDeadlineInputs({ ...deadlineInputs, [assignment.id]: e.target.value })}
+                              className="flex-1"
+                            />
+                            <Button onClick={() => saveDeadline(assignment.id)}>
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={() => cancelEditDeadline(assignment.id)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                              Deadline: {safeFormatDate(assignment.deadline)}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => startEditDeadline(assignment.id, assignment.deadline)}
+                            >
+                              Edit Deadline
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -616,7 +742,7 @@ export default function AdminDashboard() {
                           <h3 className="font-semibold">{submission.studentName}</h3>
                           <p className="text-sm text-gray-600">ID: {submission.studentId}</p>
                           <p className="text-sm text-gray-500">
-                            Submitted: {format(new Date(submission.submittedAt), "PPP p")}
+                            Submitted: {safeFormatDate(submission.submittedAt)}
                           </p>
                         </div>
                         {submission.fileUrl && (

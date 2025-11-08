@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +63,18 @@ export default function ClassroomPage() {
 
   const [assignments, setAssignments] = useState([]);
   const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
+  // Inline deadline edit state (per-assignment)
+  const [editingDeadline, setEditingDeadline] = useState({}); // { [assignmentId]: true|false }
+  const [deadlineInputs, setDeadlineInputs] = useState({});   // { [assignmentId]: 'YYYY-MM-DDTHH:mm' }
+  const DynamicWhiteboard = dynamic(() => import("@/components/whiteboard/WhiteboardViewer"), {
+    ssr: false,
+  });
+  const wbInputRef = useRef(null);
+
+  // Whiteboard state (per-course)
+  const [wbSelectedFile, setWbSelectedFile] = useState(null); // local PDF File
+  const [wbCurrentFile, setWbCurrentFile] = useState(null);   // { fileUrl, fileName, _id }
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
 
   // --- Data Fetching ---
 
@@ -95,63 +108,116 @@ export default function ClassroomPage() {
       const res = await fetch(`/api/classroom/${id}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load classroom");
-      setClassroom(data.classroom);
+      // API returns { classroom }
+      setClassroom(data.classroom || null);
     } catch (err) {
-      console.error("Error fetching classroom:", err);
-      setError("Failed to load classroom details.");
+      console.error("Failed to fetch classroom:", err);
+      setError("Failed to load classroom");
+    } finally {
+      // no-op for assignments here
     }
   };
 
-  // Fetch stream posts
+  // Fetch stream posts for this class
   const fetchStreamPosts = async () => {
+    if (!id) return;
     try {
-      const res = await fetch(`/api/stream?classId=${id}`);
-      if (!res.ok) {
-        console.error("fetchStreamPosts failed", await res.text());
-        return setStreamPosts([]);
-      }
-      const data = await res.json();
-      setStreamPosts(Array.isArray(data) ? data : []);
+      const res = await fetch(`/api/stream?classId=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error("Failed to fetch stream posts");
+      const posts = await res.json();
+      setStreamPosts(Array.isArray(posts) ? posts : []);
     } catch (err) {
       console.error("Error fetching stream posts:", err);
       setStreamPosts([]);
     }
   };
 
-  // Fetch chat messages
+  // Fetch chat messages for this class
   const fetchChatMessages = async () => {
     if (!id) return;
     setIsChatLoading(true);
     try {
-      const res = await fetch(`/api/chat?classId=${id}`);
-      if (!res.ok) {
-        throw new Error("Failed to load chat");
-      }
-      const data = await res.json();
-      setChatMessages(Array.isArray(data) ? data : []);
+      const res = await fetch(`/api/chat?classId=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error("Failed to fetch chat messages");
+      const msgs = await res.json();
+      setChatMessages(Array.isArray(msgs) ? msgs : []);
     } catch (err) {
-      console.error("Error fetching chat:", err);
-      toast.error(err.message);
+      console.error("Error fetching chat messages:", err);
+      setChatMessages([]);
     } finally {
       setIsChatLoading(false);
     }
   };
 
+  // Fetch assignments for this class
   const fetchAssignments = async () => {
     if (!id) return;
     setIsAssignmentsLoading(true);
     try {
-      const res = await fetch(`/api/assignments?classId=${id}`);
-      if (!res.ok) {
-        setAssignments([]);
-        return;
-      }
-      const data = await res.json();
-      setAssignments(Array.isArray(data) ? data : []);
+      const res = await fetch(`/api/assignments?classId=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error("Failed to fetch assignments");
+      const list = await res.json();
+      setAssignments(Array.isArray(list) ? list : []);
     } catch (err) {
+      console.error("Error fetching assignments:", err);
       setAssignments([]);
     } finally {
       setIsAssignmentsLoading(false);
+    }
+  };
+
+  // Helpers for deadline editing
+  const toLocalDatetimeInput = (value) => {
+    if (!value) return "";
+    try {
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return "";
+      const pad = (n) => String(n).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const min = pad(d.getMinutes());
+      return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    } catch (_) {
+      return "";
+    }
+  };
+
+  const startEditDeadline = (assignmentId, existing) => {
+    setEditingDeadline((p) => ({ ...p, [assignmentId]: true }));
+    setDeadlineInputs((p) => ({ ...p, [assignmentId]: toLocalDatetimeInput(existing) }));
+  };
+
+  const cancelEditDeadline = (assignmentId) => {
+    setEditingDeadline((p) => ({ ...p, [assignmentId]: false }));
+    setDeadlineInputs((p) => ({ ...p, [assignmentId]: "" }));
+  };
+
+  const saveDeadline = async (assignmentId) => {
+    const newVal = deadlineInputs[assignmentId];
+    if (!newVal) {
+      toast.error("Please select a deadline");
+      return;
+    }
+    const loadingId = toast.loading("Saving deadline...");
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deadline: newVal }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update deadline");
+      }
+      toast.success("Deadline updated", { id: loadingId });
+      setEditingDeadline((p) => ({ ...p, [assignmentId]: false }));
+      // refresh list
+      fetchAssignments();
+    } catch (e) {
+      console.error("Update deadline error:", e);
+      toast.error(e.message || "Failed to update deadline", { id: loadingId });
     }
   };
 
@@ -169,9 +235,7 @@ export default function ClassroomPage() {
     } else if (activeTab === "assignments") {
       fetchAssignments();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user, activeTab]); // Re-run when tab, user, or class ID changes
-
+    }, [id, user, activeTab]);
   // [NEW] useEffect for chat polling (auto-refresh)
   useEffect(() => {
     if (activeTab === 'chat' && id) {
@@ -190,6 +254,66 @@ export default function ClassroomPage() {
   }, [chatMessages]);
 
   // --- Handlers ---
+  // Whiteboard helpers
+  const openLocalPdfForWhiteboard = () => {
+    if (!wbSelectedFile) return toast.error("Please choose a PDF to edit");
+    const url = URL.createObjectURL(wbSelectedFile);
+    setWbCurrentFile({ fileUrl: url, fileName: wbSelectedFile.name, _id: `local-${Date.now()}` });
+    setIsWhiteboardOpen(true);
+  };
+
+  const handleWbFileChange = (e) => {
+    const f = e?.target?.files?.[0];
+    if (f && f.type === "application/pdf") {
+      setWbSelectedFile(f);
+    } else if (f) {
+      toast.error("Please select a PDF file");
+      setWbSelectedFile(null);
+    }
+  };
+
+  const closeWhiteboard = () => {
+    try {
+      if (wbCurrentFile && String(wbCurrentFile._id).startsWith("local-")) {
+        URL.revokeObjectURL(wbCurrentFile.fileUrl);
+      }
+    } catch (_) {}
+    setIsWhiteboardOpen(false);
+    setWbCurrentFile(null);
+  };
+
+  const handleWhiteboardSave = async (payload, filename) => {
+    if (!user || !id) return;
+    const loadingId = toast.loading("Posting announcement...");
+    try {
+      const form = new FormData();
+      form.append("classId", id);
+      form.append("authorId", user.uid);
+      form.append("authorName", username || user.email || "");
+      form.append("title", "Whiteboard Material");
+      form.append("content", `Edited material from ${wbCurrentFile?.fileName || "whiteboard"}`);
+
+      if (typeof payload === 'string') {
+        // Back-compat: single image dataURL
+        const res = await fetch(payload);
+        const blob = await res.blob();
+        form.append("file", blob, filename || "whiteboard_edited.png");
+      } else if (payload && payload.annotatedPdf) {
+        // New flow: annotated PDF + notes text separately
+        const resPdf = await fetch(payload.annotatedPdf);
+        const pdfBlob = await resPdf.blob();
+        form.append("file", pdfBlob, filename || "whiteboard_annotated.pdf");
+        if (payload.notesText) form.append("notesText", payload.notesText);
+  }
+      closeWhiteboard();
+      // Refresh stream to show the new announcement
+      fetchStreamPosts();
+      setWbSelectedFile(null);
+    } catch (e) {
+      console.error("Whiteboard save failed:", e);
+      toast.error("Failed to post announcement", { id: loadingId });
+    }
+  };
 
   const handleCopy = () => {
     if (classroom?.courseCode) {
@@ -385,6 +509,38 @@ export default function ClassroomPage() {
           {/* STREAM */}
           {activeTab === "stream" && (
             <div className="space-y-4">
+              {/* Whiteboard quick editor for this course */}
+              <Card className="border border-gray-300 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-xl">Whiteboard</CardTitle>
+                  <CardDescription>Edit a PDF and post as an announcement</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                    <input
+                      id="wb-course-pdf"
+                      ref={wbInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleWbFileChange}
+                      className="hidden"
+                    />
+                    <Button
+                      variant="outline"
+                      className="cursor-pointer"
+                      onClick={() => wbInputRef.current && wbInputRef.current.click()}
+                    >
+                      Choose PDF
+                    </Button>
+                    <Button onClick={openLocalPdfForWhiteboard} disabled={!wbSelectedFile}>
+                      Open in Whiteboard
+                    </Button>
+                    {wbSelectedFile && (
+                      <span className="text-sm text-gray-600 truncate">{wbSelectedFile.name}</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
               {/* "Create Post" Dialog for instructors */}
               {isInstructor && (
                 <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
@@ -529,7 +685,7 @@ export default function ClassroomPage() {
 
                         <p className="text-gray-700 mb-3 text-left">{post.content}</p>
 
-                        {/* Post Link */}
+                        {/* Post Link (e.g., annotated PDF) */}
                         {post.link?.url && (
                           <div className="mb-3">
                             <a
@@ -539,8 +695,16 @@ export default function ClassroomPage() {
                               className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
                             >
                               <LinkIcon className="w-3 h-3" />
-                              {post.link.text || post.link.url}
+                              {post.link.text || 'Annotated Material'}
                             </a>
+                          </div>
+                        )}
+
+                        {/* Notes (from whiteboard) shown separately */}
+                        {post.notesText && post.notesText.trim() !== '' && (
+                          <div className="mb-3 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-left">
+                            <div className="text-xs font-semibold text-yellow-800 mb-1">Notes</div>
+                            <pre className="whitespace-pre-wrap break-words text-sm text-yellow-900">{post.notesText}</pre>
                           </div>
                         )}
 
@@ -575,53 +739,70 @@ export default function ClassroomPage() {
               )}
             </div>
           )}
-
           {/* ASSIGNMENTS */}
           {activeTab === "assignments" && (
             <div className="space-y-4">
-              {isAssignmentsLoading ? (
-                <Card className="border border-gray-300 p-6 text-center text-gray-600">
-                  Loading assignments...
-                </Card>
-              ) : assignments.length === 0 ? (
-                <Card className="border border-gray-300 p-6 text-center text-gray-600">
-                  No assignments yet.
-                </Card>
-              ) : (
-                <div className="space-y-3">
-                  {assignments.map((a) => {
-                    const deadline = a.deadline ? new Date(a.deadline).toLocaleString() : null;
-                    const idKey = a._id || a.id;
-                    return (
-                      <div key={idKey} className="border border-gray-200 rounded-md p-4 text-left">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold text-gray-800">{a.title}</h3>
-                          {deadline && (
-                            <span className="text-sm text-gray-500">Due: {deadline}</span>
+              <Card className="border border-gray-300 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-xl">Assignments</CardTitle>
+                  <CardDescription>Course assignments and deadlines</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isAssignmentsLoading && <p>Loading assignments...</p>}
+                  {!isAssignmentsLoading && assignments.length === 0 && (
+                    <p className="text-gray-600">No assignments available.</p>
+                  )}
+                  {!isAssignmentsLoading && assignments.length > 0 && (
+                    <div className="space-y-4">
+                      {assignments
+                        .filter((a) => String(a.classId || a.courseId) === String(id))
+                        .map((a) => (
+                        <div key={a.id} className="border rounded-md p-4 hover:shadow-sm transition">
+                          <button
+                            className="font-semibold text-lg text-left text-blue-700 hover:underline"
+                            onClick={() => window.location.href = `/assignments`}
+                            title="Open assignments page"
+                          >
+                            {a.title}
+                          </button>
+                          {a.description && (
+                            <p className="text-sm text-gray-700 mt-1">{a.description}</p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
+                          {isInstructor && (
+                            <div className="mt-2">
+                              {!editingDeadline[a.id] ? (
+                                <Button variant="outline" size="sm" onClick={() => startEditDeadline(a.id, a.deadline)}>Edit Deadline</Button>
+                              ) : (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Input
+                                    type="datetime-local"
+                                    value={deadlineInputs[a.id] || ''}
+                                    onChange={(e) => setDeadlineInputs((p) => ({ ...p, [a.id]: e.target.value }))}
+                                  />
+                                  <Button size="sm" onClick={() => saveDeadline(a.id)}>Save</Button>
+                                  <Button size="sm" variant="outline" onClick={() => cancelEditDeadline(a.id)}>Cancel</Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {a.fileUrl && (
+                            <div className="mt-3">
+                              <Button variant="outline" size="sm" asChild>
+                                <a href={a.fileUrl} target="_blank" rel="noopener noreferrer">Download File</a>
+                              </Button>
+                            </div>
                           )}
                         </div>
-                        {a.description && (
-                          <p className="text-gray-700 mt-1">{a.description}</p>
-                        )}
-                        {a.fileUrl && (
-                          <div className="mt-2">
-                            <a
-                              href={a.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-600 hover:underline"
-                            >
-                              Download attachment
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
+
+          
 
           {/* CHAT */}
           {activeTab === "chat" && (
@@ -645,7 +826,7 @@ export default function ClassroomPage() {
                           className={`flex items-end max-w-xs md:max-w-md ${msg.author.id === user?.uid ? "flex-row-reverse" : "flex-row"
                             }`}
                         >
-                          <div className="w-8 h-8 rounded-full bg-gray-400 text-white flex items-center justify-center text-sm font-semibold mx-2 flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-gray-400 text-white flex items-center justify-center text-sm font-semibold mx-2 shrink-0">
                             {msg.author.name ? msg.author.name[0].toUpperCase() : "?"}
                           </div>
                           <div
@@ -737,6 +918,14 @@ export default function ClassroomPage() {
             </div>
           )}
         </div>
+        {/* Mount the Whiteboard modal when opened */}
+        {isWhiteboardOpen && wbCurrentFile && (
+          <DynamicWhiteboard
+            pdfUrl={wbCurrentFile.fileUrl}
+            onSave={handleWhiteboardSave}
+            onClose={closeWhiteboard}
+          />
+        )}
       </div>
     </div>
   );

@@ -24,14 +24,23 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
   const [numPages, setNumPages] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [currentTool, setCurrentTool] = useState('pen');
+  const [currentTool, setCurrentTool] = useState('pen'); // 'pen' | 'highlighter' | 'eraser' | 'text-notes'
+  const [brushColor, setBrushColor] = useState('#000000');
+  const [brushSize, setBrushSize] = useState(2);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [canvas, setCanvas] = useState(null);
+  const [notesCanvas, setNotesCanvas] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [notesPlainText, setNotesPlainText] = useState('');
   const canvasRef = useRef(null);
   const bgCanvasRef = useRef(null);
+  const notesCanvasRef = useRef(null);
+  const notesContainerRef = useRef(null);
   const containerRef = useRef(null);
   const pdfRef = useRef(null);
+  const pageStatesRef = useRef({}); // per-page annotation JSON
+  const notesTextHandlerRef = useRef(null);
+  // Overlay & complex editing removed in favor of a simple textarea
 
   // Zoom control functions
   const handleZoomIn = () => {
@@ -77,6 +86,15 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
     canvas.setWidth(width * zoom);
     canvas.setHeight(height * zoom);
     canvas.renderAll();
+  };
+
+  const applyBrushSettings = () => {
+    try {
+      if (canvas?.freeDrawingBrush) {
+        canvas.freeDrawingBrush.width = brushSize;
+        canvas.freeDrawingBrush.color = brushColor;
+      }
+    } catch (_) {}
   };
 
   // Undo and Clear All logic
@@ -136,14 +154,14 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
       }
       // create fabric canvas
       const newCanvas = new fabric.Canvas(canvasRef.current, {
-        isDrawingMode: true,
+        isDrawingMode: currentTool !== 'text-notes',
       });
       newCanvas.setWidth(widthFallback);
       newCanvas.setHeight(heightFallback);
       // default brush
-      newCanvas.freeDrawingBrush = new fabric.PencilBrush(newCanvas);
-      newCanvas.freeDrawingBrush.width = 2;
-      newCanvas.freeDrawingBrush.color = '#000000';
+  newCanvas.freeDrawingBrush = new fabric.PencilBrush(newCanvas);
+  newCanvas.freeDrawingBrush.width = brushSize;
+  newCanvas.freeDrawingBrush.color = brushColor;
       // log some canvas events to help debug drawing activity
       try {
         newCanvas.on('mouse:down', () => console.log('WHITEBOARD_CANVAS_MOUSE_DOWN'));
@@ -157,6 +175,24 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
         width: newCanvas.getWidth(),
         height: newCanvas.getHeight(),
       });
+
+      // Create a separate notes canvas on the right
+      if (notesCanvasRef.current) {
+        const nCanvas = new fabric.Canvas(notesCanvasRef.current, {
+          isDrawingMode: false, // notes area is text-only
+        });
+        // Set a reasonable default size; will stretch via CSS
+        nCanvas.setWidth(500);
+        nCanvas.setHeight(heightFallback);
+        nCanvas.backgroundColor = '#ffffff';
+        nCanvas.renderAll();
+        // Ensure keyboard focus can be applied to canvas for IText editing
+        try {
+          nCanvas.upperCanvasEl.setAttribute('tabindex', '0');
+          nCanvas.upperCanvasEl.style.outline = 'none';
+        } catch (_) {}
+        setNotesCanvas(nCanvas);
+      }
       return newCanvas;
     } catch (err) {
       console.error('initializeCanvas error', err);
@@ -250,6 +286,14 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
           created.backgroundColor = 'rgba(0,0,0,0)';
           created.renderAll();
           console.log('renderPdfPage: initialized and resized fabric canvas to match bg');
+          // Load page state if present
+          const saved = pageStatesRef.current[pageNumber];
+          if (saved) {
+            created.loadFromJSON(saved, () => created.renderAll());
+          } else {
+            created.clear();
+            created.renderAll();
+          }
         }
       } else {
         try {
@@ -258,7 +302,19 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
           canvas.setHeight(canvasEl.height);
           canvas.calcOffset && canvas.calcOffset();
           canvas.backgroundColor = 'rgba(0,0,0,0)';
-          canvas.renderAll();
+          // When switching pages, restore per-page annotations if any, else clear
+          const saved = pageStatesRef.current[pageNumber];
+          if (saved) {
+            canvas.loadFromJSON(saved, () => {
+              canvas.renderAll();
+              canvas.isDrawingMode = currentTool !== 'text-notes';
+              applyBrushSettings();
+            });
+          } else {
+            canvas.clear();
+            canvas.renderAll();
+          }
+          
           canvas.upperCanvasEl.style.position = 'absolute';
           canvas.upperCanvasEl.style.left = '0';
           canvas.upperCanvasEl.style.top = '0';
@@ -268,6 +324,13 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
           console.warn('renderPdfPage: could not resize existing fabric canvas', e);
         }
       }
+      // Sync notes canvas height to page height for better alignment
+      try {
+        if (notesCanvas) {
+          notesCanvas.setHeight(canvasEl.height);
+          notesCanvas.renderAll();
+        }
+      } catch (_) {}
       setIsLoading(false);
     } catch (err) {
       console.error('Error rendering PDF page:', err);
@@ -296,6 +359,9 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
       if (canvas) {
         canvas.dispose();
       }
+      if (notesCanvas) {
+        notesCanvas.dispose();
+      }
     };
   }, [containerRef]);
 
@@ -312,7 +378,6 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
   useEffect(() => {
     if (pdfUrl) {
       renderPdfPage(pdfUrl, currentPage);
-      // Do NOT clear canvas when changing page
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
@@ -325,82 +390,158 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
     setCurrentTool(tool);
     if (!canvas) return;
 
-    canvas.isDrawingMode = true;
+    // Only PDF annotation canvas can be in drawing mode. Notes canvas stays non-drawing (text only).
+    canvas.isDrawingMode = tool !== 'text-notes' && tool !== 'eraser' && tool !== 'highlighter' && tool !== 'pen' ? false : (tool !== 'text-notes');
+    if (notesCanvas) notesCanvas.isDrawingMode = false;
 
     if (typeof window !== 'undefined') {
       let fabricImport = await import('fabric');
       const fabric = fabricImport.default ? fabricImport.default : fabricImport.fabric ? fabricImport.fabric : fabricImport;
-      // Remove any previous eraser event listeners
+
+      // Clean previous listeners
       canvas.off('path:created');
+      if (notesCanvas) {
+        notesCanvas.off && notesCanvas.off('path:created');
+        if (notesTextHandlerRef.current) {
+          notesCanvas.off('mouse:down', notesTextHandlerRef.current);
+          notesTextHandlerRef.current = null;
+        }
+      }
+
       switch (tool) {
-        case 'pen':
-          canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-          canvas.freeDrawingBrush.color = '#000000';
-          canvas.freeDrawingBrush.width = 2;
+        case 'pen': {
+          const pen = new fabric.PencilBrush(canvas);
+          pen.color = brushColor;
+          pen.width = brushSize;
+          canvas.freeDrawingBrush = pen;
           break;
-        case 'highlighter':
-          const highlighterBrush = new fabric.PencilBrush(canvas);
-          highlighterBrush.color = 'rgba(255,255,0,0.4)';
-          highlighterBrush.width = 15;
-          highlighterBrush.opacity = 0.4;
-          canvas.freeDrawingBrush = highlighterBrush;
+        }
+        case 'highlighter': {
+          const hl = new fabric.PencilBrush(canvas);
+          hl.color = 'rgba(255,255,0,0.4)';
+          hl.width = 15;
+          hl.opacity = 0.4;
+          canvas.freeDrawingBrush = hl;
           break;
-        case 'eraser':
-          // Always remove path after creation for eraser
-          const eraserBrush = new fabric.PencilBrush(canvas);
-          eraserBrush.color = 'rgba(0,0,0,0)';
-          eraserBrush.width = 20;
-          canvas.freeDrawingBrush = eraserBrush;
+        }
+        case 'eraser': {
+          // Eraser implemented by removing the created path immediately
+          const eraser = new fabric.PencilBrush(canvas);
+          eraser.color = 'rgba(0,0,0,0)';
+          eraser.width = 20;
+          canvas.freeDrawingBrush = eraser;
           canvas.on('path:created', (e) => {
             canvas.remove(e.path);
+            canvas.renderAll();
           });
           break;
+        }
+        case 'text-notes': {
+          // Just focus the textarea for notes
+          if (notesContainerRef.current) {
+            const ta = notesContainerRef.current.querySelector('textarea[data-notes-input]');
+            if (ta) setTimeout(() => ta.focus(), 0);
+          }
+          break;
+        }
         default:
           break;
       }
     }
-          // Area erase: remove objects under cursor on click/drag
-          let isErasing = false;
-          let eraseHandler = (opt) => {
-            if (!isErasing) return;
-            const pointer = canvas.getPointer(opt.e);
-            const objects = canvas.getObjects();
-            objects.forEach((obj) => {
-              if (obj.containsPoint && obj.containsPoint(pointer)) {
-                canvas.remove(obj);
-              }
-            });
-            canvas.renderAll();
-          };
-          canvas.on('mouse:down', () => { isErasing = true; });
-          canvas.on('mouse:move', eraseHandler);
-          canvas.on('mouse:up', () => { isErasing = false; });
+  };
+
+  const saveCurrentPageState = () => {
+    try {
+      if (canvas && currentPage) {
+        pageStatesRef.current[currentPage] = canvas.toJSON();
+      }
+    } catch (e) {
+      console.warn('Failed to save page state', e);
+    }
   };
 
   const handleSave = async () => {
-    if (!canvas || !bgCanvasRef.current) return;
+    if (!pdfRef.current || !canvas) return;
+    // Save current page state before export
+    saveCurrentPageState();
+    const pdf = pdfRef.current;
+    const totalPages = pdf.numPages;
 
-    // Composite background PDF canvas and drawing canvas into a single image
-    const bg = bgCanvasRef.current;
-    const tmp = document.createElement('canvas');
-    tmp.width = bg.width;
-    tmp.height = bg.height;
-    const ctx = tmp.getContext('2d');
-    // Draw PDF background
-    ctx.drawImage(bg, 0, 0);
-    // Draw all visible objects from fabric canvas
-    const drawingURL = canvas.toDataURL({ format: 'png', multiplier: 1 });
-    const drawingImg = new window.Image();
-    drawingImg.onload = async () => {
-      ctx.drawImage(drawingImg, 0, 0);
-      const dataURL = tmp.toDataURL('image/png');
-      // Create a new filename with _edited suffix
-      const originalFilename = pdfUrl.split('/').pop();
-      const newFilename = originalFilename.replace('.pdf', '_edited.png');
-      // Call the onSave callback with the image data and filename
-      await onSave(dataURL, newFilename);
+    // Dynamically import jsPDF (ensure dependency added in package.json)
+    let jsPDFMod;
+    try {
+      jsPDFMod = await import('jspdf');
+    } catch (e) {
+      console.error('jsPDF import failed. Did you install it?', e);
+      return;
+    }
+    const { jsPDF } = jsPDFMod;
+
+    // Determine initial page size from first page
+    const first = await pdf.getPage(1);
+    const baseScale = 1.5;
+    const firstVp = first.getViewport({ scale: baseScale });
+    const doc = new jsPDF({ unit: 'px', compress: true, format: [firstVp.width, firstVp.height] });
+
+    for (let p = 1; p <= totalPages; p++) {
+      try {
+        const page = await pdf.getPage(p);
+        const vp = page.getViewport({ scale: baseScale });
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = vp.width;
+        pageCanvas.height = vp.height;
+        const ctx = pageCanvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+        // Create fabric temp canvas to load annotations for this page
+        let fabricImport = await import('fabric');
+        const fabric = fabricImport.default ? fabricImport.default : fabricImport.fabric ? fabricImport.fabric : fabricImport;
+        const tempFabric = new fabric.Canvas(document.createElement('canvas'), { width: vp.width, height: vp.height });
+        const savedState = pageStatesRef.current[p];
+        if (savedState) {
+          await new Promise((res) => tempFabric.loadFromJSON(savedState, () => { tempFabric.renderAll(); res(); }));
+        }
+        const overlayURL = tempFabric.toDataURL({ format: 'png', multiplier: 1 });
+        const overlayImg = new Image();
+        await new Promise((res) => { overlayImg.onload = res; overlayImg.src = overlayURL; });
+        ctx.drawImage(overlayImg, 0, 0);
+
+        const pageImgData = pageCanvas.toDataURL('image/png');
+        if (p === 1) {
+          doc.addImage(pageImgData, 'PNG', 0, 0, vp.width, vp.height);
+        } else {
+          doc.addPage([vp.width, vp.height]);
+          doc.addImage(pageImgData, 'PNG', 0, 0, vp.width, vp.height);
+        }
+        tempFabric.dispose();
+      } catch (e) {
+        console.warn('Failed to export page', p, e);
+      }
+    }
+
+    const pdfBlob = doc.output('blob');
+    const annotatedPdfUrl = URL.createObjectURL(pdfBlob);
+    // Extract notes text objects
+    // Notes text comes from the textarea; fall back to any i-text objects on canvas
+    let notesText = (notesPlainText || '').trim();
+    if (!notesText && notesCanvas) {
+      try {
+        notesCanvas.getObjects('i-text').forEach((t) => {
+          notesText += (t.text || '').trim() + '\n';
+        });
+        notesText = notesText.trim();
+      } catch (_) {}
+    }
+    const originalFilename = pdfUrl.split('/').pop() || 'material.pdf';
+    const newFilename = originalFilename.replace('.pdf', '_annotated.pdf');
+
+    // Pass both annotated pdf blob (converted to base64) and notes text to onSave
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Pdf = reader.result; // data:application/pdf;base64,...
+      await onSave({ annotatedPdf: base64Pdf, notesText }, newFilename);
     };
-    drawingImg.src = drawingURL;
+    reader.readAsDataURL(pdfBlob);
   };
 
   const toggleFullScreen = () => {
@@ -413,18 +554,29 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
     }
   };
 
+  // Persist current page state before changing page
+  const gotoPrev = () => {
+    if (currentPage <= 1) return;
+    saveCurrentPageState();
+    setCurrentPage(currentPage - 1);
+  };
+  const gotoNext = () => {
+    if (!numPages || currentPage >= numPages) return;
+    saveCurrentPageState();
+    setCurrentPage(currentPage + 1);
+  };
+
   return (
     <Dialog open={true} onOpenChange={onClose} className="max-w-4xl">
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-[1200px] w-full max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Whiteboard Editor</DialogTitle>
           <DialogDescription>
             Edit and annotate the PDF document
           </DialogDescription>
         </DialogHeader>
-        
         <div className="flex flex-col h-full" ref={containerRef}>
-          <div className="flex gap-2 mb-4 flex-wrap">
+          <div className="flex gap-3 mb-3 flex-wrap items-center">
             <Button
               variant={currentTool === 'pen' ? 'default' : 'outline'}
               onClick={() => handleToolChange('pen')}
@@ -444,6 +596,34 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
             >
               Eraser
             </Button>
+            <Button
+              variant={currentTool === 'text-notes' ? 'default' : 'outline'}
+              onClick={() => handleToolChange('text-notes')}
+            >
+              Text (Notes)
+            </Button>
+            <div className="border-l mx-2"></div>
+            <label className="text-sm text-gray-600">Color</label>
+            <input
+              type="color"
+              value={brushColor}
+              onChange={(e) => {
+                setBrushColor(e.target.value);
+                if (canvas?.freeDrawingBrush) canvas.freeDrawingBrush.color = e.target.value;
+              }}
+            />
+            <label className="ml-2 text-sm text-gray-600">Size</label>
+            <input
+              type="range"
+              min="1"
+              max="30"
+              value={brushSize}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setBrushSize(val);
+                if (canvas?.freeDrawingBrush) canvas.freeDrawingBrush.width = val;
+              }}
+            />
             <div className="border-l mx-2"></div>
             <Button onClick={handleUndo} variant="outline">Undo</Button>
             <Button onClick={handleClearAll} variant="outline">Clear All</Button>
@@ -464,22 +644,48 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
   // Removed duplicate handler definitions from inside JSX
           </div>
 
-          <div className="relative flex-1 overflow-auto" style={{ padding: '20px' }}>
-            <canvas ref={bgCanvasRef} className="absolute left-0 top-0 z-0" />
-            <canvas ref={canvasRef} className="absolute left-0 top-0 z-10" />
+          <div className="flex-1 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 h-full">
+              {/* Left: PDF page with overlay */}
+              <div className="relative overflow-auto border rounded-md" style={{ minHeight: '400px' }}>
+                <div className="relative" style={{ padding: '20px' }}>
+                  <canvas ref={bgCanvasRef} className="absolute left-0 top-0 z-0" />
+                  <canvas ref={canvasRef} className="absolute left-0 top-0 z-10" />
+                </div>
+              </div>
+              {/* Right: Notes white area */}
+              <div className="flex flex-col">
+                <div className="text-sm text-gray-600 mb-2">Notes</div>
+                <div className="border rounded-md overflow-hidden" style={{ minHeight: '400px' }}>
+                  {/* Simple, reliable textarea for notes typing */}
+                  <textarea
+                    data-notes-input
+                    value={notesPlainText}
+                    onChange={(e) => setNotesPlainText(e.target.value)}
+                    placeholder="Type your notes here..."
+                    className="w-full h-40 p-3 outline-none resize-y text-sm"
+                    style={{ borderBottom: '1px solid #e5e7eb' }}
+                  />
+                  {/* Optional drawing space (kept for future shape/text rendering, but disabled for drawing) */}
+                  <div ref={notesContainerRef} className="relative">
+                    <canvas ref={notesCanvasRef} />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-between mt-4">
             <div className="flex gap-2">
               <Button
                 disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(currentPage - 1)}
+                onClick={gotoPrev}
               >
                 Previous
               </Button>
               <Button
                 disabled={currentPage >= numPages}
-                onClick={() => setCurrentPage(currentPage + 1)}
+                onClick={gotoNext}
               >
                 Next
               </Button>

@@ -81,10 +81,10 @@ export default function MainNavbar() {
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             <Link href="/" className="text-foreground hover:text-primary transition-colors font-medium">Home</Link>
-            <Link href="/assignments" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</Link>
             {user && (
               <>
-                <Link href="/student" className="text-muted-foreground hover:text-primary transition-colors font-medium">Student Dashboard</Link>
+                {/* Unified Assignments (renamed from Student Dashboard) */}
+                <Link href="/student" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</Link>
                 {(isAdmin || user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com")) && (
                   <Link href="/admin" className="text-muted-foreground hover:text-primary transition-colors font-medium">Admin Dashboard</Link>
                 )}
@@ -121,10 +121,10 @@ export default function MainNavbar() {
         <div className="container mx-auto px-4 py-3">
           <nav className="flex flex-wrap items-center gap-4 text-sm">
             <Link href="/" className="text-foreground hover:text-primary transition-colors font-medium">Home</Link>
-            <Link href="/assignments" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</Link>
             {user && (
               <>
-                <Link href="/student" className="text-muted-foreground hover:text-primary transition-colors font-medium">Student</Link>
+                {/* Mobile: only one Assignments link pointing to /student */}
+                <Link href="/student" className="text-muted-foreground hover:text-primary transition-colors font-medium">Assignments</Link>
                 {(isAdmin || user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com")) && (
                   <Link href="/admin" className="text-muted-foreground hover:text-primary transition-colors font-medium">Admin</Link>
                 )}

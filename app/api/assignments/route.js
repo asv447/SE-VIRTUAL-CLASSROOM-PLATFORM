@@ -12,16 +12,40 @@ export async function GET(request) {
     const role = searchParams.get("role");
 
     const assignmentsCollection = await getAssignmentsCollection();
+    const coursesCollection = await getCoursesCollection();
     let query = {};
+    const conditions = [];
 
-    if (classId) query.classId = classId;
-    if (role === "instructor") query.instructorId = userId;
+    if (classId) {
+      // Support legacy records that may use either classId or courseId
+      conditions.push({ $or: [{ classId: classId }, { courseId: classId }] });
+    }
+    if (role === "instructor" && userId) {
+      conditions.push({ instructorId: userId });
+    }
+
+    if (conditions.length === 1) {
+      query = conditions[0];
+    } else if (conditions.length > 1) {
+      query = { $and: conditions };
+    }
 
     const assignments = await assignmentsCollection.find(query).toArray();
+
+    // Build a map of courseId -> course title for enrichment (avoid client Unknown Course labels)
+    const courseIds = [...new Set(assignments.map(a => a.classId || a.courseId).filter(Boolean))];
+    let courseMap = {};
+    if (courseIds.length > 0) {
+      const courseDocs = await coursesCollection.find({ _id: { $in: courseIds.map(cid => {
+        try { return new ObjectId(cid); } catch { return null; }
+      }).filter(Boolean) }}).toArray();
+      courseDocs.forEach(c => { courseMap[c._id.toString()] = c.title; });
+    }
 
     const formattedAssignments = assignments.map((assignment) => ({
       id: assignment._id.toString(),
       ...assignment,
+      courseTitle: courseMap[assignment.classId || assignment.courseId] || null,
       _id: undefined,
     }));
 
@@ -44,14 +68,9 @@ export async function POST(request) {
     const instructorId = formData.get("instructorId");
     const instructorName = formData.get("instructorName");
     
-    // Allow two modes:
-    // 1) Full assignment creation (courseId, title, description, deadline, instructorId, instructorName)
-    // 2) File-only upload (used by whiteboard) - accept when only a file is provided
-    const isFullCreate = courseId && title && description && deadline && instructorId && instructorName;
-    const isFileOnly = file && file.size > 0 && !(courseId && title && description && deadline && instructorId && instructorName);
-
-    if (!isFullCreate && !isFileOnly) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    // Strict validation: all fields required except file
+    if (!courseId || !title || !description || !deadline || !instructorId || !instructorName) {
+      return NextResponse.json({ error: "Missing required fields: courseId, title, description, deadline, instructorId, instructorName" }, { status: 400 });
     }
 
     const assignmentsCollection = await getAssignmentsCollection();
@@ -71,11 +90,13 @@ export async function POST(request) {
     // Build assignment object. For file-only uploads, fill minimal metadata.
     const newAssignment = {
       _id: new ObjectId(assignmentId),
-      classId: courseId || null,
-      courseId: courseId || null,
-      title: title || (fileData ? fileData.name : 'Uploaded File'),
-      description: description || (fileData ? 'Uploaded via whiteboard editor' : ''),
-      deadline: deadline || null,
+      classId: courseId,
+      courseId: courseId,
+      instructorId,
+      instructorName,
+      title,
+      description,
+      deadline,
       fileUrl,
       fileData,
       createdAt: new Date(),

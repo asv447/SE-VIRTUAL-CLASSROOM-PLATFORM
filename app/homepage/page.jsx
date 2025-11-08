@@ -403,9 +403,9 @@ export default function ClassyncDashboard() {
                   className="h-20 flex-col gap-2 bg-transparent"
                   asChild
                 >
-                  <a href="/student">
+                  <a href="/assignments">
                     <FileText className="w-6 h-6" />
-                    <span className="text-sm">Student Dashboard</span>
+                    <span className="text-sm">Assignments</span>
                   </a>
                 </Button>
               )}
