@@ -267,25 +267,15 @@ export default function SharedNavbar() {
             >
               Home
             </Link>
-            <Link
-              href="/assignments"
-              className="text-muted-foreground hover:text-primary transition-colors font-medium"
-            >
-              Assignments
-            </Link>
-            <Link
-              href="/setup"
-              className="text-muted-foreground hover:text-primary transition-colors font-medium"
-            >
-              Setup
-            </Link>
+            {/* Single Assignments entry will be shown under authenticated section */}
+            {/* Setup link removed (was used for dummy data) */}
             {user && (
               <>
                 <Link
-                  href="/student"
+                  href="/assignments"
                   className="text-muted-foreground hover:text-primary transition-colors font-medium"
                 >
-                  Student
+                  Assignments
                 </Link>
                 {(isAdmin ||
                   user?.email?.includes("@instructor.com") ||
@@ -339,25 +329,15 @@ export default function SharedNavbar() {
             >
               Home
             </Link>
-            <Link
-              href="/assignments"
-              className="text-muted-foreground hover:text-primary transition-colors font-medium"
-            >
-              Assignments
-            </Link>
-            <Link
-              href="/setup"
-              className="text-muted-foreground hover:text-primary transition-colors font-medium"
-            >
-              Setup
-            </Link>
+            {/* Authenticated users see Assignments below */}
+            {/* Setup link removed (was used for dummy data) */}
             {user && (
               <>
                 <Link
-                  href="/student"
+                  href="/assignments"
                   className="text-muted-foreground hover:text-primary transition-colors font-medium"
                 >
-                  Student
+                  Assignments
                 </Link>
                 {(isAdmin ||
                   user?.email?.includes("@instructor.com") ||
@@ -383,11 +363,11 @@ export default function SharedNavbar() {
 
       {/* Login Modal */}
       {isLoginOpen && mounted && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
-          <div className="relative w-full max-w-md mx-auto z-[10000]">
+  <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
+          <div className="relative w-full max-w-md mx-auto z-10000">
             <Login onBackToHome={() => setIsLoginOpen(false)} />
             <button
-              className="absolute top-2 right-2 text-white text-2xl font-bold z-[10001]"
+              className="absolute top-2 right-2 text-white text-2xl font-bold z-10001"
               onClick={() => setIsLoginOpen(false)}
             >
               ×
@@ -398,11 +378,11 @@ export default function SharedNavbar() {
 
       {/* Register Modal */}
       {isRegisterOpen && mounted && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
-          <div className="relative w-full max-w-md mx-auto z-[10000]">
+  <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
+          <div className="relative w-full max-w-md mx-auto z-10000">
             <Register onBackToHome={() => setIsRegisterOpen(false)} />
             <button
-              className="absolute top-2 right-2 text-white text-2xl font-bold z-[10001] cursor-pointer"
+              className="absolute top-2 right-2 text-white text-2xl font-bold z-10001 cursor-pointer"
               onClick={() => setIsRegisterOpen(false)}
             >
               ×

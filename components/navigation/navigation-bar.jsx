@@ -58,11 +58,11 @@ export default function NavigationBar() {
             {user ? (
               <>
                 <Link 
-                  href="/student" 
+                  href="/assignments" 
                   className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
                 >
                   <User className="h-4 w-4" />
-                  Student Dashboard
+                  Assignments
                 </Link>
                 
                 {isAdmin && (
@@ -137,12 +137,12 @@ export default function NavigationBar() {
               {user ? (
                 <>
                   <Link 
-                    href="/student" 
+                    href="/assignments" 
                     className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <User className="h-4 w-4" />
-                    Student Dashboard
+                    Assignments
                   </Link>
                   
                   {isAdmin && (

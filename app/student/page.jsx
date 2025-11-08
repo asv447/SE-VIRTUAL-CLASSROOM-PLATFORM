@@ -12,14 +12,18 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  FileText
+  FileText,
+  Filter,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
-export default function StudentDashboard() {
+export default function AssignmentsPage() {
   const [user, setUser] = useState(null);
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
@@ -28,6 +32,13 @@ export default function StudentDashboard() {
   const [pageLoading, setPageLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState({});
   const [uploading, setUploading] = useState({});
+  
+  // Filter states
+  const [filterCourse, setFilterCourse] = useState("all");
+  // Single specific deadline date filter (exact day match)
+  const [filterDeadline, setFilterDeadline] = useState("");
+  // Dynamic course options gathered from assignments themselves (covers courses user may no longer be enrolled in)
+  const [assignmentCourseOptions, setAssignmentCourseOptions] = useState([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (usr) => {
@@ -59,14 +70,20 @@ export default function StudentDashboard() {
   };
 
   const loadCourses = async () => {
+    if (!user?.uid) return;
     try {
-      const res = await fetch("/api/courses");
+      const url = `/api/courses?role=student&userId=${encodeURIComponent(user.uid)}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setCourses(data);
+        setCourses(Array.isArray(data) ? data : []);
+      } else {
+        console.error("Failed to fetch enrolled courses", await res.text());
+        setCourses([]);
       }
     } catch (err) {
       console.error("Error loading courses:", err);
+      setCourses([]);
     }
   };
 
@@ -76,6 +93,19 @@ export default function StudentDashboard() {
       if (res.ok) {
         const data = await res.json();
         setAssignments(data);
+        // Build dynamic list of courses from assignments
+        const map = new Map();
+        data.forEach(a => {
+          const cid = a.courseId || a.classId;
+          if (!cid) return;
+          if (!map.has(cid)) {
+            map.set(cid, {
+              id: cid,
+              name: a.courseTitle || a.courseName || a.classTitle || cid
+            });
+          }
+        });
+        setAssignmentCourseOptions(Array.from(map.values()));
         // Load submissions for each assignment
         data.forEach(assignment => {
           loadSubmissions(assignment.id);
@@ -159,9 +189,12 @@ export default function StudentDashboard() {
     }
   };
 
-  const getCourseName = (courseId) => {
-    const course = courses.find(c => c.id === courseId);
-    return course ? `${course.name} (${course.code})` : "Unknown Course";
+  const getCourseName = (assignment) => {
+    // Prefer server-enriched title
+    if (assignment?.courseTitle) return assignment.courseTitle;
+    const cid = assignment?.courseId || assignment?.classId;
+    const course = courses.find(c => c.id === cid);
+    return course ? `${course.name} (${course.courseCode || course.code || ""})` : "Unknown Course";
   };
 
   const isOverdue = (deadline) => {
@@ -199,10 +232,43 @@ export default function StudentDashboard() {
     return { pending, submitted, overdue };
   };
 
+  const applyFilters = (assignmentsList) => {
+    let filtered = [...assignmentsList];
+
+    if (filterCourse && filterCourse !== "all") {
+      filtered = filtered.filter(a => (a.courseId || a.classId) === filterCourse);
+    }
+
+    if (filterDeadline) {
+      filtered = filtered.filter(a => {
+        const assignmentDate = new Date(a.deadline).toDateString();
+        const filterDate = new Date(filterDeadline).toDateString();
+        return assignmentDate === filterDate;
+      });
+    }
+    return filtered;
+  };
+
+  const clearFilters = () => {
+    setFilterCourse("all");
+    setFilterDeadline("");
+  };
+
+  const safeFormatDate = (date) => {
+    if (!date) return "No deadline";
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "No deadline";
+    try {
+      return format(d, "PPP p");
+    } catch (e) {
+      return d.toString();
+    }
+  };
+
   if (!user) {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
-        <h1 className="text-2xl font-bold mb-4">Student Dashboard</h1>
+        <h1 className="text-2xl font-bold mb-4">Assignments</h1>
         <p className="text-gray-600">Please log in to access your assignments.</p>
       </div>
     );
@@ -216,14 +282,44 @@ export default function StudentDashboard() {
     );
   }
 
+  // Combine enrolled courses and assignment-derived courses (dedupe by id)
+  const combinedCourses = (() => {
+    const map = new Map();
+    assignmentCourseOptions.forEach(c => map.set(c.id, c));
+    courses.forEach(c => {
+      const cid = c.id || c._id || c.courseId;
+      if (!cid) return;
+      if (!map.has(cid)) {
+        map.set(cid, {
+          id: cid,
+          name: c.name || c.title || c.courseTitle || cid
+        });
+      } else {
+        // prefer nicer name if available
+        const existing = map.get(cid);
+        const betterName = c.name || c.title || c.courseTitle;
+        if (betterName && existing.name === existing.id) {
+          map.set(cid, { id: cid, name: betterName });
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a,b) => a.name.localeCompare(b.name));
+  })();
+
   const { pending, submitted, overdue } = groupAssignmentsByStatus();
+  const filteredPending = applyFilters(pending);
+  const filteredSubmitted = applyFilters(submitted);
+  const filteredOverdue = applyFilters(overdue);
 
   const AssignmentCard = ({ assignment, showSubmitButton = true }) => {
+    const courseIdForNav = assignment.courseId || assignment.classId;
     const submission = getSubmission(assignment.id);
     const isOverdueStatus = isOverdue(assignment.deadline);
 
     return (
-      <Card className="h-full">
+      <Card className="h-full cursor-pointer" onClick={() => {
+        window.location.href = `/assignments`;
+      }}>
         <CardHeader>
           <div className="flex justify-between items-start">
             <CardTitle className="text-lg">{assignment.title}</CardTitle>
@@ -237,11 +333,11 @@ export default function StudentDashboard() {
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-1">
               <BookOpen className="h-4 w-4" />
-              {getCourseName(assignment.courseId)}
+              {getCourseName(assignment)}
             </div>
             <div className="flex items-center gap-1">
               <Calendar className="h-4 w-4" />
-              Due: {format(new Date(assignment.deadline), "PPP p")}
+              Due: {safeFormatDate(assignment.deadline)}
             </div>
           </div>
 
@@ -263,7 +359,7 @@ export default function StudentDashboard() {
                 <span className="text-sm font-medium">Submitted</span>
               </div>
               <p className="text-xs text-gray-500">
-                Submitted on: {format(new Date(submission.submittedAt), "PPP p")}
+                Submitted on: {safeFormatDate(submission.submittedAt)}
               </p>
               {submission.fileUrl && (
                 <Button variant="outline" size="sm" asChild>
@@ -333,10 +429,15 @@ export default function StudentDashboard() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">Assignments</h1>
+        <p className="text-gray-600">Manage and submit your course assignments</p>
+      </div>
+
       <Tabs defaultValue="pending" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="pending">
-            Pending ({pending.length})
+            Pending ({filteredPending.length})
           </TabsTrigger>
           <TabsTrigger value="submitted">
             Submitted ({submitted.length})
@@ -347,17 +448,84 @@ export default function StudentDashboard() {
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4">
-          {pending.length === 0 ? (
+          {/* Filter Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Filters
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                {/* Course Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Course</label>
+                  <Select value={filterCourse} onValueChange={setFilterCourse}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Courses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Courses</SelectItem>
+                      {combinedCourses.map((course) => (
+                        <SelectItem key={course.id} value={course.id}>
+                          {course.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Single Deadline Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Deadline Date</label>
+                  <Input
+                    type="date"
+                    value={filterDeadline}
+                    onChange={(e) => setFilterDeadline(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Clear Filters Button */}
+              {(filterCourse !== "all" || filterDeadline) && (
+                <div className="mt-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={clearFilters}
+                    className="flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4" />
+                    Clear Filters
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Assignments List */}
+          {filteredPending.length === 0 ? (
             <Card>
               <CardContent className="text-center py-8">
-                <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                <h3 className="text-lg font-semibold text-green-700">All caught up!</h3>
-                <p className="text-gray-600">You have no pending assignments.</p>
+                {pending.length === 0 ? (
+                  <>
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <h3 className="text-lg font-semibold text-green-700">All caught up!</h3>
+                    <p className="text-gray-600">You have no pending assignments.</p>
+                  </>
+                ) : (
+                  <>
+                    <Filter className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-700">No assignments match your filters</h3>
+                    <p className="text-gray-600">Try adjusting your filter criteria.</p>
+                  </>
+                )}
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {pending.map((assignment) => (
+              {filteredPending.map((assignment) => (
                 <AssignmentCard 
                   key={assignment.id} 
                   assignment={assignment} 
@@ -369,17 +537,17 @@ export default function StudentDashboard() {
         </TabsContent>
 
         <TabsContent value="submitted" className="space-y-4">
-          {submitted.length === 0 ? (
+          {filteredSubmitted.length === 0 ? (
             <Card>
               <CardContent className="text-center py-8">
                 <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700">No submissions yet</h3>
-                <p className="text-gray-600">You haven't submitted any assignments.</p>
+                <h3 className="text-lg font-semibold text-gray-700">No submissions match your filters</h3>
+                <p className="text-gray-600">Adjust or clear filters to see more.</p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {submitted.map((assignment) => (
+              {filteredSubmitted.map((assignment) => (
                 <AssignmentCard 
                   key={assignment.id} 
                   assignment={assignment} 
@@ -391,17 +559,17 @@ export default function StudentDashboard() {
         </TabsContent>
 
         <TabsContent value="overdue" className="space-y-4">
-          {overdue.length === 0 ? (
+          {filteredOverdue.length === 0 ? (
             <Card>
               <CardContent className="text-center py-8">
                 <Calendar className="h-12 w-12 mx-auto text-blue-500 mb-4" />
-                <h3 className="text-lg font-semibold text-blue-700">No overdue assignments</h3>
-                <p className="text-gray-600">Great job! All assignments are submitted on time.</p>
+                <h3 className="text-lg font-semibold text-blue-700">No overdue assignments match filters</h3>
+                <p className="text-gray-600">Adjust or clear filters to see more.</p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {overdue.map((assignment) => (
+              {filteredOverdue.map((assignment) => (
                 <AssignmentCard 
                   key={assignment.id} 
                   assignment={assignment} 
