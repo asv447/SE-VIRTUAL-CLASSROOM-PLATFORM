@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { 
   BookOpen, 
-  Users, 
   User, 
   LogOut, 
   Menu, 
@@ -18,6 +18,7 @@ import {
 export default function NavigationBar() {
   const [user, setUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (usr) => {
@@ -35,6 +36,8 @@ export default function NavigationBar() {
   };
 
   const isAdmin = user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com");
+  const isHomepage = pathname === "/" || pathname === "/homepage";
+  const showNavLinks = !isHomepage;
 
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm">
@@ -47,49 +50,53 @@ export default function NavigationBar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link 
-              href="/" 
-              className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors"
-            >
-              Home
-            </Link>
-            
-            {user ? (
+          <div className="hidden md:flex items-center gap-6">
+            {showNavLinks && (
               <>
                 <Link 
-                  href="/assignments" 
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                  href="/" 
+                  className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors"
                 >
-                  <User className="h-4 w-4" />
-                  Assignments
+                  Home
                 </Link>
-                
-                {isAdmin && (
-                  <Link 
-                    href="/admin" 
-                    className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    Admin Dashboard
-                  </Link>
+                {user && (
+                  <>
+                    <Link 
+                      href="/assignments" 
+                      className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      <User className="h-4 w-4" />
+                      Assignments
+                    </Link>
+                    {isAdmin && (
+                      <Link 
+                        href="/admin" 
+                        className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        Admin Dashboard
+                      </Link>
+                    )}
+                  </>
                 )}
-                
-                <div className="flex items-center space-x-4 border-l border-gray-300 pl-4">
-                  <span className="text-sm text-gray-600">
-                    {user.displayName || user.email}
-                  </span>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleLogout}
-                    className="flex items-center gap-2"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Logout
-                  </Button>
-                </div>
               </>
+            )}
+
+            {user ? (
+              <div className={`flex items-center space-x-4 ${showNavLinks ? "border-l border-gray-300 pl-4" : ""}`}>
+                <span className="text-sm text-gray-600">
+                  {user.displayName || user.email}
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  className="flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </Button>
+              </div>
             ) : (
               <div className="flex items-center space-x-4">
                 <Link href="/login">
@@ -126,51 +133,55 @@ export default function NavigationBar() {
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 py-4">
             <div className="flex flex-col space-y-4">
-              <Link 
-                href="/" 
-                className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Home
-              </Link>
-              
-              {user ? (
+              {showNavLinks && (
                 <>
                   <Link 
-                    href="/assignments" 
-                    className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
+                    href="/" 
+                    className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
-                    <User className="h-4 w-4" />
-                    Assignments
+                    Home
                   </Link>
-                  
-                  {isAdmin && (
-                    <Link 
-                      href="/admin" 
-                      className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <BookOpen className="h-4 w-4" />
-                      Admin Dashboard
-                    </Link>
+                  {user && (
+                    <>
+                      <Link 
+                        href="/assignments" 
+                        className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <User className="h-4 w-4" />
+                        Assignments
+                      </Link>
+                      {isAdmin && (
+                        <Link 
+                          href="/admin" 
+                          className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <BookOpen className="h-4 w-4" />
+                          Admin Dashboard
+                        </Link>
+                      )}
+                    </>
                   )}
-                  
-                  <div className="border-t border-gray-200 pt-4 space-y-3">
-                    <div className="px-3 text-sm text-gray-600">
-                      {user.displayName || user.email}
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleLogout}
-                      className="ml-3 flex items-center gap-2"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Logout
-                    </Button>
-                  </div>
                 </>
+              )}
+
+              {user ? (
+                <div className="border-t border-gray-200 pt-4 space-y-3">
+                  <div className="px-3 text-sm text-gray-600">
+                    {user.displayName || user.email}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleLogout}
+                    className="ml-3 flex items-center gap-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </Button>
+                </div>
               ) : (
                 <div className="flex flex-col space-y-3 px-3">
                   <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
