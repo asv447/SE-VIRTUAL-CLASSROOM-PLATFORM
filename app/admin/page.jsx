@@ -31,6 +31,7 @@ export default function AdminDashboard() {
   const [username, setUsername] = useState(""); // [FIX] Add username state
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("assignments");
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -58,6 +59,18 @@ export default function AdminDashboard() {
   const [editingDeadline, setEditingDeadline] = useState({});
   const [deadlineInputs, setDeadlineInputs] = useState({});
   const [savingDeadline, setSavingDeadline] = useState({});
+
+  // When selecting an assignment from the submissions tab dropdown
+  const handleSelectSubmissionAssignment = async (assignmentId) => {
+    const selected = assignments.find((a) => a.id === assignmentId);
+    if (!selected) {
+      setViewingSubmissions(null);
+      setSubmissions([]);
+      return;
+    }
+    setViewingSubmissions(selected);
+    await loadSubmissions(selected.id);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
@@ -334,6 +347,8 @@ export default function AdminDashboard() {
 
   const viewAssignmentSubmissions = async (assignment) => {
     setViewingSubmissions(assignment);
+    // Switch to the Submissions tab so the user can see results immediately
+    setActiveTab("submissions");
     await loadSubmissions(assignment.id);
   };
 
@@ -422,7 +437,7 @@ export default function AdminDashboard() {
         <p className="text-gray-600">Welcome, {username}</p> {/* [FIX] Use username */}
       </div>
 
-      <Tabs defaultValue="assignments" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="assignments">Assignments</TabsTrigger>
@@ -721,12 +736,35 @@ export default function AdminDashboard() {
                   : "Select an assignment to view submissions"
                 }
               </CardDescription>
+              {/* Assignment selector for viewing submissions */}
+              <div className="mt-4">
+                <Label className="mb-2 block">Choose assignment</Label>
+                <Select
+                  value={viewingSubmissions?.id || ""}
+                  onValueChange={handleSelectSubmissionAssignment}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an assignment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignments.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-gray-500">No assignments available</div>
+                    ) : (
+                      assignments.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.title}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent>
               {!viewingSubmissions ? (
                 <div className="text-center py-8">
                   <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-600">Go to the Assignments tab and click "View Submissions" for any assignment</p>
+                  <p className="text-gray-600">Select an assignment above or go to the Assignments tab and click "View Submissions"</p>
                 </div>
               ) : submissions.length === 0 ? (
                 <div className="text-center py-8">

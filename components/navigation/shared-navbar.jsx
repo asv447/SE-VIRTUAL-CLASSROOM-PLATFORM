@@ -5,7 +5,7 @@ import Link from "next/link";
 import NotificationBell from "./notification-bell";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import {
   onAuthStateChanged,
@@ -35,6 +35,8 @@ export default function SharedNavbar() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [loadingReset, setLoadingReset] = useState(false);
+  const pathname = usePathname();
+  const isHomepage = pathname === "/" || pathname === "/homepage";
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -260,42 +262,44 @@ export default function SharedNavbar() {
             </Link>
           </div>
           {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
-            <Link
-              href="/"
-              className="text-foreground hover:text-primary transition-colors font-medium"
-            >
-              Home
-            </Link>
-            {/* Single Assignments entry will be shown under authenticated section */}
-            {/* Setup link removed (was used for dummy data) */}
-            {user && (
-              <>
-                <Link
-                  href="/assignments"
-                  className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                >
-                  Assignments
-                </Link>
-                {(isAdmin ||
-                  user?.email?.includes("@instructor.com") ||
-                  user?.email?.includes("@admin.com")) && (
+          {!isHomepage && (
+            <nav className="hidden md:flex items-center space-x-8">
+              <Link
+                href="/"
+                className="text-foreground hover:text-primary transition-colors font-medium"
+              >
+                Home
+              </Link>
+              {/* Single Assignments entry will be shown under authenticated section */}
+              {/* Setup link removed (was used for dummy data) */}
+              {user && (
+                <>
                   <Link
-                    href="/admin"
+                    href="/assignments"
                     className="text-muted-foreground hover:text-primary transition-colors font-medium"
                   >
-                    Admin
+                    Assignments
                   </Link>
-                )}
-              </>
-            )}
-            <Link
-              href="/ai-tools"
-              className="text-muted-foreground hover:text-primary transition-colors font-medium"
-            >
-              AI Tools
-            </Link>
-          </nav>
+                  {(isAdmin ||
+                    user?.email?.includes("@instructor.com") ||
+                    user?.email?.includes("@admin.com")) && (
+                    <Link
+                      href="/admin"
+                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                    >
+                      Admin
+                    </Link>
+                  )}
+                </>
+              )}
+              <Link
+                href="/ai-tools"
+                className="text-muted-foreground hover:text-primary transition-colors font-medium"
+              >
+                AI Tools
+              </Link>
+            </nav>
+          )}
           {/* User Actions */}
           <div className="flex items-center space-x-4">
             <NotificationBell />
@@ -320,46 +324,48 @@ export default function SharedNavbar() {
       </header>
 
       {/* Mobile Menu - for smaller screens */}
-      <div className="md:hidden border-b border-border bg-background">
-        <div className="container mx-auto px-4 py-3">
-          <nav className="flex flex-wrap items-center gap-4 text-sm">
-            <Link
-              href="/"
-              className="text-foreground hover:text-primary transition-colors font-medium"
-            >
-              Home
-            </Link>
-            {/* Authenticated users see Assignments below */}
-            {/* Setup link removed (was used for dummy data) */}
-            {user && (
-              <>
-                <Link
-                  href="/assignments"
-                  className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                >
-                  Assignments
-                </Link>
-                {(isAdmin ||
-                  user?.email?.includes("@instructor.com") ||
-                  user?.email?.includes("@admin.com")) && (
+      {!isHomepage && (
+        <div className="md:hidden border-b border-border bg-background">
+          <div className="container mx-auto px-4 py-3">
+            <nav className="flex flex-wrap items-center gap-4 text-sm">
+              <Link
+                href="/"
+                className="text-foreground hover:text-primary transition-colors font-medium"
+              >
+                Home
+              </Link>
+              {/* Authenticated users see Assignments below */}
+              {/* Setup link removed (was used for dummy data) */}
+              {user && (
+                <>
                   <Link
-                    href="/admin"
+                    href="/assignments"
                     className="text-muted-foreground hover:text-primary transition-colors font-medium"
                   >
-                    Admin
+                    Assignments
                   </Link>
-                )}
-              </>
-            )}
-            <Link
-              href="/ai-tools"
-              className="text-muted-foreground hover:text-primary transition-colors font-medium"
-            >
-              AI Tools
-            </Link>
-          </nav>
+                  {(isAdmin ||
+                    user?.email?.includes("@instructor.com") ||
+                    user?.email?.includes("@admin.com")) && (
+                    <Link
+                      href="/admin"
+                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                    >
+                      Admin
+                    </Link>
+                  )}
+                </>
+              )}
+              <Link
+                href="/ai-tools"
+                className="text-muted-foreground hover:text-primary transition-colors font-medium"
+              >
+                AI Tools
+              </Link>
+            </nav>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Login Modal */}
       {isLoginOpen && mounted && (
