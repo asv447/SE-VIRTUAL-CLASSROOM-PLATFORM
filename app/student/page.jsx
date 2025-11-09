@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
@@ -32,6 +32,8 @@ export default function AssignmentsPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState({});
   const [uploading, setUploading] = useState({});
+  const fileInputRefs = useRef({});
+  const [userProfile, setUserProfile] = useState(null);
   
   // Filter states
   const [filterCourse, setFilterCourse] = useState("all");
@@ -49,11 +51,31 @@ export default function AssignmentsPage() {
 
   useEffect(() => {
     if (user) {
+      fetchUserProfile(user.uid);
       loadData();
     } else {
       setPageLoading(false);
     }
   }, [user]);
+
+  const fetchUserProfile = async (uid) => {
+    if (!uid) {
+      setUserProfile(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${uid}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUserProfile(data.user || null);
+      } else {
+        setUserProfile(null);
+      }
+    } catch (err) {
+      console.error("Error fetching user profile:", err);
+      setUserProfile(null);
+    }
+  };
 
   const loadData = async () => {
     setPageLoading(true);
@@ -134,8 +156,15 @@ export default function AssignmentsPage() {
   const handleFileSelect = (assignmentId, file) => {
     setSelectedFile(prev => ({
       ...prev,
-      [assignmentId]: file
+      [assignmentId]: file || null
     }));
+  };
+
+  const openFilePicker = (assignmentId) => {
+    const input = fileInputRefs.current[assignmentId];
+    if (input) {
+      input.click();
+    }
   };
 
   const submitAssignment = async (assignmentId) => {
@@ -157,9 +186,13 @@ export default function AssignmentsPage() {
 
     try {
       const formData = new FormData();
-      formData.append("assignmentId", assignmentId);
-      formData.append("studentId", user.uid);
-      formData.append("studentName", user.displayName || user.email);
+  const preferredName = userProfile?.username || user.displayName || user.email?.split("@")[0] || user.email;
+  const preferredEmail = userProfile?.email || user.email || "";
+
+  formData.append("assignmentId", assignmentId);
+  formData.append("studentId", user.uid);
+  formData.append("studentName", preferredName);
+  formData.append("studentEmail", preferredEmail);
       formData.append("file", file);
 
       const res = await fetch("/api/submissions", {
@@ -172,6 +205,10 @@ export default function AssignmentsPage() {
           ...prev,
           [assignmentId]: null
         }));
+        const input = fileInputRefs.current[assignmentId];
+        if (input) {
+          input.value = "";
+        }
         await loadSubmissions(assignmentId);
         alert("Assignment submitted successfully!");
       } else {
@@ -317,9 +354,7 @@ export default function AssignmentsPage() {
     const isOverdueStatus = isOverdue(assignment.deadline);
 
     return (
-      <Card className="h-full cursor-pointer" onClick={() => {
-        window.location.href = `/assignments`;
-      }}>
+      <Card className="h-full">
         <CardHeader>
           <div className="flex justify-between items-start">
             <CardTitle className="text-lg">{assignment.title}</CardTitle>
@@ -377,16 +412,33 @@ export default function AssignmentsPage() {
                   Upload your submission *
                 </label>
                 <input
+                  ref={(el) => {
+                    if (el) {
+                      fileInputRefs.current[assignment.id] = el;
+                    } else {
+                      delete fileInputRefs.current[assignment.id];
+                    }
+                  }}
                   type="file"
-                  onChange={(e) => handleFileSelect(assignment.id, e.target.files[0])}
+                  onChange={(e) => handleFileSelect(assignment.id, e.target.files?.[0] || null)}
                   accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png,.py,.js,.java,.cpp"
-                  required
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="hidden"
                 />
-                {selectedFile[assignment.id] && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openFilePicker(assignment.id)}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Choose File
+                </Button>
+                {selectedFile[assignment.id] ? (
                   <p className="text-xs text-gray-600 mt-2">
                     Selected: {selectedFile[assignment.id].name}
                   </p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-2">No file selected</p>
                 )}
                 <p className="text-xs text-gray-500 mt-1">
                   Accepted formats: PDF, DOC, TXT, ZIP, Images, Code files

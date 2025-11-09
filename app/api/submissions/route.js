@@ -12,19 +12,46 @@ import { ObjectId } from "mongodb";
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const classId = searchParams.get('classId');
-    const assignmentId = searchParams.get('assignmentId');
-    
+    const classId = searchParams.get("classId");
+    const assignmentId = searchParams.get("assignmentId");
+
     const submissionsCollection = await getSubmissionsCollection();
-    const submissions = assignmentId 
-      ? await submissionsCollection.find({ assignmentId }).toArray()
-      : await submissionsCollection.find({}).toArray();
-    
-    const formattedSubmissions = submissions.map((submission) => ({
-      id: submission._id.toString(),
-      ...submission,
-      _id: undefined,
-    }));
+
+    const buildIdMatchers = (value) => {
+      if (!value) return [];
+      const matchers = [{ assignmentId: value }, { classId: value }];
+      try {
+        const objectId = new ObjectId(value);
+        matchers.push({ assignmentId: objectId });
+        matchers.push({ classId: objectId });
+      } catch (_) {
+        // value is not a valid ObjectId; ignore
+      }
+      return matchers;
+    };
+
+    const query = (() => {
+      if (assignmentId) {
+        const matchers = buildIdMatchers(assignmentId);
+        return matchers.length > 0 ? { $or: matchers } : {};
+      }
+      if (classId) {
+        const matchers = buildIdMatchers(classId);
+        return matchers.length > 0 ? { $or: matchers } : {};
+      }
+      return {};
+    })();
+
+    const submissions = await submissionsCollection.find(query).toArray();
+
+    const formattedSubmissions = submissions.map((submission) => {
+      const { _id, fileData, ...rest } = submission;
+      return {
+        id: _id?.toString(),
+        ...rest,
+        fileData: undefined,
+      };
+    });
 
     return NextResponse.json(formattedSubmissions, { status: 200 });
   } catch (err) {
@@ -37,9 +64,10 @@ export async function POST(request) {
   try {
     const formData = await request.formData();
     
-    const assignmentId = formData.get("assignmentId");
-    const studentId = formData.get("studentId");
-    const studentName = formData.get("studentName");
+  const assignmentId = formData.get("assignmentId");
+  const studentId = formData.get("studentId");
+  const studentName = formData.get("studentName");
+  const studentEmail = formData.get("studentEmail");
     const file = formData.get("file");
     
     if (!assignmentId || !studentId || !studentName || !file) {
@@ -67,8 +95,9 @@ export async function POST(request) {
       _id: new ObjectId(submissionId),
       classId: assignmentId,
       assignmentId,
-      studentId,
-      studentName,
+  studentId,
+  studentName,
+  studentEmail: studentEmail || null,
       fileUrl,
       fileData,
       submittedAt: new Date(),
@@ -123,7 +152,8 @@ export async function POST(request) {
       id: result.insertedId.toString(),
       assignmentId,
       studentId,
-      studentName,
+  studentName,
+  studentEmail: studentEmail || null,
       fileUrl,
       submittedAt: newSubmission.submittedAt,
     }, { status: 201 });
