@@ -3,8 +3,7 @@ import { useState, useEffect } from "react";
 import { auth } from "../../lib/firebase";
 import {
   createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
+  signOut,
 } from "firebase/auth";
 import Login from "./Login";
 
@@ -264,6 +263,10 @@ export default function Register({ onBackToHome }) {
         providerData: user?.providerData?.map((p) => p.providerId),
       });
 
+      // Sign out immediately - user should not be logged in until email is verified
+      await signOut(auth);
+      console.log("[Register] User signed out - will not be logged in until email is verified");
+
       try {
         // Create user record immediately with emailVerified: false
         console.log("[Register] Creating user record in database...");
@@ -371,93 +374,46 @@ export default function Register({ onBackToHome }) {
     }
   };
 
-  const handleGoogleRegister = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Try server-side API write for Google registration
-      try {
-        const username = (user.email || "").split("@")[0];
-        const res = await fetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uid: user.uid,
-            username,
-            email: user.email,
-            role: "student",
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          console.error("[Google Register] Server API write failed:", data);
-          throw new Error(data.error || "Server write failed");
-        }
-        console.log("[Google Register] Server API write success:", data);
-      } catch (apiErr) {
-        console.error("[Google Register] Server API error:", apiErr);
-        throw new Error("Failed to create user record in database.");
-      }
-
-      onBackToHome && onBackToHome();
-    } catch (err) {
-      console.error("Google register error:", err);
-      const msg = err?.message || String(err);
-      if (msg.toLowerCase().includes("permission")) {
-        setError(
-          "Permission denied: Database write failed. Check server configuration."
-        );
-      } else if (msg.toLowerCase().includes("popup")) {
-        setError("Google sign-in popup blocked or closed. Try again.");
-      } else {
-        setError(msg);
-      }
-      setMessage("");
-    }
-  };
-
   // If waiting for verification, show a small verification-check UI
   if (awaitingVerification) {
     return (
       <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
         <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
-          <h2 className="text-center text-2xl font-bold mb-4">Verify your email</h2>
-          {error && <div className="text-red-600 text-sm text-center">{error}</div>}
-          {message && <div className="text-green-600 text-sm text-center">{message}</div>}
+          <h2 className="text-center text-2xl font-bold mb-4">📧 Verify Your Email</h2>
+          {error && <div className="text-red-600 text-sm text-center mb-4 p-3 bg-red-50 rounded">{error}</div>}
+          {message && <div className="text-green-600 text-sm text-center mb-4 p-3 bg-green-50 rounded">{message}</div>}
 
           <p className="mt-4 text-center text-sm text-gray-700">
-            A verification link was sent to <strong>{createdUser?.email}</strong>.
-            Please click the link in your email to verify your account.
+            A verification link was sent to<br/>
+            <strong className="block mt-2">{createdUser?.email}</strong>
           </p>
 
-          <div className="mt-6 space-y-3">
+          <p className="mt-4 text-center text-xs text-gray-600">
+            Please check your inbox and spam folder. Click the verification link to activate your account.
+          </p>
+
+          <div className="mt-8 space-y-3">
             <button
               type="button"
               onClick={checkVerification}
-              className="w-full py-2 px-4 rounded-xl bg-green-600 text-white hover:bg-green-700"
+              className="w-full py-3 px-4 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
             >
-              I have verified — check now
+              ✓ I have verified — Check Now
             </button>
 
             <button
               type="button"
               onClick={handleResendVerification}
               disabled={resendDisabled}
-              className={`w-full py-2 px-4 rounded-xl ${resendDisabled ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white'} hover:opacity-90`}
+              className={`w-full py-2 px-4 rounded-xl font-medium transition-colors ${resendDisabled ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
             >
-              {resendDisabled ? 'Please wait...' : 'Resend verification email'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowLogin(true)}
-              className="w-full py-2 px-4 rounded-xl bg-white border border-gray-300 text-gray-700"
-            >
-              Back to Login
+              {resendDisabled ? '⏳ Please wait before resending...' : '📤 Resend Verification Email'}
             </button>
           </div>
+
+          <p className="mt-6 text-center text-xs text-gray-500 border-t pt-4">
+            ℹ️ You will not be able to log in until your email is verified.
+          </p>
         </div>
       </div>
     );
@@ -552,14 +508,6 @@ export default function Register({ onBackToHome }) {
             className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
           >
             {loading ? "Creating..." : "Sign up"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleGoogleRegister}
-            className="w-full py-2 px-4 rounded-xl bg-white border border-gray-300 text-gray-700 font-medium shadow-md hover:bg-gray-100 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
-          >
-            Sign up with Google
           </button>
 
           <div className="text-center space-y-2 pt-2">
