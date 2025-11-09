@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getNotificationsCollection } from "../../../lib/mongodb";
+import { getNotificationsCollection } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 // GET: /api/notifications?uid=<uid>

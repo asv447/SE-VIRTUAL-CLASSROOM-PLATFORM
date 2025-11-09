@@ -5,7 +5,6 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
-  sendEmailVerification,
 } from "firebase/auth";
 import Login from "./Login";
 
@@ -50,8 +49,54 @@ export default function Register({ onBackToHome }) {
   // finalize registration after verification
   const checkVerification = async () => {
     if (!auth.currentUser) return;
+    
+    try {
+      // First check database for verification status
+      const dbRes = await fetch(`/api/users?uid=${auth.currentUser.uid}`);
+      const response = await dbRes.json();
+      const userData = response.user;
+      
+      if (userData && userData.emailVerified) {
+        console.log("[Register] User verified in database!");
+        setError("");
+        setAwaitingVerification(false);
+        setMessage("Email verified. Finalizing account creation...");
+        
+        // create DB record now that email is verified
+        try {
+          const username = (auth.currentUser.email || "").split("@")[0];
+          const res = await fetch("/api/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              uid: auth.currentUser.uid,
+              username,
+              email: auth.currentUser.email,
+              role: role,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            console.error("[Register] Server API write failed:", data);
+            throw new Error(data.error || "Server write failed");
+          }
+          console.log("[Register] Server API write success:", data);
+        } catch (apiErr) {
+          console.error("[Register] Server API error:", apiErr);
+          // proceed anyway; user can be created later
+        }
+
+        onBackToHome && onBackToHome();
+        return;
+      }
+    } catch (err) {
+      console.log("[Register] Database check error, trying Firebase:", err.message);
+    }
+    
+    // Fallback: check Firebase emailVerified
     await auth.currentUser.reload();
     if (auth.currentUser.emailVerified) {
+      console.log("[Register] User verified in Firebase!");
       setError("");
       setAwaitingVerification(false);
       setMessage("Email verified. Finalizing account creation...");
@@ -87,20 +132,78 @@ export default function Register({ onBackToHome }) {
 
   // Poll for verification status while waiting to improve UX
   useEffect(() => {
-    if (!awaitingVerification) return;
+    if (!awaitingVerification || !createdUser) return;
+    
+    const uid = createdUser.uid;
+    let isActive = true;
+    
+    // Check database for verification status
+    const checkDatabaseVerification = async () => {
+      try {
+        if (!isActive) return false;
+        const dbRes = await fetch(`/api/users?uid=${uid}`);
+        const response = await dbRes.json();
+        const userData = response.user;
+        
+        console.log("[Register] Database check result:", { uid, emailVerified: userData?.emailVerified });
+        
+        if (userData && userData.emailVerified) {
+          console.log("[Register] Email verified detected in database!");
+          if (isActive) {
+            checkVerification();
+          }
+          return true;
+        }
+      } catch (err) {
+        console.log("[Register] Database check error:", err.message);
+      }
+      return false;
+    };
+
+    // Immediate check when tab comes back into focus
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && isActive) {
+        console.log("[Register] Page visibility changed, checking verification...");
+        const found = await checkDatabaseVerification();
+        if (!found && auth.currentUser) {
+          await auth.currentUser.reload();
+          if (auth.currentUser.emailVerified) {
+            console.log("[Register] Email verified in Firebase!");
+            checkVerification();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Regular polling every 2 seconds to check database
     const iv = setInterval(async () => {
       try {
-        if (!auth.currentUser) return;
-        await auth.currentUser.reload();
-        if (auth.currentUser.emailVerified) {
-          checkVerification();
+        if (!isActive) return;
+        
+        // Check database first (faster)
+        const found = await checkDatabaseVerification();
+        
+        // Also check Firebase as fallback
+        if (!found && auth.currentUser) {
+          await auth.currentUser.reload();
+          if (auth.currentUser.emailVerified) {
+            console.log("[Register] Email verified from Firebase polling!");
+            checkVerification();
+          }
         }
       } catch (err) {
         console.error("poll verification error:", err);
       }
-    }, 5000);
-    return () => clearInterval(iv);
-  }, [awaitingVerification]);
+    }, 2000);
+
+    return () => {
+      isActive = false;
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [awaitingVerification, createdUser]);
 
   if (showLogin) {
     return (
@@ -162,18 +265,46 @@ export default function Register({ onBackToHome }) {
       });
 
       try {
-        // Send verification email and wait for user to verify before creating DB record
-        console.log("[Register] Sending email verification...");
-        await sendEmailVerification(user);
+        // Create user record immediately with emailVerified: false
+        console.log("[Register] Creating user record in database...");
+        const username = (user.email || "").split("@")[0];
+        const userRes = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: user.uid,
+            username,
+            email: user.email,
+            role: role,
+            emailVerified: false,
+          }),
+        });
+        const userData = await userRes.json();
+        console.log("[Register] User record created:", userData);
+
+        // Send verification email via custom SMTP API route
+        console.log("[Register] Sending email verification via SMTP...");
+        const smtpRes = await fetch("/api/auth/send-verification-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: user.uid,
+            email: user.email,
+          }),
+        });
+        const smtpData = await smtpRes.json();
+        if (!smtpRes.ok) {
+          throw new Error(smtpData.error || "Failed to send verification email");
+        }
         setMessage(
           "Verification email sent. Please check your inbox to verify your account."
         );
         setAwaitingVerification(true);
         setCreatedUser({ uid: user.uid, email });
       } catch (verifErr) {
-        console.warn("sendEmailVerification error:", verifErr);
+        console.warn("Verification setup error:", verifErr);
         setError(
-          "Account created but failed to send verification email. Please check your email settings."
+          "Account created but setup incomplete. Please refresh and try logging in."
         );
       }
     } catch (e) {
@@ -216,7 +347,20 @@ export default function Register({ onBackToHome }) {
     if (!auth.currentUser) return;
     try {
       setResendDisabled(true);
-      await sendEmailVerification(auth.currentUser);
+      setError("");
+      // Call SMTP email API to resend verification
+      const res = await fetch("/api/auth/send-verification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid: auth.currentUser.uid,
+          email: auth.currentUser.email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to resend");
+      }
       setMessage("Verification email resent. Check your inbox.");
       // simple cooldown
       setTimeout(() => setResendDisabled(false), 30 * 1000);

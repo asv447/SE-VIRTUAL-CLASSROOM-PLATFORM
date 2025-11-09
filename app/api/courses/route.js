@@ -1,6 +1,6 @@
 // API routes for courses
 import { NextResponse } from "next/server";
-import { getCoursesCollection } from "../../../lib/mongodb";
+import { getCoursesCollection } from "@/lib/mongodb";
 
 export async function GET(request) {
   try {

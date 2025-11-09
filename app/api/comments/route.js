@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStreamsCollection, getNotificationsCollection } from "../../../lib/mongodb";
+import { getStreamsCollection, getNotificationsCollection } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function POST(request) {

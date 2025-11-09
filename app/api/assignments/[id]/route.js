@@ -1,6 +1,6 @@
 // API routes for assignment operations
 import { NextResponse } from "next/server";
-import { getAssignmentsCollection, getCoursesCollection } from "../../../../lib/mongodb";
+import { getAssignmentsCollection, getCoursesCollection } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function DELETE(request, { params }) {

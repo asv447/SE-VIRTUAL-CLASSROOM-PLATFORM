@@ -57,7 +57,18 @@ export default function Login({ onBackToHome }) {
         // Fallback to email check if database check fails
       }
     } catch (err) {
-      setError(err.message);
+      // Handle Firebase auth errors with user-friendly messages
+      if (err.code === "auth/user-not-found") {
+        setError("This email is not registered. Please sign up first.");
+      } else if (err.code === "auth/wrong-password") {
+        setError("Incorrect password. Please try again.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Invalid email address. Please check and try again.");
+      } else if (err.code === "auth/user-disabled") {
+        setError("This account has been disabled. Please contact support.");
+      } else {
+        setError(err.message);
+      }
     }
     onBackToHome && onBackToHome();
   };

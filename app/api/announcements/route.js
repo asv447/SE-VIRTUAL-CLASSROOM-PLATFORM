@@ -4,8 +4,8 @@ import {
   getStreamsCollection,
   getCoursesCollection,
   getNotificationsCollection,
-} from "../../../lib/mongodb";
-import { prepareFileForStorage } from "../../../lib/file-upload";
+} from "@/lib/mongodb";
+import { prepareFileForStorage } from "@/lib/file-upload";
 
 // Creates an announcement (stream post) with an optional file attachment (material)
 export async function POST(request) {

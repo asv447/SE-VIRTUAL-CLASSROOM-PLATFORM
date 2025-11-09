@@ -1,7 +1,7 @@
 // API routes for assignments
 import { NextResponse } from "next/server";
-import { getAssignmentsCollection, getStreamsCollection, getCoursesCollection, getNotificationsCollection } from "../../../lib/mongodb";
-import { prepareFileForStorage } from "../../../lib/file-upload";
+import { getAssignmentsCollection, getStreamsCollection, getCoursesCollection, getNotificationsCollection } from "@/lib/mongodb";
+import { prepareFileForStorage } from "@/lib/file-upload";
 import { ObjectId } from "mongodb";
 
 export async function GET(request) {
@@ -10,6 +10,8 @@ export async function GET(request) {
     const classId = searchParams.get("classId");
     const userId = searchParams.get("userId");
     const role = searchParams.get("role");
+
+    console.log("[API /api/assignments GET] Params:", { classId, userId, role });
 
     const assignmentsCollection = await getAssignmentsCollection();
     const coursesCollection = await getCoursesCollection();
@@ -30,7 +32,11 @@ export async function GET(request) {
       query = { $and: conditions };
     }
 
+    console.log("[API /api/assignments GET] Query:", JSON.stringify(query));
+
     const assignments = await assignmentsCollection.find(query).toArray();
+
+    console.log("[API /api/assignments GET] Found assignments:", assignments.length);
 
     // Build a map of courseId -> course title for enrichment (avoid client Unknown Course labels)
     const courseIds = [...new Set(assignments.map(a => a.classId || a.courseId).filter(Boolean))];
@@ -51,7 +57,7 @@ export async function GET(request) {
 
     return NextResponse.json(formattedAssignments, { status: 200 });
   } catch (err) {
-    console.error("[API /api/assignments] Error:", err);
+    console.error("[API /api/assignments GET] Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

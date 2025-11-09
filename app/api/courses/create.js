@@ -1,5 +1,5 @@
 // pages/api/courses/create.js
-import { getCoursesCollection } from "../../../lib/mongodb";
+import { getCoursesCollection } from "@/lib/mongodb";
 import { generateCourseCode } from "../../../utils/generateCourseCode";
 
 export default async function handler(req, res) {

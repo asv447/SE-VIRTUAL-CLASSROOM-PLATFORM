@@ -4,7 +4,7 @@ import {
   getStreamsCollection,
   getClassroomChatsCollection,
   getSubmissionsCollection, // Added all collections
-} from "../../../../lib/mongodb"; // [FIX] Corrected import path
+} from "@/lib/mongodb"; // [FIX] Corrected import path
 import { NextResponse } from "next/server"; // [FIX] Use NextResponse for consistency
 
 async function handleUpdate(req) {

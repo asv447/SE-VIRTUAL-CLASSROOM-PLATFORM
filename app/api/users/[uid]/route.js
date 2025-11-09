@@ -1,6 +1,6 @@
 // app/api/users/[uid]/route.js
 import { NextResponse } from "next/server";
-import { getUsersCollection } from "../../../../lib/mongodb";
+import { getUsersCollection } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function GET(request, { params }) {
