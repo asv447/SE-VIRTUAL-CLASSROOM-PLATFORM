@@ -1,11 +1,6 @@
-"use client";
+'use client'
+import QAinterface from './components/QAinterface'
 
-import QAInterface from "./QAinterface";
-
-export default function ChatbotPage() {
-  return (
-    <div>
-      <QAInterface />
-    </div>
-  );
+export default function Page() {
+  return <QAinterface />
 }
