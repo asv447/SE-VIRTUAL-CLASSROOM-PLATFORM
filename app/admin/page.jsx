@@ -35,6 +35,7 @@ export default function AdminDashboard() {
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [studentDirectory, setStudentDirectory] = useState({});
   
   const [formLoading, setFormLoading] = useState(false);
   // [FIX] Changed state names to match what we send to the API
@@ -130,8 +131,31 @@ export default function AdminDashboard() {
     try {
       await Promise.all([
         loadCourses(),
-        loadAssignments()
+        loadAssignments(),
+        loadStudentDirectory()
       ]);
+  const loadStudentDirectory = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch("/api/users?role=student");
+      if (!res.ok) return;
+      const data = await res.json();
+      const directory = {};
+      const students = Array.isArray(data?.users) ? data.users : [];
+      students.forEach((student) => {
+        if (student.role && student.role !== "student") return;
+        const key = student.uid || student._id || student.id;
+        if (!key) return;
+        directory[key] = {
+          username: student.username || student.email?.split("@")[0] || null,
+          email: student.email || null,
+        };
+      });
+      setStudentDirectory(directory);
+    } catch (err) {
+      console.error("Error loading student directory:", err);
+    }
+  };
     } catch (err) {
       console.error("Error loading data:", err);
     } finally {
@@ -408,6 +432,13 @@ export default function AdminDashboard() {
     } finally {
       setSavingDeadline((p) => ({ ...p, [assignmentId]: false }));
     }
+  };
+
+  const resolveSubmissionMeta = (submission) => {
+    const directoryEntry = studentDirectory[submission.studentId];
+    const displayName = directoryEntry?.username || submission.studentName || submission.studentEmail || submission.studentId;
+    const displayEmail = directoryEntry?.email || submission.studentEmail || null;
+    return { displayName, displayEmail };
   };
 
   if (!user) {
@@ -773,27 +804,33 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {submissions.map((submission) => (
-                    <div key={submission.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold">{submission.studentName}</h3>
-                          <p className="text-sm text-gray-600">ID: {submission.studentId}</p>
-                          <p className="text-sm text-gray-500">
-                            Submitted: {safeFormatDate(submission.submittedAt)}
-                          </p>
+                  {submissions.map((submission) => {
+                    const { displayName, displayEmail } = resolveSubmissionMeta(submission);
+                    return (
+                      <div key={submission.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-semibold">{displayName}</h3>
+                            <p className="text-sm text-gray-600">ID: {submission.studentId}</p>
+                            {displayEmail && (
+                              <p className="text-sm text-gray-500">Email: {displayEmail}</p>
+                            )}
+                            <p className="text-sm text-gray-500">
+                              Submitted: {safeFormatDate(submission.submittedAt)}
+                            </p>
+                          </div>
+                          {submission.fileUrl && (
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
+                                <Download className="h-4 w-4 mr-2" />
+                                Download
+                              </a>
+                            </Button>
+                          )}
                         </div>
-                        {submission.fileUrl && (
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
-                              <Download className="h-4 w-4 mr-2" />
-                              Download
-                            </a>
-                          </Button>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
