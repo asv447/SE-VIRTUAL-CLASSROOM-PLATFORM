@@ -11,6 +11,7 @@ import {
   onAuthStateChanged,
   signOut,
   sendPasswordResetEmail,
+  updateProfile,
 } from "firebase/auth";
 
 // Dynamically import Login/Register to avoid SSR issues
@@ -35,6 +36,11 @@ export default function SharedNavbar() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [loadingReset, setLoadingReset] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [userPhoto, setUserPhoto] = useState("");
   const pathname = usePathname();
   const isHomepage = pathname === "/" || pathname === "/homepage";
 
@@ -74,6 +80,16 @@ export default function SharedNavbar() {
             const data = await res.json();
             setUsername(data.user.username || currentUser.email.split("@")[0]);
             setIsAdmin(data.user.role === "instructor");
+            // prefer photo stored in Mongo (photoBase64) or fallback to photoURL
+            if (data.user?.photoBase64) {
+              setUserPhoto(
+                `data:${data.user.photoContentType};base64,${data.user.photoBase64}`
+              );
+            } else if (data.user?.photoURL) {
+              setUserPhoto(data.user.photoURL);
+            } else {
+              setUserPhoto("");
+            }
           } else {
             setUsername(currentUser.email.split("@")[0]);
             setIsAdmin(false);
@@ -89,6 +105,7 @@ export default function SharedNavbar() {
         setUser(null);
         setUsername("");
         setIsAdmin(false);
+        setUserPhoto("");
         setLoading(false);
       }
     });
@@ -102,6 +119,90 @@ export default function SharedNavbar() {
       document.body.style.overflow = "";
     }
   }, [isLoginOpen, isRegisterOpen]);
+
+  // file select handler for profile pic
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+    // Basic client-side validation
+    const MAX_MB = 6; // don't accept extremely large files
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`Please select an image smaller than ${MAX_MB}MB`);
+      return;
+    }
+
+    setSelectedFile(file);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  };
+
+  const handleUploadProfile = async () => {
+    if (!user) {
+      alert("You must be logged in to upload a profile picture.");
+      return;
+    }
+    if (!selectedFile) {
+      alert("Please choose a file first.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Read file as base64 data URL
+      const reader = new FileReader();
+      const fileRead = new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(selectedFile);
+      const dataUrl = await fileRead; // 'data:<type>;base64,<data>'
+
+      const match = dataUrl.match(/^data:(.+);base64,(.*)$/);
+      if (!match) throw new Error("Could not parse file data");
+      const contentType = match[1];
+      const base64 = match[2];
+
+      const idToken = await auth.currentUser?.getIdToken?.();
+      const res = await fetch("/api/users/upload-photo", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          photoBase64: base64,
+          photoContentType: contentType,
+        }),
+      });
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+      console.log("upload-photo response", res.status, data);
+
+      if (!res.ok) {
+        alert("Upload failed: " + (data?.message || res.status));
+        setUploading(false);
+        return;
+      }
+
+      // show the uploaded image immediately
+      setUserPhoto(dataUrl);
+      setIsUploadOpen(false);
+      setSelectedFile(null);
+      setPreviewUrl("");
+    } catch (err) {
+      console.error("Error uploading profile picture to server:", err);
+      alert("Failed to upload profile picture. See console for details.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   async function handleChangeUsername() {
     if (!user) return;
@@ -181,10 +282,21 @@ export default function SharedNavbar() {
             onClick={() => setIsProfileOpen((s) => !s)}
             aria-expanded={isProfileOpen}
             aria-haspopup="true"
-            className="cursor-pointer w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-medium uppercase"
+            className="cursor-pointer w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-medium uppercase overflow-hidden"
             title={username || "User"}
           >
-            {(username && username[0]) || "U"}
+            {userPhoto || user?.photoURL ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={userPhoto || user.photoURL}
+                alt={`${username || "User"} avatar`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="uppercase">
+                {(username && username[0]) || "U"}
+              </span>
+            )}
           </button>
         </div>
 
@@ -227,6 +339,19 @@ export default function SharedNavbar() {
               className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
             >
               Change Password
+            </button>
+
+            <button
+              onClick={() => {
+                setIsProfileOpen(false);
+                // open upload modal at root level
+                setIsUploadOpen(true);
+                // preload preview with current stored photo
+                setPreviewUrl(userPhoto || user?.photoURL || "");
+              }}
+              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
+            >
+              Upload Profile Picture
             </button>
 
             <button
@@ -369,7 +494,7 @@ export default function SharedNavbar() {
 
       {/* Login Modal */}
       {isLoginOpen && mounted && (
-  <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
           <div className="relative w-full max-w-md mx-auto z-10000">
             <Login onBackToHome={() => setIsLoginOpen(false)} />
             <button
@@ -384,7 +509,7 @@ export default function SharedNavbar() {
 
       {/* Register Modal */}
       {isRegisterOpen && mounted && (
-  <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
           <div className="relative w-full max-w-md mx-auto z-10000">
             <Register onBackToHome={() => setIsRegisterOpen(false)} />
             <button
@@ -393,6 +518,167 @@ export default function SharedNavbar() {
             >
               ×
             </button>
+          </div>
+        </div>
+      )}
+      {/* Upload Profile Picture Modal */}
+      {isUploadOpen && mounted && (
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
+          <div className="relative w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg p-6">
+            <button
+              onClick={() => {
+                setIsUploadOpen(false);
+                setSelectedFile(null);
+                setPreviewUrl("");
+              }}
+              className="absolute top-3 right-4 text-gray-700 text-2xl font-bold hover:text-gray-900 transition cursor-pointer"
+            >
+              ×
+            </button>
+
+            <h3 className="text-lg font-semibold mb-4">
+              Upload Profile Picture
+            </h3>
+
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100">
+                {previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewUrl}
+                    alt="preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    No image
+                  </div>
+                )}
+              </div>
+
+              <label className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md cursor-pointer text-sm text-gray-700">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 mr-2 text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M7 16V4m0 0L3 8m4-4 4 4M17 8v8a2 2 0 01-2 2H9a2 2 0 01-2-2V8m10 0l-4-4"
+                  />
+                </svg>
+                <span>Choose file</span>
+              </label>
+              {selectedFile && (
+                <p className="text-xs text-gray-600 mt-2">
+                  {selectedFile.name}
+                </p>
+              )}
+
+              <div className="w-full flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    if (uploading) {
+                      // We don't support cancelling server upload; inform the user
+                      const ok = confirm("Upload in progress. Cancel anyway?");
+                      if (!ok) return;
+                    }
+                    setIsUploadOpen(false);
+                    setSelectedFile(null);
+                    setPreviewUrl("");
+                    setUploading(false);
+                  }}
+                  className="cursor-pointer px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                >
+                  Cancel
+                </button>
+
+                {(userPhoto || user?.photoURL) && (
+                  <button
+                    onClick={async () => {
+                      const ok = confirm(
+                        "Are you sure you want to remove your current profile picture?"
+                      );
+                      if (!ok) return;
+                      try {
+                        setUploading(true);
+                        const idToken = await auth.currentUser?.getIdToken?.();
+                        const res = await fetch("/api/users/remove-photo", {
+                          method: "PATCH",
+                          headers: {
+                            "Content-Type": "application/json",
+                            ...(idToken
+                              ? { Authorization: `Bearer ${idToken}` }
+                              : {}),
+                          },
+                          body: JSON.stringify({ uid: user.uid }),
+                        });
+                        const text = await res.text();
+                        let data;
+                        try {
+                          data = JSON.parse(text);
+                        } catch {
+                          data = { message: text };
+                        }
+                        console.log("remove-photo response", res.status, data);
+                        if (!res.ok) {
+                          alert(
+                            "Failed to remove photo: " +
+                              (data?.message || res.status)
+                          );
+                        } else {
+                          // clear firebase photoURL if present
+                          try {
+                            if (auth.currentUser?.photoURL) {
+                              await updateProfile(auth.currentUser, {
+                                photoURL: null,
+                              });
+                            }
+                          } catch (e) {
+                            console.warn(
+                              "Failed to clear MongoDB photoURL:",
+                              e
+                            );
+                          }
+                          setUserPhoto("");
+                          setPreviewUrl("");
+                          setSelectedFile(null);
+                          setIsUploadOpen(false);
+                          alert("Profile picture removed.");
+                        }
+                      } catch (err) {
+                        console.error("Error removing photo:", err);
+                        alert("Failed to remove photo. See console.");
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                    disabled={uploading}
+                    className="cursor-pointer px-3 py-2 text-sm text-red-600 border border-red-200 hover:bg-red-50 rounded-md"
+                  >
+                    Remove
+                  </button>
+                )}
+
+                <button
+                  onClick={handleUploadProfile}
+                  disabled={uploading}
+                  className="cursor-pointer px-3 py-2 text-sm bg-blue-600 text-white rounded-md disabled:opacity-60"
+                >
+                  {uploading ? "Uploading..." : "Save"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
