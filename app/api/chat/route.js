@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getClassroomChatsCollection,
   getUsersCollection,
-} from "../../../lib/mongodb";
+} from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function GET(request) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 // [FIXED] Import the helper function from your lib/mongodb.js file
-import { getCoursesCollection } from "../../../../lib/mongodb";
+import { getCoursesCollection } from "@/lib/mongodb";
 
 export async function GET(req, { params }) {
   const { id } = params;

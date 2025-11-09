@@ -80,10 +80,14 @@ export default function AssignmentsPage() {
   const loadData = async () => {
     setPageLoading(true);
     try {
-      await Promise.all([
-        loadCourses(),
-        loadAssignments()
-      ]);
+      // Load courses first
+      const coursesData = await loadCourses();
+      // Then load assignments using the courses we just got
+      if (coursesData && coursesData.length > 0) {
+        await loadAssignmentsForCourses(coursesData);
+      } else {
+        setAssignments([]);
+      }
     } catch (err) {
       console.error("Error loading data:", err);
     } finally {
@@ -92,24 +96,104 @@ export default function AssignmentsPage() {
   };
 
   const loadCourses = async () => {
-    if (!user?.uid) return;
+    if (!user?.uid) return [];
     try {
       const url = `/api/courses?role=student&userId=${encodeURIComponent(user.uid)}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setCourses(Array.isArray(data) ? data : []);
+        const coursesArray = Array.isArray(data) ? data : [];
+        setCourses(coursesArray);
+        return coursesArray;
       } else {
         console.error("Failed to fetch enrolled courses", await res.text());
         setCourses([]);
+        return [];
       }
     } catch (err) {
       console.error("Error loading courses:", err);
       setCourses([]);
+      return [];
+    }
+  };
+
+  const loadAssignmentsForCourses = async (coursesData) => {
+    if (!user?.uid) {
+      console.log("No user UID, skipping loadAssignments");
+      return;
+    }
+    try {
+      console.log("Courses data received:", coursesData);
+      
+      // Get course IDs from the courses data passed in
+      const enrolledCourseIds = coursesData
+        .map(course => {
+          const courseId = course.id || course._id;
+          console.log(`Course object:`, course, `-> extracted ID:`, courseId);
+          return courseId;
+        })
+        .filter(Boolean);
+      
+      console.log("Enrolled course IDs to fetch assignments for:", enrolledCourseIds);
+      
+      if (enrolledCourseIds.length === 0) {
+        // No enrolled courses, so no assignments to show
+        console.log("No enrolled courses found");
+        setAssignments([]);
+        setAssignmentCourseOptions([]);
+        return;
+      }
+
+      // Fetch assignments for each enrolled course
+      let allAssignments = [];
+      
+      for (const courseId of enrolledCourseIds) {
+        try {
+          const url = `/api/assignments?classId=${encodeURIComponent(courseId)}`;
+          console.log(`Fetching assignments from: ${url}`);
+          const res = await fetch(url);
+          if (res.ok) {
+            const data = await res.json();
+            console.log(`Assignments for course ${courseId}:`, data);
+            allAssignments = allAssignments.concat(data);
+          } else {
+            console.error(`Failed to fetch assignments for course ${courseId}:`, res.status);
+            const errorText = await res.text();
+            console.error(`Response:`, errorText);
+          }
+        } catch (err) {
+          console.error(`Error loading assignments for course ${courseId}:`, err);
+        }
+      }
+      
+      console.log("All assignments combined:", allAssignments);
+      setAssignments(allAssignments);
+      
+      // Build dynamic list of courses from assignments
+      const map = new Map();
+      allAssignments.forEach(a => {
+        const cid = a.courseId || a.classId;
+        if (!cid) return;
+        if (!map.has(cid)) {
+          map.set(cid, {
+            id: cid,
+            name: a.courseTitle || a.courseName || a.classTitle || cid
+          });
+        }
+      });
+      setAssignmentCourseOptions(Array.from(map.values()));
+      
+      // Load submissions for each assignment
+      allAssignments.forEach(assignment => {
+        loadSubmissions(assignment.id);
+      });
+    } catch (err) {
+      console.error("Error loading assignments:", err);
     }
   };
 
   const loadAssignments = async () => {
+    if (!user?.uid) return;
     try {
       const res = await fetch("/api/assignments");
       if (res.ok) {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStudentsCollection } from "../../../lib/mongodb";
+import { getStudentsCollection } from "@/lib/mongodb";
 
 export async function GET(request) {
   try {

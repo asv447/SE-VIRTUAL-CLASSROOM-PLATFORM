@@ -1,6 +1,6 @@
 // app/api/seed/route.js
 import { NextResponse } from "next/server";
-import { getCoursesCollection, getAssignmentsCollection } from "../../../lib/mongodb";
+import { getCoursesCollection, getAssignmentsCollection } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function POST(request) {

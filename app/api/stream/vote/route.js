@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { getStreamsCollection } from "../../../../lib/mongodb";
+import { getStreamsCollection } from "@/lib/mongodb";
 
 export async function POST(request) {
   try {

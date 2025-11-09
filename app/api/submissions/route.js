@@ -5,8 +5,8 @@ import {
   getAssignmentsCollection,
   getCoursesCollection,
   getNotificationsCollection,
-} from "../../../lib/mongodb";
-import { prepareFileForStorage } from "../../../lib/file-upload";
+} from "@/lib/mongodb";
+import { prepareFileForStorage } from "@/lib/file-upload";
 import { ObjectId } from "mongodb";
 
 export async function GET(request) {
