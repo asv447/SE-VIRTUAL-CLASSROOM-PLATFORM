@@ -16,7 +16,6 @@ export default function Login({ onBackToHome }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showRegister, setShowRegister] = useState(false);
-  const [showVerifyButton, setShowVerifyButton] = useState(false);
   const router = useRouter();
   const [showForgot, setShowForgot] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
@@ -46,12 +45,6 @@ export default function Login({ onBackToHome }) {
       );
       const user = userCredential.user;
       await user.reload();
-
-      if (!user.emailVerified) {
-        setError("Please verify your email before logging in.");
-        setShowVerifyButton(true);
-        return;
-      }
       // Check user's role from the database
       try {
         const res = await fetch(`/api/users?uid=${user.uid}`);
@@ -67,19 +60,6 @@ export default function Login({ onBackToHome }) {
       setError(err.message);
     }
     onBackToHome && onBackToHome();
-  };
-
-  const checkVeri = async () => {
-    if (!auth.currentUser) return;
-    await auth.currentUser.reload();
-    if (auth.currentUser.emailVerified) {
-      setError("");
-      setShowVerifyButton(false);
-      router.push("/homepage");
-
-    } else {
-      setError("Email still not verified. Please check your inbox.");
-    }
   };
 
   const handleGoogleLogin = async () => {
@@ -179,15 +159,7 @@ export default function Login({ onBackToHome }) {
             Sign in with Google
           </button>
 
-          {showVerifyButton && (
-            <button
-              type="button"
-              onClick={checkVeri}
-              className="w-full py-2 px-4 mt-2 rounded-xl bg-green-600 text-white hover:bg-green-700 cursor-pointer"
-            >
-              I have verified, check now
-            </button>
-          )}
+          {/* verification handled on registration; no verify button here */}
 
           <div className="flex flex-col text-center space-y-2 pt-2">
             <button
