@@ -4,6 +4,15 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import NotificationBell from "./notification-bell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
@@ -41,6 +50,11 @@ export default function SharedNavbar() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [userPhoto, setUserPhoto] = useState("");
+  const [isUsernameDialogOpen, setIsUsernameDialogOpen] = useState(false);
+  const [pendingUsername, setPendingUsername] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const pathname = usePathname();
   const isHomepage = pathname === "/" || pathname === "/homepage";
 
@@ -60,6 +74,18 @@ export default function SharedNavbar() {
     } finally {
       setLoadingReset(false);
     }
+  };
+
+  const openUsernameDialog = () => {
+    setPendingUsername(username || "");
+    setUsernameError("");
+    setIsUsernameDialogOpen(true);
+  };
+
+  const openPasswordDialog = () => {
+    setResetEmail(user?.email || "");
+    setResetMessage("");
+    setIsPasswordDialogOpen(true);
   };
 
   useEffect(() => {
@@ -155,7 +181,7 @@ export default function SharedNavbar() {
         reader.onerror = reject;
       });
       reader.readAsDataURL(selectedFile);
-      const dataUrl = await fileRead; // 'data:<type>;base64,<data>'
+      const dataUrl = await fileRead;
 
       const match = dataUrl.match(/^data:(.+);base64,(.*)$/);
       if (!match) throw new Error("Could not parse file data");
@@ -204,21 +230,24 @@ export default function SharedNavbar() {
     }
   };
 
-  async function handleChangeUsername() {
+  const handleChangeUsername = async () => {
     if (!user) return;
 
-    const newUsername = prompt("Enter your new username:");
-    if (!newUsername || newUsername.trim() === "") return;
+    const trimmedUsername = pendingUsername.trim();
+    if (!trimmedUsername) {
+      setUsernameError("Username is required.");
+      return;
+    }
+
+    if (trimmedUsername === username) {
+      setIsUsernameDialogOpen(false);
+      return;
+    }
 
     try {
-      console.log(
-        "Sending update request for uid:",
-        user.uid,
-        "newUsername:",
-        newUsername.trim()
-      );
-      const idToken = await user.getIdToken?.();
+      setSavingUsername(true);
 
+      const idToken = await user.getIdToken?.();
       const res = await fetch(`/api/users/update-username`, {
         method: "PATCH",
         headers: {
@@ -227,7 +256,7 @@ export default function SharedNavbar() {
         },
         body: JSON.stringify({
           uid: user.uid,
-          newUsername: newUsername.trim(),
+          newUsername: trimmedUsername,
         }),
       });
 
@@ -239,26 +268,20 @@ export default function SharedNavbar() {
         data = { message: text };
       }
 
-      console.log(
-        "update-username response status:",
-        res.status,
-        "body:",
-        data
-      );
-
       if (!res.ok) {
-        alert("Update failed: " + (data?.message || res.status));
+        setUsernameError(data?.message || "Failed to update username.");
         return;
       }
 
-      // success path
-      setUsername(newUsername.trim());
-      alert(data?.message || "Username updated.");
+      setUsername(trimmedUsername);
+      setIsUsernameDialogOpen(false);
     } catch (err) {
       console.error("Error updating username:", err);
-      alert("An error occurred. See console for details.");
+      setUsernameError("Unexpected error. Please try again.");
+    } finally {
+      setSavingUsername(false);
     }
-  }
+  };
 
   function ProfileMenu({ username }) {
     const router = useRouter();
@@ -286,7 +309,6 @@ export default function SharedNavbar() {
             title={username || "User"}
           >
             {userPhoto || user?.photoURL ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={userPhoto || user.photoURL}
                 alt={`${username || "User"} avatar`}
@@ -310,7 +332,7 @@ export default function SharedNavbar() {
             <button
               onClick={() => {
                 setIsProfileOpen(false);
-                handleChangeUsername();
+                openUsernameDialog();
               }}
               className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
             >
@@ -318,23 +340,9 @@ export default function SharedNavbar() {
             </button>
 
             <button
-              onClick={async () => {
+              onClick={() => {
                 setIsProfileOpen(false);
-                const email = prompt(
-                  "Enter your registered email to reset password:",
-                  user?.email || ""
-                );
-                if (!email || email.trim() === "") return;
-
-                try {
-                  await sendPasswordResetEmail(auth, email.trim());
-                  alert("Password reset email sent! Please check your inbox.");
-                } catch (err) {
-                  console.error("Error sending password reset email:", err);
-                  alert(
-                    "Failed to send reset email. Please check the console for details."
-                  );
-                }
+                openPasswordDialog();
               }}
               className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
             >
@@ -497,12 +505,6 @@ export default function SharedNavbar() {
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
           <div className="relative w-full max-w-md mx-auto z-10000">
             <Login onBackToHome={() => setIsLoginOpen(false)} />
-            <button
-              className="absolute top-2 right-2 text-white text-2xl font-bold z-10001"
-              onClick={() => setIsLoginOpen(false)}
-            >
-              ×
-            </button>
           </div>
         </div>
       )}
@@ -512,15 +514,134 @@ export default function SharedNavbar() {
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
           <div className="relative w-full max-w-md mx-auto z-10000">
             <Register onBackToHome={() => setIsRegisterOpen(false)} />
-            <button
-              className="absolute top-2 right-2 text-white text-2xl font-bold z-10001 cursor-pointer"
-              onClick={() => setIsRegisterOpen(false)}
-            >
-              ×
-            </button>
           </div>
         </div>
       )}
+
+      <Dialog
+        open={isUsernameDialogOpen}
+        onOpenChange={(open) => {
+          setIsUsernameDialogOpen(open);
+          if (!open) {
+            setUsernameError("");
+            setPendingUsername(username || "");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update username</DialogTitle>
+            <DialogDescription>
+              Choose the name classmates will see across the platform.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleChangeUsername();
+            }}
+          >
+            <div className="space-y-2">
+              <Input
+                value={pendingUsername}
+                onChange={(event) => {
+                  setPendingUsername(event.target.value);
+                  if (usernameError) {
+                    setUsernameError("");
+                  }
+                }}
+                placeholder="Enter a new username"
+                autoFocus
+              />
+              {usernameError && (
+                <p className="text-sm text-destructive">{usernameError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                className="cursor-pointer"
+                onClick={() => setIsUsernameDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="cursor-pointer"
+                type="submit"
+                disabled={savingUsername}
+              >
+                {savingUsername ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isPasswordDialogOpen}
+        onOpenChange={(open) => {
+          setIsPasswordDialogOpen(open);
+          if (!open) {
+            setResetMessage("");
+            setLoadingReset(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset your password</DialogTitle>
+            <DialogDescription>
+              We&apos;ll email you a secure link to choose a new password.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleChangePassword}>
+            <div className="space-y-2">
+              <Input
+                type="email"
+                value={resetEmail}
+                onChange={(event) => {
+                  setResetEmail(event.target.value);
+                  if (resetMessage) {
+                    setResetMessage("");
+                  }
+                }}
+                placeholder="you@example.com"
+                required
+              />
+              {resetMessage && (
+                <p
+                  className={`text-sm ${
+                    resetMessage.toLowerCase().includes("sent")
+                      ? "text-emerald-600"
+                      : "text-destructive"
+                  }`}
+                >
+                  {resetMessage}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                className="cursor-pointer"
+                onClick={() => setIsPasswordDialogOpen(false)}
+                disabled={loadingReset}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="cursor-pointer"
+                type="submit"
+                disabled={loadingReset}
+              >
+                {loadingReset ? "Sending..." : "Send reset link"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       {/* Upload Profile Picture Modal */}
       {isUploadOpen && mounted && (
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
