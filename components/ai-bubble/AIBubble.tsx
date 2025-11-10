@@ -1,29 +1,77 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MessageCircle, X, Send, Sparkles } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function AIBubble() {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'ai'; content: string }>>([
-    { role: 'ai', content: 'Hello! I\'m your AI assistant. How can I help you today?' }
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'ai'; content: string; isLoading?: boolean }>>([
+    { role: 'ai', content: 'Hello! I\'m your AI assistant. How can I help you with your learning today?' }
   ]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSend = () => {
-    if (!message.trim()) return;
+  const handleSend = async () => {
+    if (!message.trim() || isLoading) return;
 
-    setMessages([...messages, { role: 'user', content: message }]);
+    const userMessage = message.trim();
     setMessage('');
 
-    // Simulate AI response
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'ai', content: 'I\'m processing your request. This is a demo response!' }
-      ]);
-    }, 1000);
+    // Add user message
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
+
+    // Add loading message
+    setMessages((prev) => [...prev, { role: 'ai', content: '', isLoading: true }]);
+    setIsLoading(true);
+
+    try {
+      // Call the Next.js API route which proxies to the Python backend
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic: 'General Question',
+          question: userMessage,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get response');
+      }
+
+      // Remove loading message and add actual response
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'ai',
+          content: data.answer,
+          isLoading: false,
+        };
+        return updated;
+      });
+    } catch (error: any) {
+      console.error('AI Chat Error:', error);
+      
+      // Replace loading message with error
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'ai',
+          content: `Sorry, I encountered an error: ${error.message}. Please make sure the backend is running.`,
+          isLoading: false,
+        };
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -86,7 +134,20 @@ export default function AIBubble() {
                         : 'bg-muted text-muted-foreground border border-border'
                     }`}
                   >
-                    <p className="text-sm leading-relaxed">{msg.content}</p>
+                    {msg.isLoading ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Thinking...</span>
+                      </div>
+                    ) : msg.role === 'ai' ? (
+                      <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm leading-relaxed">{msg.content}</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -105,10 +166,15 @@ export default function AIBubble() {
                 />
                 <button
                   onClick={handleSend}
-                  className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center hover:opacity-90 transition-opacity shadow-lg"
+                  disabled={isLoading || !message.trim()}
+                  className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center hover:opacity-90 transition-opacity shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Send message"
                 >
-                  <Send className="h-5 w-5 text-primary-foreground" />
+                  {isLoading ? (
+                    <Loader2 className="h-5 w-5 text-primary-foreground animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5 text-primary-foreground" />
+                  )}
                 </button>
               </div>
             </div>
