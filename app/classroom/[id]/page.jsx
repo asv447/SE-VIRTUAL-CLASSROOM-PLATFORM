@@ -424,45 +424,6 @@ export default function ClassroomPage() {
     }
   };
 
-  // Handler for submitting a new comment
-  const handleCommentSubmit = async (e, post) => {
-    if (e.key !== "Enter" || !user) return;
-    const text = e.target.value.trim();
-    if (!text) return;
-    const postId = post._id ?? post.id;
-    if (!postId) return console.error("Missing post id");
-    const newComment = {
-      _id: `temp-${Date.now()}`,
-      author: { name: user.username, id: user.uid },
-      text, createdAt: new Date().toISOString(),
-    };
-    setStreamPosts((prevStreamPosts) =>
-      prevStreamPosts.map((p) => {
-        const pId = p._id ?? p.id;
-        if (pId === postId) {
-          return { ...p, comments: [...(p.comments || []), newComment] };
-        }
-        return p;
-      })
-    );
-    e.target.value = "";
-    try {
-      const res = await fetch("/api/comments", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postId: postId.toString(),
-          author: { name: user.username, id: user.uid }, text,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to save comment");
-      fetchStreamPosts();
-    } catch (err) {
-      console.error("Error sending comment:", err);
-      toast.error("Error sending comment.");
-      fetchStreamPosts();
-    }
-  };
-
   // [NEW] Handler for sending a new chat message
   const handleSendChatMessage = async (e) => {
     if (e) e.preventDefault();
@@ -1069,30 +1030,6 @@ export default function ClassroomPage() {
                           </div>
                         )}
 
-                        {/* Post-specific comments */}
-                        <div className="border-t border-gray-100 pt-3 mt-3">
-                          <div className="space-y-2 max-h-36 overflow-y-auto pr-2">
-                            {(post.comments || []).length === 0 ? (
-                              <p className="text-sm text-gray-500 italic">No comments yet</p>
-                            ) : (
-                              (post.comments || []).map((c, idx) => (
-                                <div key={c._id || idx} className="text-left">
-                                  <p className="text-sm font-semibold text-gray-800">
-                                    {c.author?.name || c.author || "Unknown"}
-                                  </p>
-                                  <p className="text-xs text-gray-600">{c.text}</p>
-                                </div>
-                              ))
-                            )}
-                          </div>
-
-                          <input
-                            type="text"
-                            placeholder="Add class comment..."
-                            className="mt-3 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                            onKeyDown={(e) => handleCommentSubmit(e, post)}
-                          />
-                        </div>
                       </div>
                     );
                   })}
