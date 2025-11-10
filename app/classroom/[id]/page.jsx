@@ -11,7 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,17 @@ import { auth } from "../../../lib/firebase"; // Corrected path
 import { onAuthStateChanged } from "firebase/auth";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 // [DELETED] All socket.io imports are gone
 
 const MAX_POLL_OPTIONS = 6;
@@ -421,6 +432,45 @@ export default function ClassroomPage() {
     } catch (err) {
       toast.error(`Error: ${err.message}`, { id: loadingToastId });
       setStreamPosts((prev) => prev.filter((p) => (p._id ?? p.id) !== optimisticPost.id));
+    }
+  };
+
+  const handleDeletePost = async (postId) => {
+    if (!postId || !user) return;
+
+    const pid = postId.toString();
+    const initialPosts = [...streamPosts];
+    const loadingId = toast.loading("Deleting post...");
+
+    setStreamPosts((prev) =>
+      prev.filter((candidate) => {
+        const candidateId = (candidate._id ?? candidate.id)?.toString();
+        return candidateId !== pid;
+      })
+    );
+
+    try {
+      const res = await fetch("/api/stream", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId: pid,
+          classId: id,
+          requesterId: user.uid,
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to delete post");
+      }
+
+      toast.success("Post deleted", { id: loadingId });
+      fetchStreamPosts();
+    } catch (error) {
+      console.error("Error deleting stream post:", error);
+      toast.error(error.message || "Failed to delete post", { id: loadingId });
+      setStreamPosts(initialPosts);
     }
   };
 
@@ -877,11 +927,44 @@ export default function ClassroomPage() {
                         key={pid || `post-${index}`}
                         className="border border-gray-200 rounded-md p-4 hover:shadow-sm transition"
                       >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-semibold text-gray-800">
-                            {post.author?.name || "Unknown"}
-                          </span>
-                          <span className="text-sm text-gray-500">{createdAt}</span>
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div>
+                            <span className="block font-semibold text-gray-800">
+                              {post.author?.name || "Unknown"}
+                            </span>
+                            <span className="text-sm text-gray-500">{createdAt}</span>
+                          </div>
+                          {isInstructor && pid && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                  aria-label="Delete announcement"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete this announcement?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. The announcement and any poll data will be permanently removed for everyone in the class.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeletePost(pid)}
+                                    className="bg-red-600 text-white hover:bg-red-700"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
 
                         {/* Post Title & Badges */}
