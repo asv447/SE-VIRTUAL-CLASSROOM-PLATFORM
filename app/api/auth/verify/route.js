@@ -6,18 +6,21 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const uid = searchParams.get("uid");
+    const email = searchParams.get("email");
 
-    if (!uid) {
-      return new Response("uid is required", { status: 400 });
+    if (!uid && !email) {
+      return new Response("uid or email is required", { status: 400 });
     }
 
-    console.log("[Verification] Email verification link clicked for uid:", uid);
+    const identifier = uid ? `uid: ${uid}` : `email: ${email}`;
+    console.log("[Verification] Email verification link clicked for", identifier);
 
     // Mark user as verified in database
     try {
       const db = await getDatabase();
+      const query = uid ? { uid: uid } : { email: email };
       const result = await db.collection("users").updateOne(
-        { uid: uid },
+        query,
         { 
           $set: { 
             emailVerified: true,
@@ -39,7 +42,8 @@ export async function GET(req) {
     }
 
     // Return HTML success page with verification token for client
-    const verificationToken = Buffer.from(uid).toString('base64');
+    const tokenValue = uid || email;
+    const verificationToken = Buffer.from(tokenValue).toString('base64');
     return new Response(`
       <!DOCTYPE html>
       <html>
@@ -150,8 +154,9 @@ export async function GET(req) {
           </div>
           <script>
             try {
-              sessionStorage.setItem('emailVerified_${uid}', '${verificationToken}');
-              console.log('[Verify Page] Stored verification token for uid: ${uid}');
+              const key = '${uid ? 'emailVerified_' + uid : 'emailVerified_' + email}';
+              sessionStorage.setItem(key, '${verificationToken}');
+              console.log('[Verify Page] Stored verification token');
             } catch (e) {
               console.error('[Verify Page] Error storing token:', e);
             }

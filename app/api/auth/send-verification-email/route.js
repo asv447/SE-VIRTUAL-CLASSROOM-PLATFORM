@@ -60,9 +60,9 @@ export async function POST(req) {
   try {
     const { uid, email } = await req.json();
 
-    if (!uid || !email) {
+    if (!email) {
       return Response.json(
-        { error: "uid and email are required" },
+        { error: "email is required" },
         { status: 400 }
       );
     }
@@ -78,7 +78,9 @@ export async function POST(req) {
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const verificationLink = `${appUrl}/api/auth/verify?uid=${uid}`;
+    const verificationLink = uid 
+      ? `${appUrl}/api/auth/verify?uid=${uid}`
+      : `${appUrl}/api/auth/verify?email=${encodeURIComponent(email)}`;
 
     // Email HTML template with professional styling
     const htmlContent = `
@@ -217,7 +219,7 @@ Virtual Classroom Platform
     console.log("[Verification Email] Sent successfully:", {
       messageId: info.messageId,
       to: email,
-      uid,
+      uid: uid || "N/A",
     });
 
     return Response.json({
