@@ -18,9 +18,9 @@ const PDF_VERSION = '3.11.174';
 const PDF_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/pdf.min.js`;
 const WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/pdf.worker.min.js`;
 
-const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
+const WhiteboardViewer = ({ pdfUrl, onSave, onClose, classId, authorId, authorName }) => {
   // quick console signal for debugging in the browser
-  console.log('WHITEBOARD_VIEWER_MOUNT', { pdfUrl });
+  console.log('WHITEBOARD_VIEWER_MOUNT', { pdfUrl, classId, authorId });
   const [numPages, setNumPages] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -390,23 +390,20 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
     setCurrentTool(tool);
     if (!canvas) return;
 
-    // Only PDF annotation canvas can be in drawing mode. Notes canvas stays non-drawing (text only).
-    canvas.isDrawingMode = tool !== 'text-notes' && tool !== 'eraser' && tool !== 'highlighter' && tool !== 'pen' ? false : (tool !== 'text-notes');
+    // determine drawing mode: pen, highlighter, eraser are drawing; text-notes is object/text mode
+    const drawingTools = ['pen', 'highlighter', 'eraser'];
+    canvas.isDrawingMode = drawingTools.includes(tool);
     if (notesCanvas) notesCanvas.isDrawingMode = false;
 
-    if (typeof window !== 'undefined') {
-      let fabricImport = await import('fabric');
-      const fabric = fabricImport.default ? fabricImport.default : fabricImport.fabric ? fabricImport.fabric : fabricImport;
+    if (typeof window === 'undefined') return;
+    let fabricImport = await import('fabric');
+    const fabric = fabricImport.default ? fabricImport.default : fabricImport.fabric ? fabricImport.fabric : fabricImport;
 
-      // Clean previous listeners
-      canvas.off('path:created');
-      if (notesCanvas) {
-        notesCanvas.off && notesCanvas.off('path:created');
-        if (notesTextHandlerRef.current) {
-          notesCanvas.off('mouse:down', notesTextHandlerRef.current);
-          notesTextHandlerRef.current = null;
-        }
-      }
+      // Clean previous listeners on canvas (path and mouse handlers)
+      try { canvas.off('path:created'); } catch (_) {}
+      try { canvas.off('mouse:down'); } catch (_) {}
+      // Also clear any stored handler ref
+      notesTextHandlerRef.current = null;
 
       switch (tool) {
         case 'pen': {
@@ -425,35 +422,82 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
           break;
         }
         case 'eraser': {
-          // Eraser implemented by removing the created path immediately
+          // Eraser: create a brush that draws a path which is then removed immediately
+          // This erases only the stroke being drawn, not entire connected lines
           const eraser = new fabric.PencilBrush(canvas);
-          eraser.color = 'rgba(0,0,0,0)';
           eraser.width = 20;
+          eraser.color = 'rgba(255,255,255,0.2)'; // very light/transparent so user sees erase cursor
           canvas.freeDrawingBrush = eraser;
+          
+          // When a path is created by eraser, immediately remove it and any overlapping objects
           canvas.on('path:created', (e) => {
-            canvas.remove(e.path);
-            canvas.renderAll();
+            try {
+              const eraserPath = e.path;
+              // Get bounds of the eraser stroke
+              const bounds = eraserPath.getBoundingRect();
+              // Remove the eraser path itself (no visible mark)
+              canvas.remove(eraserPath);
+              
+              // Find all objects that intersect with eraser bounds and remove them
+              const objectsToRemove = [];
+              canvas.forEachObject((obj) => {
+                if (obj === eraserPath) return;
+                try {
+                  const objBounds = obj.getBoundingRect();
+                  // Check if bounds intersect
+                  const intersects = !(bounds.left > objBounds.left + objBounds.width ||
+                    bounds.left + bounds.width < objBounds.left ||
+                    bounds.top > objBounds.top + objBounds.height ||
+                    bounds.top + bounds.height < objBounds.top);
+                  if (intersects) {
+                    objectsToRemove.push(obj);
+                  }
+                } catch (_) {}
+              });
+              objectsToRemove.forEach((obj) => canvas.remove(obj));
+              canvas.requestRenderAll();
+            } catch (err) {
+              console.warn('Eraser error:', err);
+            }
           });
           break;
         }
         case 'text-notes': {
-          // Just focus the textarea for notes
+          // Disable drawing mode for text tool - focus only on notes textarea
+          canvas.isDrawingMode = false;
+          
+          // Auto-focus the notes textarea in right panel
           if (notesContainerRef.current) {
             const ta = notesContainerRef.current.querySelector('textarea[data-notes-input]');
-            if (ta) setTimeout(() => ta.focus(), 0);
+            if (ta) {
+              setTimeout(() => {
+                ta.focus();
+                // Place cursor at end
+                ta.selectionStart = ta.value.length;
+                ta.selectionEnd = ta.value.length;
+              }, 50);
+            }
           }
           break;
         }
         default:
           break;
       }
-    }
   };
 
   const saveCurrentPageState = () => {
     try {
       if (canvas && currentPage) {
-        pageStatesRef.current[currentPage] = canvas.toJSON();
+        const state = canvas.toJSON();
+        // Only save if there are actual objects on this page
+        if (state && state.objects && state.objects.length > 0) {
+          pageStatesRef.current[currentPage] = state;
+          console.log(`Page ${currentPage}: Saved state with ${state.objects.length} object(s)`);
+        } else {
+          // Clear this page's state if no objects
+          delete pageStatesRef.current[currentPage];
+          console.log(`Page ${currentPage}: Cleared empty state`);
+        }
       }
     } catch (e) {
       console.warn('Failed to save page state', e);
@@ -461,87 +505,230 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
   };
 
   const handleSave = async () => {
-    if (!pdfRef.current || !canvas) return;
-    // Save current page state before export
-    saveCurrentPageState();
-    const pdf = pdfRef.current;
-    const totalPages = pdf.numPages;
-
-    // Dynamically import jsPDF (ensure dependency added in package.json)
-    let jsPDFMod;
-    try {
-      jsPDFMod = await import('jspdf');
-    } catch (e) {
-      console.error('jsPDF import failed. Did you install it?', e);
+    console.log('=== handleSave START ===', { pdfRef: !!pdfRef.current, canvas: !!canvas, classId, authorId });
+    
+    if (!pdfRef.current) {
+      alert('PDF not loaded');
       return;
     }
-    const { jsPDF } = jsPDFMod;
+    if (!canvas) {
+      alert('Canvas not ready');
+      return;
+    }
+    if (!classId) {
+      alert('Class ID missing - cannot upload without class ID');
+      return;
+    }
+    if (!authorId) {
+      alert('Author ID missing - cannot upload without author ID');
+      return;
+    }
+    
+    try {
+      console.log('Step 1: Save CURRENT page state');
+      // IMPORTANT: Save the current page annotations before export
+      saveCurrentPageState();
+      console.log('Step 1b: Current page state saved. Total pages with annotations:', Object.keys(pageStatesRef.current).length);
+      
+      const pdf = pdfRef.current;
+      const totalPages = pdf.numPages;
+      console.log('Step 2: Total pages =', totalPages);
 
-    // Determine initial page size from first page
-    const first = await pdf.getPage(1);
-    const baseScale = 1.5;
-    const firstVp = first.getViewport({ scale: baseScale });
-    const doc = new jsPDF({ unit: 'px', compress: true, format: [firstVp.width, firstVp.height] });
-
-    for (let p = 1; p <= totalPages; p++) {
+      // Dynamically import jsPDF
+      console.log('Step 3: Importing jsPDF...');
+      let jsPDFMod;
       try {
-        const page = await pdf.getPage(p);
-        const vp = page.getViewport({ scale: baseScale });
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = vp.width;
-        pageCanvas.height = vp.height;
-        const ctx = pageCanvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport: vp }).promise;
-
-        // Create fabric temp canvas to load annotations for this page
-        let fabricImport = await import('fabric');
-        const fabric = fabricImport.default ? fabricImport.default : fabricImport.fabric ? fabricImport.fabric : fabricImport;
-        const tempFabric = new fabric.Canvas(document.createElement('canvas'), { width: vp.width, height: vp.height });
-        const savedState = pageStatesRef.current[p];
-        if (savedState) {
-          await new Promise((res) => tempFabric.loadFromJSON(savedState, () => { tempFabric.renderAll(); res(); }));
-        }
-        const overlayURL = tempFabric.toDataURL({ format: 'png', multiplier: 1 });
-        const overlayImg = new Image();
-        await new Promise((res) => { overlayImg.onload = res; overlayImg.src = overlayURL; });
-        ctx.drawImage(overlayImg, 0, 0);
-
-        const pageImgData = pageCanvas.toDataURL('image/png');
-        if (p === 1) {
-          doc.addImage(pageImgData, 'PNG', 0, 0, vp.width, vp.height);
-        } else {
-          doc.addPage([vp.width, vp.height]);
-          doc.addImage(pageImgData, 'PNG', 0, 0, vp.width, vp.height);
-        }
-        tempFabric.dispose();
+        jsPDFMod = await import('jspdf');
       } catch (e) {
-        console.warn('Failed to export page', p, e);
+        console.error('jsPDF import failed', e);
+        alert('jsPDF library not available: ' + e.message);
+        return;
       }
-    }
+      const { jsPDF } = jsPDFMod;
+      console.log('Step 4: jsPDF imported');
 
-    const pdfBlob = doc.output('blob');
-    const annotatedPdfUrl = URL.createObjectURL(pdfBlob);
-    // Extract notes text objects
-    // Notes text comes from the textarea; fall back to any i-text objects on canvas
-    let notesText = (notesPlainText || '').trim();
-    if (!notesText && notesCanvas) {
-      try {
-        notesCanvas.getObjects('i-text').forEach((t) => {
-          notesText += (t.text || '').trim() + '\n';
-        });
-        notesText = notesText.trim();
-      } catch (_) {}
-    }
-    const originalFilename = pdfUrl.split('/').pop() || 'material.pdf';
-    const newFilename = originalFilename.replace('.pdf', '_annotated.pdf');
+      // Get first page for sizing
+      console.log('Step 5: Getting first page dimensions...');
+      const first = await pdf.getPage(1);
+      const baseScale = 1.5;
+      const firstVp = first.getViewport({ scale: baseScale });
+      console.log('Step 6: First page viewport =', firstVp.width, 'x', firstVp.height);
+      
+      const doc = new jsPDF({ unit: 'px', compress: true, format: [firstVp.width, firstVp.height] });
+      console.log('Step 7: jsPDF document created');
 
-    // Pass both annotated pdf blob (converted to base64) and notes text to onSave
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64Pdf = reader.result; // data:application/pdf;base64,...
-      await onSave({ annotatedPdf: base64Pdf, notesText }, newFilename);
-    };
-    reader.readAsDataURL(pdfBlob);
+      console.log('Step 8: Rendering pages with annotations...');
+      for (let p = 1; p <= totalPages; p++) {
+        try {
+          console.log(`  >>> Page ${p}/${totalPages}: Starting render...`);
+          const page = await pdf.getPage(p);
+          const vp = page.getViewport({ scale: baseScale });
+          
+          // Create main canvas for PDF
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = vp.width;
+          pageCanvas.height = vp.height;
+          const ctx = pageCanvas.getContext('2d');
+          
+          // Render PDF page to canvas
+          console.log(`  >>> Page ${p}: Rendering PDF page...`);
+          await page.render({ canvasContext: ctx, viewport: vp }).promise;
+          console.log(`  >>> Page ${p}: PDF rendered`);
+
+          // Now overlay annotations for THIS page
+          console.log(`  >>> Page ${p}: Getting saved annotations...`);
+          const savedState = pageStatesRef.current[p];
+          console.log(`  >>> Page ${p}: Saved state exists? ${!!savedState}`);
+          
+          if (savedState) {
+            // Create fabric canvas with annotations
+            let fabricImport = await import('fabric');
+            const fabric = fabricImport.default ? fabricImport.default : fabricImport.fabric ? fabricImport.fabric : fabricImport;
+            
+            // Create temp canvas to render annotations
+            const tempCanvasEl = document.createElement('canvas');
+            tempCanvasEl.width = vp.width;
+            tempCanvasEl.height = vp.height;
+            
+            const tempFabric = new fabric.Canvas(tempCanvasEl, { 
+              width: vp.width, 
+              height: vp.height,
+              backgroundColor: 'rgba(0,0,0,0)'
+            });
+            
+            console.log(`  >>> Page ${p}: Loading fabric annotations...`);
+            await new Promise((res) => {
+              tempFabric.loadFromJSON(savedState, () => {
+                console.log(`  >>> Page ${p}: Annotations loaded, rendering...`);
+                tempFabric.setViewportTransform([1, 0, 0, 1, 0, 0]); // Reset transform
+                tempFabric.renderAll();
+                res();
+              });
+            });
+            
+            // Draw fabric annotations on top of PDF
+            console.log(`  >>> Page ${p}: Drawing annotations overlay...`);
+            const fabricImageData = tempCanvasEl.toDataURL('image/png');
+            const fabricImg = new Image();
+            
+            await new Promise((res) => {
+              fabricImg.onload = () => {
+                console.log(`  >>> Page ${p}: Fabric image loaded (${fabricImageData.length} chars), compositing...`);
+                ctx.drawImage(fabricImg, 0, 0);
+                res();
+              };
+              fabricImg.onerror = () => {
+                console.warn(`  >>> Page ${p}: Fabric image failed to load`);
+                res();
+              };
+              fabricImg.src = fabricImageData;
+            });
+            
+            tempFabric.dispose();
+            console.log(`  >>> Page ${p}: Annotations drawn`);
+          } else {
+            console.log(`  >>> Page ${p}: No annotations for this page`);
+          }
+
+          // Convert page to image and add to PDF
+          const pageImgData = pageCanvas.toDataURL('image/png');
+          
+          if (p === 1) {
+            console.log(`  >>> Page ${p}: Adding as first page to PDF`);
+            doc.addImage(pageImgData, 'PNG', 0, 0, vp.width, vp.height);
+          } else {
+            console.log(`  >>> Page ${p}: Adding as new page to PDF`);
+            doc.addPage([vp.width, vp.height]);
+            doc.addImage(pageImgData, 'PNG', 0, 0, vp.width, vp.height);
+          }
+          
+          console.log(`  >>> Page ${p}: Complete`);
+        } catch (e) {
+          console.error(`  >>> Page ${p}: ERROR - `, e);
+        }
+      }
+      console.log('Step 9: All pages rendered');
+
+      console.log('Step 10: Generating PDF blob...');
+      const pdfBlob = doc.output('blob');
+      console.log('Step 11: PDF blob created, size =', pdfBlob.size, 'bytes');
+      
+      // Check if any annotations were made
+      const totalAnnotations = Object.keys(pageStatesRef.current).length;
+      const hasAnnotations = totalAnnotations > 0;
+      console.log('Step 11b: Total pages with annotations:', totalAnnotations);
+      if (!hasAnnotations) {
+        console.warn('WARNING: No annotations made on any page!');
+      } else {
+        console.log('SUCCESS: Found annotations on', totalAnnotations, 'page(s)');
+      }
+      
+      // Extract notes text from textarea - VERY IMPORTANT
+      const notesText = (notesPlainText || '').trim();
+      console.log('Step 12: Notes text extracted:', JSON.stringify(notesText.substring(0, 50)));
+      console.log('Step 12b: Full notes length =', notesText.length);
+      
+      if (!notesText) {
+        console.warn('WARNING: Notes are empty! This is allowed but notes will be blank.');
+        // Don't prevent save if notes are empty - allow blank notes
+      } else {
+        console.log('SUCCESS: Notes text is present and will be uploaded.');
+      }
+
+      // Create FormData and append everything
+      console.log('Step 13: Creating FormData...');
+      const form = new FormData();
+      form.append('classId', classId);
+      form.append('authorId', authorId);
+      form.append('authorName', authorName || 'Instructor');
+      form.append('title', 'Annotated Material');
+      form.append('content', 'Edited PDF with annotations');
+      form.append('notesText', notesText);  // EXPLICITLY append notes
+      form.append('file', pdfBlob, 'annotated_material.pdf');
+      
+      // Verify FormData
+      console.log('Step 14: FormData verification:');
+      console.log('  - classId:', classId);
+      console.log('  - authorId:', authorId);
+      console.log('  - authorName:', authorName);
+      console.log('  - notesText length:', notesText.length, 'chars');
+      console.log('  - notesText sample:', notesText.substring(0, 100) + (notesText.length > 100 ? '...' : ''));
+      console.log('  - file size:', pdfBlob.size, 'bytes');
+      console.log('  - annotations count:', totalAnnotations);
+
+      console.log('Step 15: Uploading to /api/announcements...', { classId, authorId });
+      const response = await fetch('/api/announcements', {
+        method: 'POST',
+        body: form,
+      });
+
+      console.log('Step 16: Upload response received, status =', response.status);
+      const result = await response.json();
+      console.log('Step 17: Response body:', result);
+
+      if (!response.ok) {
+        console.error('Upload failed:', result);
+        alert('Failed to upload: ' + (result.error || 'Unknown error'));
+        return;
+      }
+
+      console.log('Step 18: Success! Announcement created:', result);
+      alert('✅ Successfully uploaded to announcements!\n\nAnnotations: ' + totalAnnotations + ' page(s)\nNotes: ' + notesText.length + ' characters');
+      
+      // Call the onSave callback
+      if (onSave) {
+        console.log('Step 19: Calling onSave callback');
+        onSave({ success: true, id: result.id });
+      }
+      
+      console.log('Step 20: Closing dialog...');
+      onClose();
+      console.log('=== handleSave COMPLETE ===');
+    } catch (err) {
+      console.error('=== CRITICAL ERROR IN handleSave ===', err);
+      console.error('Stack:', err.stack);
+      alert('❌ Error: ' + err.message + '\n\nCheck browser console for details');
+    }
   };
 
   const toggleFullScreen = () => {
@@ -641,7 +828,7 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
             <Button onClick={toggleFullScreen}>
               {isFullScreen ? 'Exit Fullscreen' : 'Fullscreen'}
             </Button>
-  // Removed duplicate handler definitions from inside JSX
+            {/* Removed duplicate handler definitions from inside JSX */}
           </div>
 
           <div className="flex-1 overflow-hidden">
@@ -653,23 +840,45 @@ const WhiteboardViewer = ({ pdfUrl, onSave, onClose }) => {
                   <canvas ref={canvasRef} className="absolute left-0 top-0 z-10" />
                 </div>
               </div>
-              {/* Right: Notes white area */}
-              <div className="flex flex-col">
-                <div className="text-sm text-gray-600 mb-2">Notes</div>
-                <div className="border rounded-md overflow-hidden" style={{ minHeight: '400px' }}>
-                  {/* Simple, reliable textarea for notes typing */}
-                  <textarea
-                    data-notes-input
-                    value={notesPlainText}
-                    onChange={(e) => setNotesPlainText(e.target.value)}
-                    placeholder="Type your notes here..."
-                    className="w-full h-40 p-3 outline-none resize-y text-sm"
-                    style={{ borderBottom: '1px solid #e5e7eb' }}
-                  />
-                  {/* Optional drawing space (kept for future shape/text rendering, but disabled for drawing) */}
-                  <div ref={notesContainerRef} className="relative">
-                    <canvas ref={notesCanvasRef} />
-                  </div>
+              
+              {/* Right: Professional Notes Editor Panel */}
+              <div className="flex flex-col bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-3 border-b border-gray-200">
+                  <h3 className="text-base font-semibold text-gray-800">📝 Notes</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">Add your notes and observations here</p>
+                </div>
+                
+                {/* Text Editor Area */}
+                <textarea
+                  ref={notesContainerRef}
+                  data-notes-input
+                  value={notesPlainText}
+                  onChange={(e) => {
+                    setNotesPlainText(e.target.value);
+                    console.log('Notes updated:', e.target.value.length, 'chars');
+                  }}
+                  placeholder="Click here to start typing your notes..."
+                  className="flex-1 p-4 outline-none resize-none text-base leading-relaxed"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    color: '#1a1a1a',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontSize: '15px',
+                  }}
+                />
+                
+                {/* Footer with Character Count */}
+                <div className="bg-gray-50 px-4 py-2 border-t border-gray-200 flex justify-between items-center">
+                  <span className="text-xs text-gray-600">
+                    {notesPlainText.length} characters • {notesPlainText.split('\n').length} lines
+                  </span>
+                  <button
+                    onClick={() => setNotesPlainText('')}
+                    className="text-xs px-2 py-1 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                  >
+                    Clear
+                  </button>
                 </div>
               </div>
             </div>

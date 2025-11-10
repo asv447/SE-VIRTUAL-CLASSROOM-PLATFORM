@@ -320,35 +320,18 @@ export default function ClassroomPage() {
   };
 
   const handleWhiteboardSave = async (payload, filename) => {
-    if (!user || !id) return;
-    const loadingId = toast.loading("Posting announcement...");
+    console.log('handleWhiteboardSave called', { payload, filename });
+    // The WhiteboardViewer now uploads directly to /api/announcements
+    // This handler just needs to close and refresh
     try {
-      const form = new FormData();
-      form.append("classId", id);
-      form.append("authorId", user.uid);
-      form.append("authorName", username || user.email || "");
-      form.append("title", "Whiteboard Material");
-      form.append("content", `Edited material from ${wbCurrentFile?.fileName || "whiteboard"}`);
-
-      if (typeof payload === 'string') {
-        // Back-compat: single image dataURL
-        const res = await fetch(payload);
-        const blob = await res.blob();
-        form.append("file", blob, filename || "whiteboard_edited.png");
-      } else if (payload && payload.annotatedPdf) {
-        // New flow: annotated PDF + notes text separately
-        const resPdf = await fetch(payload.annotatedPdf);
-        const pdfBlob = await resPdf.blob();
-        form.append("file", pdfBlob, filename || "whiteboard_annotated.pdf");
-        if (payload.notesText) form.append("notesText", payload.notesText);
-  }
       closeWhiteboard();
       // Refresh stream to show the new announcement
-      fetchStreamPosts();
+      await fetchStreamPosts();
       setWbSelectedFile(null);
+      toast.success("Announcement posted successfully!");
     } catch (e) {
       console.error("Whiteboard save failed:", e);
-      toast.error("Failed to post announcement", { id: loadingId });
+      toast.error("Failed to refresh announcements");
     }
   };
 
@@ -1302,6 +1285,9 @@ export default function ClassroomPage() {
             pdfUrl={wbCurrentFile.fileUrl}
             onSave={handleWhiteboardSave}
             onClose={closeWhiteboard}
+            classId={id}
+            authorId={user?.uid}
+            authorName={username}
           />
         )}
       </div>

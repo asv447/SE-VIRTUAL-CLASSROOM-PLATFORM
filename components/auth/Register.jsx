@@ -20,6 +20,8 @@ export default function Register({ onBackToHome }) {
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
+  const [emailVerificationStep, setEmailVerificationStep] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   useEffect(() => {
     function handleOnline() {
@@ -40,169 +42,102 @@ export default function Register({ onBackToHome }) {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
-  // state to manage verification wait (must be declared before any early return)
-  const [awaitingVerification, setAwaitingVerification] = useState(false);
-  const [createdUser, setCreatedUser] = useState(null);
   const [resendDisabled, setResendDisabled] = useState(false);
 
-  // finalize registration after verification
-  const checkVerification = async () => {
-    if (!auth.currentUser) return;
-    
-    try {
-      // First check database for verification status
-      const dbRes = await fetch(`/api/users?uid=${auth.currentUser.uid}`);
-      const response = await dbRes.json();
-      const userData = response.user;
-      
-      if (userData && userData.emailVerified) {
-        console.log("[Register] User verified in database!");
-        setError("");
-        setAwaitingVerification(false);
-        setMessage("Email verified. Finalizing account creation...");
-        
-        // create DB record now that email is verified
-        try {
-          const username = (auth.currentUser.email || "").split("@")[0];
-          const res = await fetch("/api/users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              uid: auth.currentUser.uid,
-              username,
-              email: auth.currentUser.email,
-              role: role,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            console.error("[Register] Server API write failed:", data);
-            throw new Error(data.error || "Server write failed");
-          }
-          console.log("[Register] Server API write success:", data);
-        } catch (apiErr) {
-          console.error("[Register] Server API error:", apiErr);
-          // proceed anyway; user can be created later
-        }
+  // Send verification email on email submission
+  const handleEmailVerification = async (e) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
 
-        onBackToHome && onBackToHome();
-        return;
-      }
-    } catch (err) {
-      console.log("[Register] Database check error, trying Firebase:", err.message);
+    if (!email) {
+      setError("Please enter an email.");
+      return;
     }
-    
-    // Fallback: check Firebase emailVerified
-    await auth.currentUser.reload();
-    if (auth.currentUser.emailVerified) {
-      console.log("[Register] User verified in Firebase!");
-      setError("");
-      setAwaitingVerification(false);
-      setMessage("Email verified. Finalizing account creation...");
-      // create DB record now that email is verified
-      try {
-        const username = (auth.currentUser.email || "").split("@")[0];
-        const res = await fetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uid: auth.currentUser.uid,
-            username,
-            email: auth.currentUser.email,
-            role: role,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          console.error("[Register] Server API write failed:", data);
-          throw new Error(data.error || "Server write failed");
-        }
-        console.log("[Register] Server API write success:", data);
-      } catch (apiErr) {
-        console.error("[Register] Server API error:", apiErr);
-        // proceed anyway; user can be created later
-      }
 
-      onBackToHome && onBackToHome();
-    } else {
-      setError("Email still not verified. Please click the link in your inbox.");
+    if (!isOnline) {
+      setError("You're offline. Connect to the internet.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Send verification email
+      console.log("[Register] Sending verification email to:", email);
+      const res = await fetch("/api/auth/send-verification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send verification email");
+      }
+      setMessage("Verification email sent. Please check your inbox.");
+      setEmailVerificationStep(true);
+    } catch (err) {
+      console.error("Email verification error:", err);
+      setError(err.message || "Failed to send verification email.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Poll for verification status while waiting to improve UX
-  useEffect(() => {
-    if (!awaitingVerification || !createdUser) return;
-    
-    const uid = createdUser.uid;
-    let isActive = true;
-    
-    // Check database for verification status
-    const checkDatabaseVerification = async () => {
-      try {
-        if (!isActive) return false;
-        const dbRes = await fetch(`/api/users?uid=${uid}`);
-        const response = await dbRes.json();
-        const userData = response.user;
-        
-        console.log("[Register] Database check result:", { uid, emailVerified: userData?.emailVerified });
-        
-        if (userData && userData.emailVerified) {
-          console.log("[Register] Email verified detected in database!");
-          if (isActive) {
-            checkVerification();
-          }
-          return true;
-        }
-      } catch (err) {
-        console.log("[Register] Database check error:", err.message);
+  // Check if email is verified
+  const handleCheckEmailVerification = async () => {
+    setError("");
+    setMessage("");
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/auth/check-email-verified`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email }),
+      });
+      const data = await res.json();
+      if (data.emailVerified) {
+        console.log("[Register] Email verified!");
+        setMessage("Email verified successfully! Now complete your registration.");
+        setEmailVerified(true);
+        setEmailVerificationStep(false);
+      } else {
+        setError("Email not verified yet. Please check your inbox.");
       }
-      return false;
-    };
+    } catch (err) {
+      console.error("Check verification error:", err);
+      setError("Failed to check verification status.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Immediate check when tab comes back into focus
-    const handleVisibilityChange = async () => {
-      if (!document.hidden && isActive) {
-        console.log("[Register] Page visibility changed, checking verification...");
-        const found = await checkDatabaseVerification();
-        if (!found && auth.currentUser) {
-          await auth.currentUser.reload();
-          if (auth.currentUser.emailVerified) {
-            console.log("[Register] Email verified in Firebase!");
-            checkVerification();
-          }
-        }
+  // Resend verification email
+  const handleResendVerification = async () => {
+    if (!email) return;
+    try {
+      setResendDisabled(true);
+      setError("");
+      const res = await fetch("/api/auth/send-verification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to resend");
       }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    // Regular polling every 2 seconds to check database
-    const iv = setInterval(async () => {
-      try {
-        if (!isActive) return;
-        
-        // Check database first (faster)
-        const found = await checkDatabaseVerification();
-        
-        // Also check Firebase as fallback
-        if (!found && auth.currentUser) {
-          await auth.currentUser.reload();
-          if (auth.currentUser.emailVerified) {
-            console.log("[Register] Email verified from Firebase polling!");
-            checkVerification();
-          }
-        }
-      } catch (err) {
-        console.error("poll verification error:", err);
-      }
-    }, 2000);
-
-    return () => {
-      isActive = false;
-      clearInterval(iv);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [awaitingVerification, createdUser]);
+      setMessage("Verification email resent. Check your inbox.");
+      setTimeout(() => setResendDisabled(false), 30 * 1000);
+    } catch (err) {
+      console.error("resend verification error:", err);
+      setError("Failed to resend verification email. Try again later.");
+      setResendDisabled(false);
+    }
+  };
 
   if (showLogin) {
     return (
@@ -219,10 +154,6 @@ export default function Register({ onBackToHome }) {
     setMessage("");
     console.log("[Register] Submit clicked. Email:", email);
 
-    if (!email) {
-      setError("Please enter an email.");
-      return;
-    }
     if (!password) {
       setError("Please enter a password.");
       return;
@@ -236,15 +167,12 @@ export default function Register({ onBackToHome }) {
       return;
     }
 
- 
     // Validate instructor credentials
     if (role === "instructor") {
       if (instructorPassword !== "instructor") {
         setError("Invalid instructor verification password.");
         return;
       }
-      // Force role to instructor if email is instructor domain
-      setRole("instructor");
     }
 
     setLoading(true);
@@ -263,12 +191,8 @@ export default function Register({ onBackToHome }) {
         providerData: user?.providerData?.map((p) => p.providerId),
       });
 
-      // Sign out immediately - user should not be logged in until email is verified
-      await signOut(auth);
-      console.log("[Register] User signed out - will not be logged in until email is verified");
-
       try {
-        // Create user record immediately with emailVerified: false
+        // Create user record with verified email
         console.log("[Register] Creating user record in database...");
         const username = (user.email || "").split("@")[0];
         const userRes = await fetch("/api/users", {
@@ -279,36 +203,28 @@ export default function Register({ onBackToHome }) {
             username,
             email: user.email,
             role: role,
-            emailVerified: false,
+            emailVerified: true,
           }),
         });
         const userData = await userRes.json();
         console.log("[Register] User record created:", userData);
 
-        // Send verification email via custom SMTP API route
-        console.log("[Register] Sending email verification via SMTP...");
-        const smtpRes = await fetch("/api/auth/send-verification-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uid: user.uid,
-            email: user.email,
-          }),
-        });
-        const smtpData = await smtpRes.json();
-        if (!smtpRes.ok) {
-          throw new Error(smtpData.error || "Failed to send verification email");
-        }
-        setMessage(
-          "Verification email sent. Please check your inbox to verify your account."
-        );
-        setAwaitingVerification(true);
-        setCreatedUser({ uid: user.uid, email });
-      } catch (verifErr) {
-        console.warn("Verification setup error:", verifErr);
-        setError(
-          "Account created but setup incomplete. Please refresh and try logging in."
-        );
+        setMessage("Account created successfully!");
+        
+        // Reset form
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        setEmailVerified(false);
+        setEmailVerificationStep(false);
+        
+        // Go to home
+        setTimeout(() => {
+          onBackToHome && onBackToHome();
+        }, 1000);
+      } catch (apiErr) {
+        console.error("[Register] Server API error:", apiErr);
+        setError("Account created but registration incomplete. Please refresh and try logging in.");
       }
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
@@ -322,21 +238,29 @@ export default function Register({ onBackToHome }) {
         msg.toLowerCase().includes("network")
       ) {
         setError(
-          "Failed to contact server: you appear to be offline. Connect to the internet and try again."
+          "❌ Failed to contact server: you appear to be offline. Connect to the internet and try again."
         );
       } else {
         if (e.code === "auth/email-already-in-use") {
           setError(
-            "This email is already in use. Try logging in or use a different email."
+            "❌ This email is already registered. Please sign in instead or use a different email."
           );
         } else if (e.code === "auth/invalid-email") {
-          setError("Invalid email address.");
+          setError("❌ Invalid email address. Please check and try again.");
         } else if (e.code === "auth/weak-password") {
           setError(
-            "Password is too weak. Choose a stronger password (at least 6 characters)."
+            "❌ Password is too weak. Choose a stronger password (at least 6 characters)."
           );
+        } else if (e.code === "auth/invalid-credential") {
+          setError("❌ Invalid credentials. Please check your details and try again.");
+        } else if (e.code === "auth/too-many-requests") {
+          setError("❌ Too many registration attempts. Please try again later.");
+        } else if (e.code === "auth/operation-not-allowed") {
+          setError("❌ Registration is currently disabled. Please contact support.");
+        } else if (e.code === "auth/network-request-failed") {
+          setError("❌ Network error. Please check your internet connection and try again.");
         } else {
-          setError(msg);
+          setError("❌ Registration failed. Please try again or contact support.");
         }
       }
       setMessage("");
@@ -346,36 +270,8 @@ export default function Register({ onBackToHome }) {
     }
   };
 
-  const handleResendVerification = async () => {
-    if (!auth.currentUser) return;
-    try {
-      setResendDisabled(true);
-      setError("");
-      // Call SMTP email API to resend verification
-      const res = await fetch("/api/auth/send-verification-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: auth.currentUser.uid,
-          email: auth.currentUser.email,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to resend");
-      }
-      setMessage("Verification email resent. Check your inbox.");
-      // simple cooldown
-      setTimeout(() => setResendDisabled(false), 30 * 1000);
-    } catch (err) {
-      console.error("resend verification error:", err);
-      setError("Failed to resend verification email. Try again later.");
-      setResendDisabled(false);
-    }
-  };
-
-  // If waiting for verification, show a small verification-check UI
-  if (awaitingVerification) {
+  // Step 1: Email verification
+  if (emailVerificationStep) {
     return (
       <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
         <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
@@ -385,20 +281,21 @@ export default function Register({ onBackToHome }) {
 
           <p className="mt-4 text-center text-sm text-gray-700">
             A verification link was sent to<br/>
-            <strong className="block mt-2">{createdUser?.email}</strong>
+            <strong className="block mt-2">{email}</strong>
           </p>
 
           <p className="mt-4 text-center text-xs text-gray-600">
-            Please check your inbox and spam folder. Click the verification link to activate your account.
+            Please check your inbox and spam folder. Click the verification link to activate your email.
           </p>
 
           <div className="mt-8 space-y-3">
             <button
               type="button"
-              onClick={checkVerification}
-              className="w-full py-3 px-4 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
+              onClick={handleCheckEmailVerification}
+              disabled={loading}
+              className="w-full py-3 px-4 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors disabled:bg-gray-400"
             >
-              ✓ I have verified — Check Now
+              {loading ? "Checking..." : "✓ I have verified — Check Now"}
             </button>
 
             <button
@@ -412,18 +309,81 @@ export default function Register({ onBackToHome }) {
           </div>
 
           <p className="mt-6 text-center text-xs text-gray-500 border-t pt-4">
-            ℹ️ You will not be able to log in until your email is verified.
+            ℹ️ Complete this step before proceeding with registration.
           </p>
         </div>
       </div>
     );
   }
 
+  // Step 2: Email verification done, but user hasn't entered password yet
+  if (!emailVerified) {
+    return (
+      <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
+        <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+          <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
+            Create your account
+          </h2>
+
+          <form className="mt-6 space-y-6" onSubmit={handleEmailVerification}>
+            {error && (
+              <div className="text-red-600 text-sm text-center">{error}</div>
+            )}
+            {message && (
+              <div className="text-green-600 text-sm text-center">{message}</div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Email
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer disabled:bg-gray-400"
+            >
+              {loading ? "Sending..." : "Verify Email"}
+            </button>
+
+            <div className="text-center space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLogin(true)}
+                className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium"
+              >
+                Already have an account? Login
+              </button>
+              {onBackToHome && (
+                <button
+                  type="button"
+                  onClick={onBackToHome}
+                  className="text-gray-600 hover:text-gray-500 text-sm block cursor-pointer"
+                >
+                  Back to Home
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Step 3: Show password and role form after email is verified
   return (
     <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
       <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
         <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
-          Create your account
+          Complete Registration
         </h2>
 
         <form className="mt-6 space-y-6" onSubmit={handleRegister}>
@@ -436,14 +396,13 @@ export default function Register({ onBackToHome }) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Email
+              Email (Verified)
             </label>
             <input
               type="email"
-              required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              disabled
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-gray-100 cursor-not-allowed"
             />
           </div>
 
@@ -505,7 +464,7 @@ export default function Register({ onBackToHome }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
+            className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer disabled:bg-gray-400"
           >
             {loading ? "Creating..." : "Sign up"}
           </button>
@@ -513,8 +472,20 @@ export default function Register({ onBackToHome }) {
           <div className="text-center space-y-2 pt-2">
             <button
               type="button"
-              onClick={() => setShowLogin(true)}
+              onClick={() => {
+                setEmail("");
+                setEmailVerified(false);
+                setError("");
+                setMessage("");
+              }}
               className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium"
+            >
+              Use Different Email
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowLogin(true)}
+              className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium block"
             >
               Already have an account? Login
             </button>

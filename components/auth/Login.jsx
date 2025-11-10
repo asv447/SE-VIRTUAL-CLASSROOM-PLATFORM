@@ -150,6 +150,7 @@ export default function Login({ onBackToHome }) {
           
           // Email is verified, allow login
           router.push("/");
+          onBackToHome && onBackToHome();
           return;
         }
       } catch (err) {
@@ -158,21 +159,38 @@ export default function Login({ onBackToHome }) {
       
       // Fallback: if database check fails, proceed anyway
       router.push("/");
+      onBackToHome && onBackToHome();
     } catch (err) {
       // Handle Firebase auth errors with user-friendly messages
       if (err.code === "auth/user-not-found") {
-        setError("This email is not registered. Please sign up first.");
+        setError("❌ This email is not registered. Please sign up first.");
       } else if (err.code === "auth/wrong-password") {
-        setError("Incorrect password. Please try again.");
+        setError("❌ Incorrect password. Please try again.");
       } else if (err.code === "auth/invalid-email") {
-        setError("Invalid email address. Please check and try again.");
+        setError("❌ Invalid email address. Please check and try again.");
       } else if (err.code === "auth/user-disabled") {
-        setError("This account has been disabled. Please contact support.");
+        setError("❌ This account has been disabled. Please contact support.");
+      } else if (err.code === "auth/invalid-credential") {
+        setError("❌ Email or password is incorrect. Please check and try again, or sign up if you don't have an account.");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("❌ Too many failed login attempts. Please try again later.");
+      } else if (err.code === "auth/account-exists-with-different-credential") {
+        setError("❌ An account already exists with this email. Please sign in or use a different email.");
+      } else if (err.code === "auth/credential-already-in-use") {
+        setError("❌ This credential is already in use. Please use a different method.");
+      } else if (err.code === "auth/email-already-in-use") {
+        setError("❌ This email is already registered. Please sign in instead.");
+      } else if (err.code === "auth/weak-password") {
+        setError("❌ Password is too weak. Please use a stronger password.");
+      } else if (err.code === "auth/operation-not-allowed") {
+        setError("❌ Email/password sign-in is currently disabled. Please contact support.");
+      } else if (err.code === "auth/network-request-failed") {
+        setError("❌ Network error. Please check your internet connection and try again.");
       } else {
-        setError(err.message);
+        // Generic message for unknown errors
+        setError("❌ Login failed. Please sign up first if you don't have an account.");
       }
     }
-    onBackToHome && onBackToHome();
   };
 
   if (showRegister)
