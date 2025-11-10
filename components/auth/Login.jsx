@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import PropTypes from "prop-types";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import Register from "./Register";
@@ -11,6 +12,7 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import ResetPasswordModal from "./ResetPass";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Login({ onBackToHome }) {
   const [email, setEmail] = useState("");
@@ -25,6 +27,7 @@ export default function Login({ onBackToHome }) {
   const [unverifiedUser, setUnverifiedUser] = useState(null);
   const [unverifiedPassword, setUnverifiedPassword] = useState("");
   const [resendDisabled, setResendDisabled] = useState(false);
+  const { toast } = useToast();
 
   // Close login modal if user is already authenticated
   useEffect(() => {
@@ -119,11 +122,18 @@ export default function Login({ onBackToHome }) {
         throw new Error(data.error || "Failed to resend email");
       }
       setError("");
-      // Show success message temporarily
-      alert("Verification email resent! Check your inbox.");
+      toast({
+        title: "Verification email resent",
+        description: "Check your inbox for the new verification link.",
+      });
     } catch (err) {
       console.error("[Login] Resend error:", err);
       setError("Failed to resend verification email. Try again later.");
+      toast({
+        title: "Could not resend email",
+        description: err.message || "Please try again shortly.",
+        variant: "destructive",
+      });
     } finally {
       // Wait 60 seconds before allowing resend again
       setTimeout(() => setResendDisabled(false), 60000);
@@ -417,3 +427,7 @@ export default function Login({ onBackToHome }) {
     </div>
   );
 }
+
+Login.propTypes = {
+  onBackToHome: PropTypes.func,
+};

@@ -12,10 +12,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
+import { useToast } from "@/hooks/use-toast";
 import {
   onAuthStateChanged,
   signOut,
@@ -35,6 +46,7 @@ const Register = dynamic(() => import("../auth/Register"), {
 });
 
 export default function SharedNavbar() {
+  const { toast } = useToast();
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -55,6 +67,8 @@ export default function SharedNavbar() {
   const [usernameError, setUsernameError] = useState("");
   const [savingUsername, setSavingUsername] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [showCancelUploadConfirm, setShowCancelUploadConfirm] = useState(false);
+  const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
   const pathname = usePathname();
   const isHomepage = pathname === "/" || pathname === "/homepage";
 
@@ -153,7 +167,11 @@ export default function SharedNavbar() {
     // Basic client-side validation
     const MAX_MB = 6; // don't accept extremely large files
     if (file.size > MAX_MB * 1024 * 1024) {
-      alert(`Please select an image smaller than ${MAX_MB}MB`);
+      toast({
+        title: "Image too large",
+        description: `Please select an image smaller than ${MAX_MB}MB.`,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -162,13 +180,30 @@ export default function SharedNavbar() {
     setPreviewUrl(url);
   };
 
+  const handleCloseUploadModal = () => {
+    setIsUploadOpen(false);
+    setSelectedFile(null);
+    setPreviewUrl("");
+    setUploading(false);
+    setShowCancelUploadConfirm(false);
+    setShowRemovePhotoConfirm(false);
+  };
+
   const handleUploadProfile = async () => {
     if (!user) {
-      alert("You must be logged in to upload a profile picture.");
+      toast({
+        title: "Sign in required",
+        description: "Log in before uploading a profile picture.",
+        variant: "destructive",
+      });
       return;
     }
     if (!selectedFile) {
-      alert("Please choose a file first.");
+      toast({
+        title: "No file selected",
+        description: "Choose an image before uploading.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -212,19 +247,91 @@ export default function SharedNavbar() {
       console.log("upload-photo response", res.status, data);
 
       if (!res.ok) {
-        alert("Upload failed: " + (data?.message || res.status));
+        toast({
+          title: "Upload failed",
+          description: data?.message || `Server responded with ${res.status}.`,
+          variant: "destructive",
+        });
         setUploading(false);
         return;
       }
 
       // show the uploaded image immediately
       setUserPhoto(dataUrl);
-      setIsUploadOpen(false);
-      setSelectedFile(null);
-      setPreviewUrl("");
+      handleCloseUploadModal();
+      toast({
+        title: "Profile updated",
+        description: "Your profile picture has been updated.",
+      });
     } catch (err) {
       console.error("Error uploading profile picture to server:", err);
-      alert("Failed to upload profile picture. See console for details.");
+      toast({
+        title: "Upload failed",
+        description:
+          "Could not upload your profile picture. Check the console for details.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!user) return;
+    setShowRemovePhotoConfirm(false);
+    try {
+      setUploading(true);
+      const idToken = await auth.currentUser?.getIdToken?.();
+      const res = await fetch("/api/users/remove-photo", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+      console.log("remove-photo response", res.status, data);
+      if (!res.ok) {
+        toast({
+          title: "Failed to remove photo",
+          description: data?.message || `Server responded with ${res.status}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        if (auth.currentUser?.photoURL) {
+          await updateProfile(auth.currentUser, {
+            photoURL: null,
+          });
+        }
+      } catch (error) {
+        console.warn("Failed to clear Firebase photoURL:", error);
+      }
+
+      setUserPhoto("");
+      setPreviewUrl("");
+      setSelectedFile(null);
+      setIsUploadOpen(false);
+      toast({
+        title: "Profile photo removed",
+        description: "Your profile picture has been cleared.",
+      });
+    } catch (err) {
+      console.error("Error removing photo:", err);
+      toast({
+        title: "Failed to remove photo",
+        description: "Something went wrong while removing your picture.",
+        variant: "destructive",
+      });
     } finally {
       setUploading(false);
     }
@@ -379,7 +486,7 @@ export default function SharedNavbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-2">
@@ -579,6 +686,59 @@ export default function SharedNavbar() {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog
+        open={showCancelUploadConfirm}
+        onOpenChange={setShowCancelUploadConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel upload?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected image is still uploading. Canceling now will stop the
+              upload.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep uploading</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowCancelUploadConfirm(false);
+                handleCloseUploadModal();
+              }}
+            >
+              Cancel upload
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={showRemovePhotoConfirm}
+        onOpenChange={setShowRemovePhotoConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove profile photo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clear your current avatar. You can upload a new picture
+              later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="cursor-pointer">
+              Keep photo
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="cursor-pointer"
+              onClick={handleRemovePhoto}
+              disabled={uploading}
+            >
+              Remove photo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog
         open={isPasswordDialogOpen}
         onOpenChange={(open) => {
@@ -648,9 +808,11 @@ export default function SharedNavbar() {
           <div className="relative w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg p-6">
             <button
               onClick={() => {
-                setIsUploadOpen(false);
-                setSelectedFile(null);
-                setPreviewUrl("");
+                if (uploading) {
+                  setShowCancelUploadConfirm(true);
+                  return;
+                }
+                handleCloseUploadModal();
               }}
               className="absolute top-3 right-4 text-gray-700 text-2xl font-bold hover:text-gray-900 transition cursor-pointer"
             >
@@ -710,14 +872,10 @@ export default function SharedNavbar() {
                 <button
                   onClick={() => {
                     if (uploading) {
-                      // We don't support cancelling server upload; inform the user
-                      const ok = confirm("Upload in progress. Cancel anyway?");
-                      if (!ok) return;
+                      setShowCancelUploadConfirm(true);
+                      return;
                     }
-                    setIsUploadOpen(false);
-                    setSelectedFile(null);
-                    setPreviewUrl("");
-                    setUploading(false);
+                    handleCloseUploadModal();
                   }}
                   className="cursor-pointer px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
                 >
@@ -726,64 +884,7 @@ export default function SharedNavbar() {
 
                 {(userPhoto || user?.photoURL) && (
                   <button
-                    onClick={async () => {
-                      const ok = confirm(
-                        "Are you sure you want to remove your current profile picture?"
-                      );
-                      if (!ok) return;
-                      try {
-                        setUploading(true);
-                        const idToken = await auth.currentUser?.getIdToken?.();
-                        const res = await fetch("/api/users/remove-photo", {
-                          method: "PATCH",
-                          headers: {
-                            "Content-Type": "application/json",
-                            ...(idToken
-                              ? { Authorization: `Bearer ${idToken}` }
-                              : {}),
-                          },
-                          body: JSON.stringify({ uid: user.uid }),
-                        });
-                        const text = await res.text();
-                        let data;
-                        try {
-                          data = JSON.parse(text);
-                        } catch {
-                          data = { message: text };
-                        }
-                        console.log("remove-photo response", res.status, data);
-                        if (!res.ok) {
-                          alert(
-                            "Failed to remove photo: " +
-                              (data?.message || res.status)
-                          );
-                        } else {
-                          // clear firebase photoURL if present
-                          try {
-                            if (auth.currentUser?.photoURL) {
-                              await updateProfile(auth.currentUser, {
-                                photoURL: null,
-                              });
-                            }
-                          } catch (e) {
-                            console.warn(
-                              "Failed to clear MongoDB photoURL:",
-                              e
-                            );
-                          }
-                          setUserPhoto("");
-                          setPreviewUrl("");
-                          setSelectedFile(null);
-                          setIsUploadOpen(false);
-                          alert("Profile picture removed.");
-                        }
-                      } catch (err) {
-                        console.error("Error removing photo:", err);
-                        alert("Failed to remove photo. See console.");
-                      } finally {
-                        setUploading(false);
-                      }
-                    }}
+                    onClick={() => setShowRemovePhotoConfirm(true)}
                     disabled={uploading}
                     className="cursor-pointer px-3 py-2 text-sm text-red-600 border border-red-200 hover:bg-red-50 rounded-md"
                   >
