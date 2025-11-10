@@ -1,10 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { auth } from "../../lib/firebase";
-import {
-  createUserWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import Login from "./Login";
 
 export default function Register({ onBackToHome }) {
@@ -99,7 +97,9 @@ export default function Register({ onBackToHome }) {
       const data = await res.json();
       if (data.emailVerified) {
         console.log("[Register] Email verified!");
-        setMessage("Email verified successfully! Now complete your registration.");
+        setMessage(
+          "Email verified successfully! Now complete your registration."
+        );
         setEmailVerified(true);
         setEmailVerificationStep(false);
       } else {
@@ -210,21 +210,23 @@ export default function Register({ onBackToHome }) {
         console.log("[Register] User record created:", userData);
 
         setMessage("Account created successfully!");
-        
+
         // Reset form
         setEmail("");
         setPassword("");
         setConfirmPassword("");
         setEmailVerified(false);
         setEmailVerificationStep(false);
-        
+
         // Go to home
         setTimeout(() => {
           onBackToHome && onBackToHome();
         }, 1000);
       } catch (apiErr) {
         console.error("[Register] Server API error:", apiErr);
-        setError("Account created but registration incomplete. Please refresh and try logging in.");
+        setError(
+          "Account created but registration incomplete. Please refresh and try logging in."
+        );
       }
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
@@ -252,15 +254,25 @@ export default function Register({ onBackToHome }) {
             "❌ Password is too weak. Choose a stronger password (at least 6 characters)."
           );
         } else if (e.code === "auth/invalid-credential") {
-          setError("❌ Invalid credentials. Please check your details and try again.");
+          setError(
+            "❌ Invalid credentials. Please check your details and try again."
+          );
         } else if (e.code === "auth/too-many-requests") {
-          setError("❌ Too many registration attempts. Please try again later.");
+          setError(
+            "❌ Too many registration attempts. Please try again later."
+          );
         } else if (e.code === "auth/operation-not-allowed") {
-          setError("❌ Registration is currently disabled. Please contact support.");
+          setError(
+            "❌ Registration is currently disabled. Please contact support."
+          );
         } else if (e.code === "auth/network-request-failed") {
-          setError("❌ Network error. Please check your internet connection and try again.");
+          setError(
+            "❌ Network error. Please check your internet connection and try again."
+          );
         } else {
-          setError("❌ Registration failed. Please try again or contact support.");
+          setError(
+            "❌ Registration failed. Please try again or contact support."
+          );
         }
       }
       setMessage("");
@@ -274,18 +286,38 @@ export default function Register({ onBackToHome }) {
   if (emailVerificationStep) {
     return (
       <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-        <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
-          <h2 className="text-center text-2xl font-bold mb-4">📧 Verify Your Email</h2>
-          {error && <div className="text-red-600 text-sm text-center mb-4 p-3 bg-red-50 rounded">{error}</div>}
-          {message && <div className="text-green-600 text-sm text-center mb-4 p-3 bg-green-50 rounded">{message}</div>}
+        <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+          <button
+            type="button"
+            onClick={() => onBackToHome?.()}
+            className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="Close registration dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <h2 className="text-center text-2xl font-bold mb-4">
+            📧 Verify Your Email
+          </h2>
+          {error && (
+            <div className="text-red-600 text-sm text-center mb-4 p-3 bg-red-50 rounded">
+              {error}
+            </div>
+          )}
+          {message && (
+            <div className="text-green-600 text-sm text-center mb-4 p-3 bg-green-50 rounded">
+              {message}
+            </div>
+          )}
 
           <p className="mt-4 text-center text-sm text-gray-700">
-            A verification link was sent to<br/>
+            A verification link was sent to
+            <br />
             <strong className="block mt-2">{email}</strong>
           </p>
 
           <p className="mt-4 text-center text-xs text-gray-600">
-            Please check your inbox and spam folder. Click the verification link to activate your email.
+            Please check your inbox and spam folder. Click the verification link
+            to activate your email.
           </p>
 
           <div className="mt-8 space-y-3">
@@ -302,9 +334,15 @@ export default function Register({ onBackToHome }) {
               type="button"
               onClick={handleResendVerification}
               disabled={resendDisabled}
-              className={`w-full py-2 px-4 rounded-xl font-medium transition-colors ${resendDisabled ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+              className={`w-full py-2 px-4 rounded-xl font-medium transition-colors ${
+                resendDisabled
+                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
             >
-              {resendDisabled ? '⏳ Please wait before resending...' : '📤 Resend Verification Email'}
+              {resendDisabled
+                ? "⏳ Please wait before resending..."
+                : "📤 Resend Verification Email"}
             </button>
           </div>
 
@@ -320,7 +358,15 @@ export default function Register({ onBackToHome }) {
   if (!emailVerified) {
     return (
       <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-        <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+        <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+          <button
+            type="button"
+            onClick={() => onBackToHome?.()}
+            className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="Close registration dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
             Create your account
           </h2>
@@ -330,7 +376,9 @@ export default function Register({ onBackToHome }) {
               <div className="text-red-600 text-sm text-center">{error}</div>
             )}
             {message && (
-              <div className="text-green-600 text-sm text-center">{message}</div>
+              <div className="text-green-600 text-sm text-center">
+                {message}
+              </div>
             )}
 
             <div>
@@ -381,7 +429,15 @@ export default function Register({ onBackToHome }) {
   // Step 3: Show password and role form after email is verified
   return (
     <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-      <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+      <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+        <button
+          type="button"
+          onClick={() => onBackToHome?.()}
+          className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          aria-label="Close registration dialog"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
           Complete Registration
         </h2>
