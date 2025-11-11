@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ClassroomDetails() {
   const { id } = useParams();
@@ -15,6 +16,7 @@ export default function ClassroomDetails() {
   const [uploading, setUploading] = useState({});
   const [editingDeadline, setEditingDeadline] = useState({});
   const [deadlineInputs, setDeadlineInputs] = useState({});
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchClassroom = async () => {
@@ -68,7 +70,11 @@ export default function ClassroomDetails() {
   const saveDeadline = async (assignmentId) => {
     const value = deadlineInputs[assignmentId];
     if (!value) {
-      alert("Please pick a deadline");
+      toast({
+        title: "Missing deadline",
+        description: "Select a new deadline before saving.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -91,26 +97,46 @@ export default function ClassroomDetails() {
           return newC;
         });
         cancelEditDeadline(assignmentId);
-        alert("Deadline updated");
+        toast({
+          title: "Deadline updated",
+          description: "Students will now see the new due date.",
+        });
       } else {
         const e = await res.json();
-        alert("Failed to update deadline: " + (e?.error || res.statusText));
+        toast({
+          title: "Failed to update deadline",
+          description:
+            e?.error || res.statusText || "Server returned an error.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("Error updating deadline:", err);
-      alert("Error updating deadline");
+      toast({
+        title: "Failed to update deadline",
+        description: err.message || "Unexpected error occurred.",
+        variant: "destructive",
+      });
     }
   };
 
   const submitAssignment = async (assignmentId) => {
     const file = selectedFiles[assignmentId];
     if (!file) {
-      alert("Please select a file to upload");
+      toast({
+        title: "No file selected",
+        description: "Choose a file before submitting.",
+        variant: "destructive",
+      });
       return;
     }
 
     if (!user) {
-      alert("Please sign in to submit assignments");
+      toast({
+        title: "Sign in required",
+        description: "Log in to upload your submission.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -119,42 +145,63 @@ export default function ClassroomDetails() {
       const formData = new FormData();
       formData.append("assignmentId", assignmentId);
       formData.append("studentId", user.uid);
-      formData.append("studentName", user.displayName || user.email || "Student");
+      formData.append(
+        "studentName",
+        user.displayName || user.email || "Student"
+      );
       formData.append("file", file);
 
-      const res = await fetch("/api/submissions", { method: "POST", body: formData });
+      const res = await fetch("/api/submissions", {
+        method: "POST",
+        body: formData,
+      });
       if (res.ok) {
-        alert("Submission uploaded successfully");
+        toast({
+          title: "Submission uploaded",
+          description: "Your assignment file has been submitted.",
+        });
         setSelectedFiles((p) => ({ ...p, [assignmentId]: null }));
       } else {
         const err = await res.json();
-        alert("Upload failed: " + (err?.error || res.statusText));
+        toast({
+          title: "Upload failed",
+          description:
+            err?.error || res.statusText || "Server returned an error.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("Submission error:", err);
-      alert("Failed to upload submission");
+      toast({
+        title: "Upload failed",
+        description: err.message || "Unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setUploading((p) => ({ ...p, [assignmentId]: false }));
     }
   };
 
   if (error) return <p className="text-center text-red-500">{error}</p>;
-  if (!classroom) return <p className="text-center text-gray-500">Loading...</p>;
+  if (!classroom)
+    return <p className="text-center text-gray-500">Loading...</p>;
 
-    return (
+  return (
     <div className="min-h-screen bg-white text-black p-8">
       {/* Header Section */}
       <div className="border-b border-gray-300 pb-6 mb-6">
         <h1 className="text-3xl font-bold mb-2">{classroom.name}</h1>
         <p className="text-gray-600">Instructor: {classroom.instructor}</p>
         <div className="flex items-center gap-2 mt-2">
-          <span className="font-mono text-sm text-gray-700">Class ID: {classroom.classId}</span>
+          <span className="font-mono text-sm text-gray-700">
+            Class ID: {classroom.classId}
+          </span>
           <button
             onClick={() => navigator.clipboard.writeText(classroom.classId)}
             className="border border-black text-sm px-2 py-1 rounded hover:bg-black hover:text-white transition"
           >
             Copy
-                    </button>
+          </button>
         </div>
       </div>
 
@@ -181,7 +228,10 @@ export default function ClassroomDetails() {
           <div>
             {classroom.posts?.length > 0 ? (
               classroom.posts.map((post, idx) => (
-                <div key={idx} className="border p-4 rounded-xl mb-3 hover:shadow">
+                <div
+                  key={idx}
+                  className="border p-4 rounded-xl mb-3 hover:shadow"
+                >
                   <p>{post.content}</p>
                   <p className="text-xs text-gray-500 mt-2">
                     {new Date(post.createdAt).toLocaleString()}
@@ -198,35 +248,59 @@ export default function ClassroomDetails() {
           <div>
             {classroom.assignments?.length > 0 ? (
               classroom.assignments.map((a, idx) => (
-                <div key={idx} className="border p-4 rounded-xl mb-3 hover:shadow">
+                <div
+                  key={idx}
+                  className="border p-4 rounded-xl mb-3 hover:shadow"
+                >
                   <h3 className="font-semibold">{a.title}</h3>
                   <p>{a.description}</p>
                   <div className="flex items-center gap-3 mt-2">
-                    <p className="text-sm text-gray-500">Deadline: {new Date(a.deadline).toLocaleString()}</p>
+                    <p className="text-sm text-gray-500">
+                      Deadline: {new Date(a.deadline).toLocaleString()}
+                    </p>
                     {/* Show edit control for instructors only */}
-                    {user && (user.uid === classroom.instructorId || user.email === classroom.instructorEmail) && (
-                      <div>
-                        {!editingDeadline[a.id] ? (
-                          <button
-                            onClick={() => startEditDeadline(a.id, a.deadline)}
-                            className="text-sm text-blue-600 underline"
-                          >
-                            Edit deadline
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="datetime-local"
-                              value={deadlineInputs[a.id] || ''}
-                              onChange={(e) => setDeadlineInputs((p) => ({ ...p, [a.id]: e.target.value }))}
-                              className="border px-2 py-1 rounded"
-                            />
-                            <button onClick={() => saveDeadline(a.id)} className="px-3 py-1 bg-green-600 text-white rounded">Save</button>
-                            <button onClick={() => cancelEditDeadline(a.id)} className="px-3 py-1 bg-gray-200 rounded">Cancel</button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {user &&
+                      (user.uid === classroom.instructorId ||
+                        user.email === classroom.instructorEmail) && (
+                        <div>
+                          {!editingDeadline[a.id] ? (
+                            <button
+                              onClick={() =>
+                                startEditDeadline(a.id, a.deadline)
+                              }
+                              className="text-sm text-blue-600 underline"
+                            >
+                              Edit deadline
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="datetime-local"
+                                value={deadlineInputs[a.id] || ""}
+                                onChange={(e) =>
+                                  setDeadlineInputs((p) => ({
+                                    ...p,
+                                    [a.id]: e.target.value,
+                                  }))
+                                }
+                                className="border px-2 py-1 rounded"
+                              />
+                              <button
+                                onClick={() => saveDeadline(a.id)}
+                                className="px-3 py-1 bg-green-600 text-white rounded"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => cancelEditDeadline(a.id)}
+                                className="px-3 py-1 bg-gray-200 rounded"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                   </div>
 
                   {a.fileUrl && (
@@ -247,12 +321,16 @@ export default function ClassroomDetails() {
                       <div className="space-y-2">
                         <input
                           type="file"
-                          onChange={(e) => handleFileSelect(a.id, e.target.files[0])}
+                          onChange={(e) =>
+                            handleFileSelect(a.id, e.target.files[0])
+                          }
                           accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png,.py,.js,.java,.cpp"
                           className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
                         {selectedFiles[a.id] && (
-                          <p className="text-xs text-gray-600">Selected: {selectedFiles[a.id].name}</p>
+                          <p className="text-xs text-gray-600">
+                            Selected: {selectedFiles[a.id].name}
+                          </p>
                         )}
                         <div className="flex gap-2 mt-2">
                           <button
@@ -265,7 +343,9 @@ export default function ClassroomDetails() {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-600">Please sign in to submit your work.</p>
+                      <p className="text-sm text-gray-600">
+                        Please sign in to submit your work.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -280,7 +360,10 @@ export default function ClassroomDetails() {
           <div>
             {classroom.chat?.length > 0 ? (
               classroom.chat.map((msg, idx) => (
-                <div key={idx} className="border p-3 rounded-xl mb-2 hover:bg-gray-50">
+                <div
+                  key={idx}
+                  className="border p-3 rounded-xl mb-2 hover:bg-gray-50"
+                >
                   <p>
                     <strong>{msg.user}</strong>: {msg.message}
                   </p>
@@ -299,7 +382,10 @@ export default function ClassroomDetails() {
           <div className="grid grid-cols-2 gap-2">
             {classroom.people?.length > 0 ? (
               classroom.people.map((p, idx) => (
-                <div key={idx} className="border p-3 rounded-xl hover:bg-gray-50">
+                <div
+                  key={idx}
+                  className="border p-3 rounded-xl hover:bg-gray-50"
+                >
                   {p}
                 </div>
               ))

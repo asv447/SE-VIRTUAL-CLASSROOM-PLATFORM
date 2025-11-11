@@ -4,24 +4,37 @@ import React, { useEffect, useState, useRef } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
-import { 
-  BookOpen, 
-  Upload, 
-  Download, 
-  Calendar, 
+import {
+  BookOpen,
+  Upload,
+  Download,
+  Calendar,
   Clock,
   CheckCircle,
   AlertCircle,
   FileText,
   Filter,
-  X
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AssignmentsPage() {
   const [user, setUser] = useState(null);
@@ -34,7 +47,8 @@ export default function AssignmentsPage() {
   const [uploading, setUploading] = useState({});
   const fileInputRefs = useRef({});
   const [userProfile, setUserProfile] = useState(null);
-  
+  const { toast } = useToast();
+
   // Filter states
   const [filterCourse, setFilterCourse] = useState("all");
   // Single specific deadline date filter (exact day match)
@@ -98,7 +112,9 @@ export default function AssignmentsPage() {
   const loadCourses = async () => {
     if (!user?.uid) return [];
     try {
-      const url = `/api/courses?role=student&userId=${encodeURIComponent(user.uid)}`;
+      const url = `/api/courses?role=student&userId=${encodeURIComponent(
+        user.uid
+      )}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -124,18 +140,21 @@ export default function AssignmentsPage() {
     }
     try {
       console.log("Courses data received:", coursesData);
-      
+
       // Get course IDs from the courses data passed in
       const enrolledCourseIds = coursesData
-        .map(course => {
+        .map((course) => {
           const courseId = course.id || course._id;
           console.log(`Course object:`, course, `-> extracted ID:`, courseId);
           return courseId;
         })
         .filter(Boolean);
-      
-      console.log("Enrolled course IDs to fetch assignments for:", enrolledCourseIds);
-      
+
+      console.log(
+        "Enrolled course IDs to fetch assignments for:",
+        enrolledCourseIds
+      );
+
       if (enrolledCourseIds.length === 0) {
         // No enrolled courses, so no assignments to show
         console.log("No enrolled courses found");
@@ -146,10 +165,12 @@ export default function AssignmentsPage() {
 
       // Fetch assignments for each enrolled course
       let allAssignments = [];
-      
+
       for (const courseId of enrolledCourseIds) {
         try {
-          const url = `/api/assignments?classId=${encodeURIComponent(courseId)}`;
+          const url = `/api/assignments?classId=${encodeURIComponent(
+            courseId
+          )}`;
           console.log(`Fetching assignments from: ${url}`);
           const res = await fetch(url);
           if (res.ok) {
@@ -157,34 +178,40 @@ export default function AssignmentsPage() {
             console.log(`Assignments for course ${courseId}:`, data);
             allAssignments = allAssignments.concat(data);
           } else {
-            console.error(`Failed to fetch assignments for course ${courseId}:`, res.status);
+            console.error(
+              `Failed to fetch assignments for course ${courseId}:`,
+              res.status
+            );
             const errorText = await res.text();
             console.error(`Response:`, errorText);
           }
         } catch (err) {
-          console.error(`Error loading assignments for course ${courseId}:`, err);
+          console.error(
+            `Error loading assignments for course ${courseId}:`,
+            err
+          );
         }
       }
-      
+
       console.log("All assignments combined:", allAssignments);
       setAssignments(allAssignments);
-      
+
       // Build dynamic list of courses from assignments
       const map = new Map();
-      allAssignments.forEach(a => {
+      allAssignments.forEach((a) => {
         const cid = a.courseId || a.classId;
         if (!cid) return;
         if (!map.has(cid)) {
           map.set(cid, {
             id: cid,
-            name: a.courseTitle || a.courseName || a.classTitle || cid
+            name: a.courseTitle || a.courseName || a.classTitle || cid,
           });
         }
       });
       setAssignmentCourseOptions(Array.from(map.values()));
-      
+
       // Load submissions for each assignment
-      allAssignments.forEach(assignment => {
+      allAssignments.forEach((assignment) => {
         loadSubmissions(assignment.id);
       });
     } catch (err) {
@@ -201,19 +228,19 @@ export default function AssignmentsPage() {
         setAssignments(data);
         // Build dynamic list of courses from assignments
         const map = new Map();
-        data.forEach(a => {
+        data.forEach((a) => {
           const cid = a.courseId || a.classId;
           if (!cid) return;
           if (!map.has(cid)) {
             map.set(cid, {
               id: cid,
-              name: a.courseTitle || a.courseName || a.classTitle || cid
+              name: a.courseTitle || a.courseName || a.classTitle || cid,
             });
           }
         });
         setAssignmentCourseOptions(Array.from(map.values()));
         // Load submissions for each assignment
-        data.forEach(assignment => {
+        data.forEach((assignment) => {
           loadSubmissions(assignment.id);
         });
       }
@@ -227,9 +254,9 @@ export default function AssignmentsPage() {
       const res = await fetch(`/api/submissions?assignmentId=${assignmentId}`);
       if (res.ok) {
         const data = await res.json();
-        setSubmissions(prev => ({
+        setSubmissions((prev) => ({
           ...prev,
-          [assignmentId]: data
+          [assignmentId]: data,
         }));
       }
     } catch (err) {
@@ -238,9 +265,9 @@ export default function AssignmentsPage() {
   };
 
   const handleFileSelect = (assignmentId, file) => {
-    setSelectedFile(prev => ({
+    setSelectedFile((prev) => ({
       ...prev,
-      [assignmentId]: file || null
+      [assignmentId]: file || null,
     }));
   };
 
@@ -254,29 +281,41 @@ export default function AssignmentsPage() {
   const submitAssignment = async (assignmentId) => {
     const file = selectedFile[assignmentId];
     if (!file) {
-      alert("Please select a file to upload");
+      toast({
+        title: "No file selected",
+        description: "Please choose a file before submitting.",
+        variant: "destructive",
+      });
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      alert("File size must be less than 10MB");
+      toast({
+        title: "File too large",
+        description: "Please upload a file smaller than 10MB.",
+        variant: "destructive",
+      });
       return;
     }
 
-    setUploading(prev => ({
+    setUploading((prev) => ({
       ...prev,
-      [assignmentId]: true
+      [assignmentId]: true,
     }));
 
     try {
       const formData = new FormData();
-  const preferredName = userProfile?.username || user.displayName || user.email?.split("@")[0] || user.email;
-  const preferredEmail = userProfile?.email || user.email || "";
+      const preferredName =
+        userProfile?.username ||
+        user.displayName ||
+        user.email?.split("@")[0] ||
+        user.email;
+      const preferredEmail = userProfile?.email || user.email || "";
 
-  formData.append("assignmentId", assignmentId);
-  formData.append("studentId", user.uid);
-  formData.append("studentName", preferredName);
-  formData.append("studentEmail", preferredEmail);
+      formData.append("assignmentId", assignmentId);
+      formData.append("studentId", user.uid);
+      formData.append("studentName", preferredName);
+      formData.append("studentEmail", preferredEmail);
       formData.append("file", file);
 
       const res = await fetch("/api/submissions", {
@@ -285,27 +324,38 @@ export default function AssignmentsPage() {
       });
 
       if (res.ok) {
-        setSelectedFile(prev => ({
+        setSelectedFile((prev) => ({
           ...prev,
-          [assignmentId]: null
+          [assignmentId]: null,
         }));
         const input = fileInputRefs.current[assignmentId];
         if (input) {
           input.value = "";
         }
         await loadSubmissions(assignmentId);
-        alert("Assignment submitted successfully!");
+        toast({
+          title: "Assignment submitted",
+          description: "Your file has been uploaded successfully.",
+        });
       } else {
         const error = await res.json();
-        alert("Failed to submit assignment: " + error.error);
+        toast({
+          title: "Submission failed",
+          description: error?.error || "Server returned an error.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("Error submitting assignment:", err);
-      alert("Failed to submit assignment");
+      toast({
+        title: "Submission failed",
+        description: err.message || "Unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
-      setUploading(prev => ({
+      setUploading((prev) => ({
         ...prev,
-        [assignmentId]: false
+        [assignmentId]: false,
       }));
     }
   };
@@ -314,8 +364,10 @@ export default function AssignmentsPage() {
     // Prefer server-enriched title
     if (assignment?.courseTitle) return assignment.courseTitle;
     const cid = assignment?.courseId || assignment?.classId;
-    const course = courses.find(c => c.id === cid);
-    return course ? `${course.name} (${course.courseCode || course.code || ""})` : "Unknown Course";
+    const course = courses.find((c) => c.id === cid);
+    return course
+      ? `${course.name} (${course.courseCode || course.code || ""})`
+      : "Unknown Course";
   };
 
   const isOverdue = (deadline) => {
@@ -324,12 +376,12 @@ export default function AssignmentsPage() {
 
   const hasSubmitted = (assignmentId) => {
     const assignmentSubmissions = submissions[assignmentId] || [];
-    return assignmentSubmissions.some(sub => sub.studentId === user?.uid);
+    return assignmentSubmissions.some((sub) => sub.studentId === user?.uid);
   };
 
   const getSubmission = (assignmentId) => {
     const assignmentSubmissions = submissions[assignmentId] || [];
-    return assignmentSubmissions.find(sub => sub.studentId === user?.uid);
+    return assignmentSubmissions.find((sub) => sub.studentId === user?.uid);
   };
 
   const groupAssignmentsByStatus = () => {
@@ -337,7 +389,7 @@ export default function AssignmentsPage() {
     const submitted = [];
     const overdue = [];
 
-    assignments.forEach(assignment => {
+    assignments.forEach((assignment) => {
       const submittedStatus = hasSubmitted(assignment.id);
       const overdueStatus = isOverdue(assignment.deadline);
 
@@ -357,11 +409,13 @@ export default function AssignmentsPage() {
     let filtered = [...assignmentsList];
 
     if (filterCourse && filterCourse !== "all") {
-      filtered = filtered.filter(a => (a.courseId || a.classId) === filterCourse);
+      filtered = filtered.filter(
+        (a) => (a.courseId || a.classId) === filterCourse
+      );
     }
 
     if (filterDeadline) {
-      filtered = filtered.filter(a => {
+      filtered = filtered.filter((a) => {
         const assignmentDate = new Date(a.deadline).toDateString();
         const filterDate = new Date(filterDeadline).toDateString();
         return assignmentDate === filterDate;
@@ -390,7 +444,9 @@ export default function AssignmentsPage() {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
         <h1 className="text-2xl font-bold mb-4">Assignments</h1>
-        <p className="text-gray-600">Please log in to access your assignments.</p>
+        <p className="text-gray-600">
+          Please log in to access your assignments.
+        </p>
       </div>
     );
   }
@@ -406,14 +462,14 @@ export default function AssignmentsPage() {
   // Combine enrolled courses and assignment-derived courses (dedupe by id)
   const combinedCourses = (() => {
     const map = new Map();
-    assignmentCourseOptions.forEach(c => map.set(c.id, c));
-    courses.forEach(c => {
+    assignmentCourseOptions.forEach((c) => map.set(c.id, c));
+    courses.forEach((c) => {
       const cid = c.id || c._id || c.courseId;
       if (!cid) return;
       if (!map.has(cid)) {
         map.set(cid, {
           id: cid,
-          name: c.name || c.title || c.courseTitle || cid
+          name: c.name || c.title || c.courseTitle || cid,
         });
       } else {
         // prefer nicer name if available
@@ -424,7 +480,9 @@ export default function AssignmentsPage() {
         }
       }
     });
-    return Array.from(map.values()).sort((a,b) => a.name.localeCompare(b.name));
+    return Array.from(map.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
   })();
 
   const { pending, submitted, overdue } = groupAssignmentsByStatus();
@@ -463,7 +521,11 @@ export default function AssignmentsPage() {
           {assignment.fileUrl && (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" asChild>
-                <a href={assignment.fileUrl} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={assignment.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <Download className="h-4 w-4 mr-2" />
                   Download Assignment
                 </a>
@@ -482,7 +544,11 @@ export default function AssignmentsPage() {
               </p>
               {submission.fileUrl && (
                 <Button variant="outline" size="sm" asChild>
-                  <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={submission.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <Download className="h-4 w-4 mr-2" />
                     View Your Submission
                   </a>
@@ -504,7 +570,9 @@ export default function AssignmentsPage() {
                     }
                   }}
                   type="file"
-                  onChange={(e) => handleFileSelect(assignment.id, e.target.files?.[0] || null)}
+                  onChange={(e) =>
+                    handleFileSelect(assignment.id, e.target.files?.[0] || null)
+                  }
                   accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png,.py,.js,.java,.cpp"
                   className="hidden"
                 />
@@ -528,9 +596,13 @@ export default function AssignmentsPage() {
                   Accepted formats: PDF, DOC, TXT, ZIP, Images, Code files
                 </p>
               </div>
-              <Button 
+              <Button
                 onClick={() => submitAssignment(assignment.id)}
-                disabled={!selectedFile[assignment.id] || uploading[assignment.id] || isOverdueStatus}
+                disabled={
+                  !selectedFile[assignment.id] ||
+                  uploading[assignment.id] ||
+                  isOverdueStatus
+                }
                 className="w-full"
               >
                 {uploading[assignment.id] ? (
@@ -555,7 +627,9 @@ export default function AssignmentsPage() {
           ) : (
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-              <p className="text-sm text-gray-600">Cannot submit - deadline has passed</p>
+              <p className="text-sm text-gray-600">
+                Cannot submit - deadline has passed
+              </p>
             </div>
           )}
         </CardContent>
@@ -567,7 +641,9 @@ export default function AssignmentsPage() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Assignments</h1>
-        <p className="text-gray-600">Manage and submit your course assignments</p>
+        <p className="text-gray-600">
+          Manage and submit your course assignments
+        </p>
       </div>
 
       <Tabs defaultValue="pending" className="space-y-4">
@@ -578,9 +654,7 @@ export default function AssignmentsPage() {
           <TabsTrigger value="submitted">
             Submitted ({submitted.length})
           </TabsTrigger>
-          <TabsTrigger value="overdue">
-            Overdue ({overdue.length})
-          </TabsTrigger>
+          <TabsTrigger value="overdue">Overdue ({overdue.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4">
@@ -626,9 +700,9 @@ export default function AssignmentsPage() {
               {/* Clear Filters Button */}
               {(filterCourse !== "all" || filterDeadline) && (
                 <div className="mt-4">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={clearFilters}
                     className="flex items-center gap-2"
                   >
@@ -647,14 +721,22 @@ export default function AssignmentsPage() {
                 {pending.length === 0 ? (
                   <>
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                    <h3 className="text-lg font-semibold text-green-700">All caught up!</h3>
-                    <p className="text-gray-600">You have no pending assignments.</p>
+                    <h3 className="text-lg font-semibold text-green-700">
+                      All caught up!
+                    </h3>
+                    <p className="text-gray-600">
+                      You have no pending assignments.
+                    </p>
                   </>
                 ) : (
                   <>
                     <Filter className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-700">No assignments match your filters</h3>
-                    <p className="text-gray-600">Try adjusting your filter criteria.</p>
+                    <h3 className="text-lg font-semibold text-gray-700">
+                      No assignments match your filters
+                    </h3>
+                    <p className="text-gray-600">
+                      Try adjusting your filter criteria.
+                    </p>
                   </>
                 )}
               </CardContent>
@@ -662,9 +744,9 @@ export default function AssignmentsPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {filteredPending.map((assignment) => (
-                <AssignmentCard 
-                  key={assignment.id} 
-                  assignment={assignment} 
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
                   showSubmitButton={true}
                 />
               ))}
@@ -677,16 +759,20 @@ export default function AssignmentsPage() {
             <Card>
               <CardContent className="text-center py-8">
                 <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700">No submissions match your filters</h3>
-                <p className="text-gray-600">Adjust or clear filters to see more.</p>
+                <h3 className="text-lg font-semibold text-gray-700">
+                  No submissions match your filters
+                </h3>
+                <p className="text-gray-600">
+                  Adjust or clear filters to see more.
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {filteredSubmitted.map((assignment) => (
-                <AssignmentCard 
-                  key={assignment.id} 
-                  assignment={assignment} 
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
                   showSubmitButton={false}
                 />
               ))}
@@ -699,16 +785,20 @@ export default function AssignmentsPage() {
             <Card>
               <CardContent className="text-center py-8">
                 <Calendar className="h-12 w-12 mx-auto text-blue-500 mb-4" />
-                <h3 className="text-lg font-semibold text-blue-700">No overdue assignments match filters</h3>
-                <p className="text-gray-600">Adjust or clear filters to see more.</p>
+                <h3 className="text-lg font-semibold text-blue-700">
+                  No overdue assignments match filters
+                </h3>
+                <p className="text-gray-600">
+                  Adjust or clear filters to see more.
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {filteredOverdue.map((assignment) => (
-                <AssignmentCard 
-                  key={assignment.id} 
-                  assignment={assignment} 
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
                   showSubmitButton={false}
                 />
               ))}
