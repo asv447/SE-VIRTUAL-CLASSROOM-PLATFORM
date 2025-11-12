@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -59,6 +60,7 @@ export default function ClassyncDashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState([]);
+  const [courseProgress, setCourseProgress] = useState({}); // Store progress for each course
 
   // [NEW] State for student joining a course
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
@@ -83,9 +85,40 @@ export default function ClassyncDashboard() {
       const data = await res.json();
       console.log("Courses from API:", data);
       setCourses(data);
+
+      // Fetch progress for each course if user is a student
+      if (role === "student" && uid) {
+        fetchCoursesProgress(data, uid);
+      }
     } catch (error) {
       console.error("Error fetching courses:", error);
       toast.error("Could not load courses.");
+    }
+  };
+
+  // Fetch assignment progress for all courses
+  const fetchCoursesProgress = async (coursesData, uid) => {
+    const progressData = {};
+    
+    try {
+      await Promise.all(
+        coursesData.map(async (course) => {
+          try {
+            const res = await fetch(
+              `/api/courses/progress?courseId=${course.id}&studentId=${uid}`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              progressData[course.id] = data;
+            }
+          } catch (err) {
+            console.error(`Error fetching progress for course ${course.id}:`, err);
+          }
+        })
+      );
+      setCourseProgress(progressData);
+    } catch (error) {
+      console.error("Error fetching course progress:", error);
     }
   };
 
@@ -547,7 +580,43 @@ export default function ClassyncDashboard() {
                             <span>{course.students?.length || 0}</span>
                           </div>
                         </div>
-                        {course.progress > 0 && (
+                        
+                        {/* Show assignment progress for students only */}
+                        {!isAdmin && courseProgress[course.id] && (
+                          <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground font-medium">
+                                Assignment Progress
+                              </span>
+                              <span className="font-semibold text-primary">
+                                {courseProgress[course.id].submittedAssignments}/{courseProgress[course.id].totalAssignments}
+                              </span>
+                            </div>
+                            {courseProgress[course.id].totalAssignments > 0 ? (
+                              <>
+                                <Progress 
+                                  value={courseProgress[course.id].percentage} 
+                                  className="h-2.5"
+                                />
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-muted-foreground">
+                                    {courseProgress[course.id].totalAssignments - courseProgress[course.id].submittedAssignments} remaining
+                                  </span>
+                                  <span className="font-medium text-primary">
+                                    {courseProgress[course.id].percentage}% complete
+                                  </span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="text-xs text-muted-foreground text-center py-1">
+                                No assignments yet
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Keep the old progress bar for backward compatibility (if exists in course data) */}
+                        {course.progress > 0 && isAdmin && (
                           <div className="space-y-2">
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">
@@ -565,6 +634,7 @@ export default function ClassyncDashboard() {
                             </div>
                           </div>
                         )}
+                        
                         <div className="flex items-center justify-between pt-2">
                           <div className="flex gap-2">
                             {course.assignments > 0 && (
