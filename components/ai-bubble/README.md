@@ -7,11 +7,13 @@ A floating AI assistant bubble that appears on every page of your Virtual Classr
 ## ✅ Files Created/Modified
 
 ### New Files:
+
 1. **`components/ai-bubble/AIBubble.tsx`** - Main AI Bubble component
 2. **`app/api/ai-chat/route.ts`** - Next.js API route (proxy to Python backend)
 3. **`components/ai-bubble/BACKEND_SETUP.md`** - Detailed backend setup guide
 
 ### Modified Files:
+
 1. **`app/layout.tsx`** - Added AIBubble component to root layout
 
 ## 🚀 Quick Start (3 Steps)
@@ -37,6 +39,7 @@ The backend will run on `http://127.0.0.1:5000`
 ### Step 2: Configure Frontend Environment
 
 Add to your `.env.local` file (in project root):
+
 ```bash
 NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:5000
 ```
@@ -58,7 +61,7 @@ Visit `http://localhost:3000` - you'll see the AI bubble in the bottom-right cor
 🎭 **Theme-Aware**: Automatically matches your light/dark theme  
 ⚡ **Loading States**: Visual feedback while AI is thinking  
 🔄 **Error Handling**: Graceful error messages if backend is offline  
-📱 **Responsive**: Works on all screen sizes  
+📱 **Responsive**: Works on all screen sizes
 
 ## 🔧 How It Works
 
@@ -97,16 +100,19 @@ Display in AI Bubble
 ## 🐛 Troubleshooting
 
 ### AI Bubble shows error message
+
 - **Check**: Is the Python backend running? (`python app.py`)
 - **Check**: Is `NEXT_PUBLIC_BACKEND_URL` set in `.env.local`?
 - **Check**: Is your Groq API key valid in `backend/.env`?
 
 ### "Failed to get response" error
+
 - Test backend directly: `curl http://127.0.0.1:5000/health`
 - Check backend terminal for error logs
 - Verify no firewall blocking port 5000
 
 ### Styling doesn't match theme
+
 - The component uses Tailwind CSS variables
 - Check your theme settings in `globals.css`
 - Component automatically adapts to light/dark mode
@@ -114,19 +120,26 @@ Display in AI Bubble
 ## 🎨 Customization
 
 ### Change Button Position
+
 Edit `AIBubble.tsx`, line ~75:
+
 ```tsx
 <div className="fixed bottom-6 right-6 z-50">
 ```
+
 Change `bottom-6 right-6` to your preferred position.
 
 ### Change Button Color
+
 The button uses theme colors:
+
 - `bg-primary` - button background
 - `text-primary-foreground` - icon color
 
 ### Change Chat Window Size
+
 Edit `AIBubble.tsx`, line ~97:
+
 ```tsx
 <div className="w-96 h-[32rem] ...">
 ```
@@ -134,11 +147,13 @@ Edit `AIBubble.tsx`, line ~97:
 ## 🚀 Deployment
 
 See `BACKEND_SETUP.md` for detailed deployment instructions for:
+
 - Render.com (recommended)
 - Railway.app
 - Heroku
 
 After deploying backend, update `.env.local`:
+
 ```bash
 NEXT_PUBLIC_BACKEND_URL=https://your-backend-url.com
 ```

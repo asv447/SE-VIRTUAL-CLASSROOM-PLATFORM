@@ -28,8 +28,8 @@ export default function AIBubble() {
     setIsLoading(true);
 
     try {
-      // Call the Next.js API route which proxies to the Python backend
-      const response = await fetch('/api/ai-chat', {
+      // Call the Next.js API route which proxies to the AI Bubble backend
+      const response = await fetch('/api/ai-bubble', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
