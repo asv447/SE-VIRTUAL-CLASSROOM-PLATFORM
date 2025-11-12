@@ -7,6 +7,8 @@ import {
 } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
+const MAX_POLL_OPTIONS = 6;
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -21,7 +23,12 @@ export async function GET(request) {
     const posts = await streamsCollection
       .aggregate([
         { $match: { classId: classId } },
-        { $sort: { createdAt: -1 } },
+        {
+          $addFields: {
+            isPinned: { $ifNull: ["$isPinned", false] },
+          },
+        },
+        { $sort: { isPinned: -1, createdAt: -1 } },
         {
           $lookup: {
             from: "users",
@@ -52,6 +59,7 @@ export async function GET(request) {
             comments: 1,
             poll: 1,
             createdAt: 1,
+            isPinned: 1,
             author: {
               name: {
                 $ifNull: [
@@ -92,6 +100,7 @@ export async function POST(request) {
       link,
       assignment,
       poll,
+      isPinned,
     } = await request.json();
 
     // [UPDATE] Validate title and content
@@ -114,6 +123,7 @@ export async function POST(request) {
               typeof option?.text === "string" ? option.text.trim() : ""
             )
             .filter((text, index, self) => text && self.indexOf(text) === index)
+            .slice(0, MAX_POLL_OPTIONS)
         : [];
 
       if (question && cleanOptions.length >= 2) {
@@ -143,7 +153,9 @@ export async function POST(request) {
       assignment: assignment || null,
       comments: [],
       poll: pollData,
+      isPinned: Boolean(isPinned),
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     const result = await streamsCollection.insertOne(newPost);
@@ -200,6 +212,169 @@ export async function POST(request) {
   }
 }
 
+export async function PATCH(request) {
+  try {
+    const { postId, requesterId, updates, classId } = await request.json();
+
+    if (!postId || !requesterId || !updates) {
+      return NextResponse.json(
+        { error: "Missing required fields: postId, requesterId, updates" },
+        { status: 400 }
+      );
+    }
+
+    if (!ObjectId.isValid(postId)) {
+      return NextResponse.json({ error: "Invalid postId" }, { status: 400 });
+    }
+
+    const streamsCollection = await getStreamsCollection();
+    const usersCollection = await getUsersCollection();
+
+    const postObjectId = new ObjectId(postId);
+    const post = await streamsCollection.findOne({ _id: postObjectId });
+
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    if (classId && post.classId !== classId) {
+      return NextResponse.json({ error: "Post not found in this class" }, { status: 404 });
+    }
+
+    const requester = await usersCollection.findOne({ uid: requesterId });
+    const requesterRole = requester?.role;
+    const isAuthor = requesterId === post.authorId;
+    const isInstructorOrAdmin = requesterRole === "instructor" || requesterRole === "admin";
+
+    if (!isAuthor && !isInstructorOrAdmin) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
+    const updateDoc = { $set: {} };
+    let hasUpdates = false;
+
+    if (typeof updates.title === "string") {
+      updateDoc.$set.title = updates.title.trim();
+      hasUpdates = true;
+    }
+
+    if (typeof updates.content === "string") {
+      updateDoc.$set.content = updates.content.trim();
+      hasUpdates = true;
+    }
+
+    if (typeof updates.isImportant === "boolean") {
+      updateDoc.$set.isImportant = updates.isImportant;
+      hasUpdates = true;
+    }
+
+    if (typeof updates.isUrgent === "boolean") {
+      updateDoc.$set.isUrgent = updates.isUrgent;
+      hasUpdates = true;
+    }
+
+    if (typeof updates.isPinned === "boolean") {
+      updateDoc.$set.isPinned = updates.isPinned;
+      hasUpdates = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "link")) {
+      let linkValue = null;
+      if (updates.link && typeof updates.link === "object") {
+        const url = typeof updates.link.url === "string" ? updates.link.url.trim() : "";
+        const text = typeof updates.link.text === "string" ? updates.link.text.trim() : "";
+        if (url) {
+          linkValue = {
+            url,
+            text: text || "View Link",
+          };
+        }
+      }
+      updateDoc.$set.link = linkValue;
+      hasUpdates = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "poll")) {
+      if (updates.poll === null) {
+        updateDoc.$set.poll = null;
+        hasUpdates = true;
+      } else if (updates.poll && typeof updates.poll === "object") {
+        const question = typeof updates.poll.question === "string" ? updates.poll.question.trim() : "";
+        const allowMultiple = Boolean(updates.poll.allowMultiple);
+        const optionInputs = Array.isArray(updates.poll.options) ? updates.poll.options : [];
+
+        const cleanOptions = optionInputs
+          .map((option) => {
+            const text = typeof option?.text === "string" ? option.text.trim() : "";
+            const id = typeof option?.id === "string" ? option.id : null;
+            if (!text) return null;
+            return { id, text };
+          })
+          .filter(Boolean);
+
+        if (!question || cleanOptions.length < 2) {
+          return NextResponse.json({ error: "Poll must include a question and at least two options" }, { status: 400 });
+        }
+
+        const existingOptions = new Map();
+        if (post.poll?.options) {
+          for (const option of post.poll.options) {
+            existingOptions.set(option.id, option);
+          }
+        }
+
+        const uniqueOptions = [];
+        for (const option of cleanOptions) {
+          if (!uniqueOptions.find((candidate) => candidate.text === option.text)) {
+            uniqueOptions.push(option);
+          }
+        }
+
+        const limitedOptions = uniqueOptions.slice(0, MAX_POLL_OPTIONS);
+
+        if (limitedOptions.length < 2) {
+          return NextResponse.json({ error: "Poll must include unique options" }, { status: 400 });
+        }
+
+        const nextOptions = limitedOptions.map((option) => {
+          const existing = option.id ? existingOptions.get(option.id) : null;
+          return {
+            id: existing?.id || new ObjectId().toString(),
+            text: option.text,
+            voterIds: existing?.voterIds || [],
+          };
+        });
+
+        updateDoc.$set.poll = {
+          question,
+          allowMultiple,
+          options: nextOptions,
+          createdAt: post.poll?.createdAt || new Date(),
+          updatedAt: new Date(),
+        };
+        hasUpdates = true;
+      }
+    }
+
+    if (!hasUpdates) {
+      return NextResponse.json({ error: "No valid updates provided" }, { status: 400 });
+    }
+
+    updateDoc.$set.updatedAt = new Date();
+
+    const result = await streamsCollection.updateOne({ _id: postObjectId }, updateDoc);
+
+    if (!result.acknowledged || result.matchedCount !== 1) {
+      return NextResponse.json({ error: "Failed to update post" }, { status: 500 });
+    }
+
+    return NextResponse.json({ message: "Post updated" }, { status: 200 });
+  } catch (err) {
+    console.error("Error updating stream post:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 export async function DELETE(request) {
   try {
     const { postId, requesterId, classId } = await request.json();
@@ -240,7 +415,7 @@ export async function DELETE(request) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
 
-  const result = await streamsCollection.deleteOne({ _id: postObjectId });
+    const result = await streamsCollection.deleteOne({ _id: postObjectId });
 
     if (!result.acknowledged || result.deletedCount !== 1) {
       return NextResponse.json({ error: "Failed to delete post" }, { status: 500 });
