@@ -65,6 +65,13 @@ export default function AdminDashboard() {
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [studentDirectory, setStudentDirectory] = useState({});
+  const [gradingSubmission, setGradingSubmission] = useState(null);
+  const [gradeForm, setGradeForm] = useState({
+    grade: "",
+    maxScore: "",
+    feedback: "",
+  });
+  const [gradeSaving, setGradeSaving] = useState(false);
 
   const [formLoading, setFormLoading] = useState(false);
   // [FIX] Changed state names to match what we send to the API
@@ -499,6 +506,77 @@ export default function AdminDashboard() {
     const displayEmail =
       directoryEntry?.email || submission.studentEmail || null;
     return { displayName, displayEmail };
+  };
+
+  const openGradeDialog = (submission) => {
+    const normalizeNumberInput = (value) =>
+      value === null || value === undefined ? "" : String(value);
+    setGradingSubmission(submission);
+    setGradeForm({
+      grade: normalizeNumberInput(submission?.grade),
+      maxScore: normalizeNumberInput(submission?.maxScore),
+      feedback: submission?.feedback || "",
+    });
+  };
+
+  const closeGradeDialog = () => {
+    setGradingSubmission(null);
+    setGradeForm({ grade: "", maxScore: "", feedback: "" });
+  };
+
+  const handleGradeFormChange = (field, value) => {
+    setGradeForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const submitGrade = async () => {
+    if (!gradingSubmission) {
+      toast.error("No submission selected for grading");
+      return;
+    }
+    if (!user?.uid) {
+      toast.error("User context missing. Please sign in again.");
+      return;
+    }
+
+    setGradeSaving(true);
+    try {
+      const payload = {
+        submissionId: gradingSubmission.id,
+        grade: gradeForm.grade.trim() === "" ? null : gradeForm.grade.trim(),
+        maxScore:
+          gradeForm.maxScore.trim() === "" ? null : gradeForm.maxScore.trim(),
+        feedback: gradeForm.feedback.trim(),
+      };
+
+      const res = await fetch(`/api/submissions`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-uid": user.uid,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err?.error || "Failed to save grade");
+        return;
+      }
+
+      const updated = await res.json();
+      setSubmissions((current) =>
+        current.map((item) =>
+          item.id === updated.id ? { ...item, ...updated } : item
+        )
+      );
+      toast.success("Submission graded successfully");
+      closeGradeDialog();
+    } catch (error) {
+      console.error("Error saving grade:", error);
+      toast.error("Unable to save grade right now");
+    } finally {
+      setGradeSaving(false);
+    }
   };
 
   if (!user) {
@@ -1031,6 +1109,40 @@ export default function AdminDashboard() {
                               </Button>
                             )}
                           </div>
+                          <div className="mt-4 space-y-2">
+                            <div className="text-sm text-gray-700">
+                              {submission.grade === null ||
+                              submission.grade === undefined
+                                ? "Not graded yet."
+                                : `Grade: ${submission.grade}${
+                                    submission.maxScore === null ||
+                                    submission.maxScore === undefined
+                                      ? ""
+                                      : ` / ${submission.maxScore}`
+                                  }`}
+                            </div>
+                            {submission.feedback && (
+                              <p className="text-sm text-gray-500 italic">
+                                Feedback: {submission.feedback}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-3">
+                              <Button
+                                size="sm"
+                                onClick={() => openGradeDialog(submission)}
+                              >
+                                {submission.grade === null ||
+                                submission.grade === undefined
+                                  ? "Grade submission"
+                                  : "Update grade"}
+                              </Button>
+                              {submission.gradedAt && (
+                                <span className="text-xs text-gray-500">
+                                  Graded {safeFormatDate(submission.gradedAt)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -1041,6 +1153,82 @@ export default function AdminDashboard() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog
+        open={!!gradingSubmission}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            closeGradeDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {gradingSubmission
+                ? `Grade ${
+                    resolveSubmissionMeta(gradingSubmission).displayName
+                  }`
+                : "Grade submission"}
+            </DialogTitle>
+            <DialogDescription>
+              {gradingSubmission
+                ? "Record the score and optional feedback for this submission. Leave grade blank to remove an existing score."
+                : "Record grading details."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="gradeInput">Grade</Label>
+              <Input
+                id="gradeInput"
+                value={gradeForm.grade}
+                onChange={(event) =>
+                  handleGradeFormChange("grade", event.target.value)
+                }
+                placeholder="e.g., 85"
+                inputMode="decimal"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="maxScoreInput">Max score</Label>
+              <Input
+                id="maxScoreInput"
+                value={gradeForm.maxScore}
+                onChange={(event) =>
+                  handleGradeFormChange("maxScore", event.target.value)
+                }
+                placeholder="e.g., 100"
+                inputMode="decimal"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="feedbackInput">Feedback</Label>
+              <Textarea
+                id="feedbackInput"
+                value={gradeForm.feedback}
+                onChange={(event) =>
+                  handleGradeFormChange("feedback", event.target.value)
+                }
+                placeholder="Share comments for the student"
+                rows={4}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={closeGradeDialog}
+              disabled={gradeSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={submitGrade} disabled={gradeSaving}>
+              {gradeSaving ? "Saving..." : "Save grade"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={!!assignmentToDelete}
