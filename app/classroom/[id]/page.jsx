@@ -11,7 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,17 @@ import { auth } from "../../../lib/firebase"; // Corrected path
 import { onAuthStateChanged } from "firebase/auth";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 // [DELETED] All socket.io imports are gone
 
 const MAX_POLL_OPTIONS = 6;
@@ -320,35 +331,18 @@ export default function ClassroomPage() {
   };
 
   const handleWhiteboardSave = async (payload, filename) => {
-    if (!user || !id) return;
-    const loadingId = toast.loading("Posting announcement...");
+    console.log('handleWhiteboardSave called', { payload, filename });
+    // The WhiteboardViewer now uploads directly to /api/announcements
+    // This handler just needs to close and refresh
     try {
-      const form = new FormData();
-      form.append("classId", id);
-      form.append("authorId", user.uid);
-      form.append("authorName", username || user.email || "");
-      form.append("title", "Whiteboard Material");
-      form.append("content", `Edited material from ${wbCurrentFile?.fileName || "whiteboard"}`);
-
-      if (typeof payload === 'string') {
-        // Back-compat: single image dataURL
-        const res = await fetch(payload);
-        const blob = await res.blob();
-        form.append("file", blob, filename || "whiteboard_edited.png");
-      } else if (payload && payload.annotatedPdf) {
-        // New flow: annotated PDF + notes text separately
-        const resPdf = await fetch(payload.annotatedPdf);
-        const pdfBlob = await resPdf.blob();
-        form.append("file", pdfBlob, filename || "whiteboard_annotated.pdf");
-        if (payload.notesText) form.append("notesText", payload.notesText);
-  }
       closeWhiteboard();
       // Refresh stream to show the new announcement
-      fetchStreamPosts();
+      await fetchStreamPosts();
       setWbSelectedFile(null);
+      toast.success("Announcement posted successfully!");
     } catch (e) {
       console.error("Whiteboard save failed:", e);
-      toast.error("Failed to post announcement", { id: loadingId });
+      toast.error("Failed to refresh announcements");
     }
   };
 
@@ -441,42 +435,42 @@ export default function ClassroomPage() {
     }
   };
 
-  // Handler for submitting a new comment
-  const handleCommentSubmit = async (e, post) => {
-    if (e.key !== "Enter" || !user) return;
-    const text = e.target.value.trim();
-    if (!text) return;
-    const postId = post._id ?? post.id;
-    if (!postId) return console.error("Missing post id");
-    const newComment = {
-      _id: `temp-${Date.now()}`,
-      author: { name: user.username, id: user.uid },
-      text, createdAt: new Date().toISOString(),
-    };
-    setStreamPosts((prevStreamPosts) =>
-      prevStreamPosts.map((p) => {
-        const pId = p._id ?? p.id;
-        if (pId === postId) {
-          return { ...p, comments: [...(p.comments || []), newComment] };
-        }
-        return p;
+  const handleDeletePost = async (postId) => {
+    if (!postId || !user) return;
+
+    const pid = postId.toString();
+    const initialPosts = [...streamPosts];
+    const loadingId = toast.loading("Deleting post...");
+
+    setStreamPosts((prev) =>
+      prev.filter((candidate) => {
+        const candidateId = (candidate._id ?? candidate.id)?.toString();
+        return candidateId !== pid;
       })
     );
-    e.target.value = "";
+
     try {
-      const res = await fetch("/api/comments", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+      const res = await fetch("/api/stream", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          postId: postId.toString(),
-          author: { name: user.username, id: user.uid }, text,
+          postId: pid,
+          classId: id,
+          requesterId: user.uid,
         }),
       });
-      if (!res.ok) throw new Error("Failed to save comment");
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to delete post");
+      }
+
+      toast.success("Post deleted", { id: loadingId });
       fetchStreamPosts();
-    } catch (err) {
-      console.error("Error sending comment:", err);
-      toast.error("Error sending comment.");
-      fetchStreamPosts();
+    } catch (error) {
+      console.error("Error deleting stream post:", error);
+      toast.error(error.message || "Failed to delete post", { id: loadingId });
+      setStreamPosts(initialPosts);
     }
   };
 
@@ -933,11 +927,44 @@ export default function ClassroomPage() {
                         key={pid || `post-${index}`}
                         className="border border-gray-200 rounded-md p-4 hover:shadow-sm transition"
                       >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-semibold text-gray-800">
-                            {post.author?.name || "Unknown"}
-                          </span>
-                          <span className="text-sm text-gray-500">{createdAt}</span>
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div>
+                            <span className="block font-semibold text-gray-800">
+                              {post.author?.name || "Unknown"}
+                            </span>
+                            <span className="text-sm text-gray-500">{createdAt}</span>
+                          </div>
+                          {isInstructor && pid && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                  aria-label="Delete announcement"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete this announcement?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. The announcement and any poll data will be permanently removed for everyone in the class.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeletePost(pid)}
+                                    className="bg-red-600 text-white hover:bg-red-700"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
 
                         {/* Post Title & Badges */}
@@ -1086,30 +1113,6 @@ export default function ClassroomPage() {
                           </div>
                         )}
 
-                        {/* Post-specific comments */}
-                        <div className="border-t border-gray-100 pt-3 mt-3">
-                          <div className="space-y-2 max-h-36 overflow-y-auto pr-2">
-                            {(post.comments || []).length === 0 ? (
-                              <p className="text-sm text-gray-500 italic">No comments yet</p>
-                            ) : (
-                              (post.comments || []).map((c, idx) => (
-                                <div key={c._id || idx} className="text-left">
-                                  <p className="text-sm font-semibold text-gray-800">
-                                    {c.author?.name || c.author || "Unknown"}
-                                  </p>
-                                  <p className="text-xs text-gray-600">{c.text}</p>
-                                </div>
-                              ))
-                            )}
-                          </div>
-
-                          <input
-                            type="text"
-                            placeholder="Add class comment..."
-                            className="mt-3 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                            onKeyDown={(e) => handleCommentSubmit(e, post)}
-                          />
-                        </div>
                       </div>
                     );
                   })}
@@ -1302,6 +1305,9 @@ export default function ClassroomPage() {
             pdfUrl={wbCurrentFile.fileUrl}
             onSave={handleWhiteboardSave}
             onClose={closeWhiteboard}
+            classId={id}
+            authorId={user?.uid}
+            authorName={username}
           />
         )}
       </div>

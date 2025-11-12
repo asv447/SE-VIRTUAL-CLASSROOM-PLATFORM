@@ -4,7 +4,7 @@ import {
   getUsersCollection,
   getCoursesCollection,
   getNotificationsCollection,
-} from "../../../lib/mongodb";
+} from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function GET(request) {
@@ -196,6 +196,59 @@ export async function POST(request) {
     );
   } catch (err) {
     console.error("Error adding stream post:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const { postId, requesterId, classId } = await request.json();
+
+    if (!postId || !requesterId) {
+      return NextResponse.json(
+        { error: "Missing required fields: postId, requesterId" },
+        { status: 400 }
+      );
+    }
+
+    if (!ObjectId.isValid(postId)) {
+      return NextResponse.json({ error: "Invalid postId" }, { status: 400 });
+    }
+
+    const streamsCollection = await getStreamsCollection();
+    const usersCollection = await getUsersCollection();
+
+    const postObjectId = new ObjectId(postId);
+    const post = await streamsCollection.findOne({ _id: postObjectId });
+
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    if (classId && post.classId !== classId) {
+      return NextResponse.json({ error: "Post not found in this class" }, { status: 404 });
+    }
+
+    const requester = await usersCollection.findOne({ uid: requesterId });
+    const requesterRole = requester?.role;
+    const isAuthorized =
+      requesterId === post.authorId ||
+      requesterRole === "instructor" ||
+      requesterRole === "admin";
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
+  const result = await streamsCollection.deleteOne({ _id: postObjectId });
+
+    if (!result.acknowledged || result.deletedCount !== 1) {
+      return NextResponse.json({ error: "Failed to delete post" }, { status: 500 });
+    }
+
+    return NextResponse.json({ message: "Post deleted" }, { status: 200 });
+  } catch (err) {
+    console.error("Error deleting stream post:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

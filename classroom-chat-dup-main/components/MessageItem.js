@@ -1,9 +1,20 @@
 // components/MessageItem.js
-export default function MessageItem({ user, text }) {
+import PropTypes from "prop-types";
+import {
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
+} from "../../components/ui/avatar";
+
+export default function MessageItem({ user, text, photoUrl }) {
   return (
     <div className="flex items-start space-x-4 p-3 hover:bg-gray-50 rounded-lg">
-      {/* Placeholder for user avatar */}
-      <div className="w-10 h-10 rounded-full bg-indigo-500 flex-shrink-0"></div>
+      <Avatar>
+        <AvatarImage src={photoUrl} alt={`${user}'s avatar`} />
+        <AvatarFallback className="bg-primary text-white">
+          {user?.charAt(0)?.toUpperCase() || "U"}
+        </AvatarFallback>
+      </Avatar>
       <div>
         <p className="font-semibold text-gray-900">{user}</p>
         <p className="text-gray-700">{text}</p>
@@ -11,3 +22,9 @@ export default function MessageItem({ user, text }) {
     </div>
   );
 }
+
+MessageItem.propTypes = {
+  user: PropTypes.string.isRequired,
+  text: PropTypes.string.isRequired,
+  photoUrl: PropTypes.string,
+};

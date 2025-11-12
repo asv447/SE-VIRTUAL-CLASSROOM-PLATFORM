@@ -5,24 +5,53 @@ import { useRouter } from "next/navigation"; // [FIX] Import useRouter
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
-import { 
-  BookOpen, 
-  Plus, 
-  Trash2, 
-  Download, 
-  Users, 
+import {
+  BookOpen,
+  Plus,
+  Trash2,
+  Download,
+  Users,
   Calendar,
   FileText,
-  Upload
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner"; // [FIX] Import toast
 
 export default function AdminDashboard() {
@@ -35,18 +64,19 @@ export default function AdminDashboard() {
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
-  
+  const [studentDirectory, setStudentDirectory] = useState({});
+
   const [formLoading, setFormLoading] = useState(false);
   // [FIX] Changed state names to match what we send to the API
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
-  
+
   const [newAssignment, setNewAssignment] = useState({
     title: "",
     description: "",
     deadline: "",
     courseId: "",
-    file: null
+    file: null,
   });
   const [selectedCourse, setSelectedCourse] = useState("");
   const [assignmentTitle, setAssignmentTitle] = useState("");
@@ -59,6 +89,10 @@ export default function AdminDashboard() {
   const [editingDeadline, setEditingDeadline] = useState({});
   const [deadlineInputs, setDeadlineInputs] = useState({});
   const [savingDeadline, setSavingDeadline] = useState({});
+  const [assignmentToDelete, setAssignmentToDelete] = useState(null);
+  const [deletingAssignment, setDeletingAssignment] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState(null);
+  const [deletingCourse, setDeletingCourse] = useState(false);
 
   // When selecting an assignment from the submissions tab dropdown
   const handleSelectSubmissionAssignment = async (assignmentId) => {
@@ -75,15 +109,16 @@ export default function AdminDashboard() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
       if (usr) {
-        let isInstructorEmail = usr.email?.includes("@instructor.com") || 
-                                usr.email?.includes("@admin.com");
-        
+        let isInstructorEmail =
+          usr.email?.includes("@instructor.com") ||
+          usr.email?.includes("@admin.com");
+
         try {
           const res = await fetch(`/api/users/${usr.uid}`);
           if (res.ok) {
             const data = await res.json();
             const isInstructorRole = data.user.role === "instructor";
-            
+
             // [FIX] Set the username from the database
             setUsername(data.user.username || usr.email.split("@")[0]);
 
@@ -107,7 +142,7 @@ export default function AdminDashboard() {
           // [FIX] Fallback for username on error
           setUsername(usr.email.split("@")[0]);
         }
-        
+
         setUser(usr);
       } else {
         setUser(null);
@@ -130,8 +165,32 @@ export default function AdminDashboard() {
     try {
       await Promise.all([
         loadCourses(),
-        loadAssignments()
+        loadAssignments(),
+        loadStudentDirectory(),
       ]);
+      const loadStudentDirectory = async () => {
+        if (!user) return;
+        try {
+          const res = await fetch("/api/users?role=student");
+          if (!res.ok) return;
+          const data = await res.json();
+          const directory = {};
+          const students = Array.isArray(data?.users) ? data.users : [];
+          students.forEach((student) => {
+            if (student.role && student.role !== "student") return;
+            const key = student.uid || student._id || student.id;
+            if (!key) return;
+            directory[key] = {
+              username:
+                student.username || student.email?.split("@")[0] || null,
+              email: student.email || null,
+            };
+          });
+          setStudentDirectory(directory);
+        } catch (err) {
+          console.error("Error loading student directory:", err);
+        }
+      };
     } catch (err) {
       console.error("Error loading data:", err);
     } finally {
@@ -141,10 +200,12 @@ export default function AdminDashboard() {
 
   const loadCourses = async () => {
     // [FIX] Make sure user is available before fetching
-    if (!user) return; 
+    if (!user) return;
     try {
       // [FIX] Call the API to get *only* this instructor's courses
-      const res = await fetch(`/api/courses?role=instructor&userId=${user.uid}`);
+      const res = await fetch(
+        `/api/courses?role=instructor&userId=${user.uid}`
+      );
       if (res.ok) {
         const data = await res.json();
         setCourses(data);
@@ -246,14 +307,20 @@ export default function AdminDashboard() {
   };
 
   const createAssignment = async () => {
-    if (!selectedCourse || !assignmentTitle || !assignmentDescription || !assignmentDeadline) {
+    if (
+      !selectedCourse ||
+      !assignmentTitle ||
+      !assignmentDescription ||
+      !assignmentDeadline
+    ) {
       toast.error("Please fill all required fields"); // [FIX] Use toast
       return;
     }
 
     setLoading(true);
     try {
-      if (!user || !username) { // [FIX] Check for username
+      if (!user || !username) {
+        // [FIX] Check for username
         toast.error("User not available. Please sign in again."); // [FIX] Use toast
         setLoading(false);
         return;
@@ -298,34 +365,41 @@ export default function AdminDashboard() {
     }
   };
 
-  const deleteAssignment = async (assignmentId) => {
-    if (!confirm("Delete this assignment and all its submissions?")) return;
-    
+  const handleDeleteAssignment = async () => {
+    if (!assignmentToDelete) return;
+    setDeletingAssignment(true);
     try {
-      const assignment = assignments.find(a => a.id === assignmentId);
+      const assignment = assignmentToDelete;
       const classId = assignment?.classId || assignment?.courseId;
-      
-      const res = await fetch(`/api/assignments/${assignmentId}?classId=${classId}`, {
-        method: "DELETE",
-      });
-      
+
+      const res = await fetch(
+        `/api/assignments/${assignment.id}?classId=${classId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
       if (res.ok) {
         await loadAssignments();
-        toast.success("Assignment deleted successfully!"); // [FIX] Use toast
+        toast.success("Assignment deleted successfully!");
       } else {
         const error = await res.json();
-        toast.error("Failed to delete assignment: " + error.error); // [FIX] Use toast
+        toast.error("Failed to delete assignment: " + error.error);
       }
     } catch (err) {
       console.error("Error deleting assignment:", err);
-      toast.error("Failed to delete assignment"); // [FIX] Use toast
+      toast.error("Failed to delete assignment");
+    } finally {
+      setDeletingAssignment(false);
+      setAssignmentToDelete(null);
     }
   };
 
-  const deleteCourse = async (courseId) => {
-    if (!confirm("Delete this course and related data (posts/assignments/submissions)?")) return;
+  const handleDeleteCourse = async () => {
+    if (!courseToDelete) return;
+    setDeletingCourse(true);
     try {
-      const res = await fetch(`/api/courses/${courseId}`, {
+      const res = await fetch(`/api/courses/${courseToDelete.id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -342,6 +416,9 @@ export default function AdminDashboard() {
     } catch (e) {
       console.error("Delete course error:", e);
       toast.error("Failed to delete course");
+    } finally {
+      setDeletingCourse(false);
+      setCourseToDelete(null);
     }
   };
 
@@ -400,7 +477,9 @@ export default function AdminDashboard() {
         toast.success("Deadline updated");
       } else {
         const e = await res.json();
-        toast.error("Failed to update deadline: " + (e?.error || res.statusText));
+        toast.error(
+          "Failed to update deadline: " + (e?.error || res.statusText)
+        );
       }
     } catch (err) {
       console.error("Error updating deadline:", err);
@@ -410,11 +489,25 @@ export default function AdminDashboard() {
     }
   };
 
+  const resolveSubmissionMeta = (submission) => {
+    const directoryEntry = studentDirectory[submission.studentId];
+    const displayName =
+      directoryEntry?.username ||
+      submission.studentName ||
+      submission.studentEmail ||
+      submission.studentId;
+    const displayEmail =
+      directoryEntry?.email || submission.studentEmail || null;
+    return { displayName, displayEmail };
+  };
+
   if (!user) {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
         <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
-        <p className="text-gray-600">Please log in to access the admin dashboard.</p>
+        <p className="text-gray-600">
+          Please log in to access the admin dashboard.
+        </p>
       </div>
     );
   }
@@ -428,378 +521,596 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <BookOpen className="h-8 w-8" />
-          Admin Dashboard
-        </h1>
-        <p className="text-gray-600">Welcome, {username}</p> {/* [FIX] Use username */}
-      </div>
+    <>
+      <div className="p-6 max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <BookOpen className="h-8 w-8" />
+            Admin Dashboard
+          </h1>
+          <p className="text-gray-600">Welcome, {username}</p>{" "}
+          {/* [FIX] Use username */}
+        </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="courses">Courses</TabsTrigger>
-          <TabsTrigger value="assignments">Assignments</TabsTrigger>
-          <TabsTrigger value="submissions">Submissions</TabsTrigger>
-        </TabsList>
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-4"
+        >
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="courses">Courses</TabsTrigger>
+            <TabsTrigger value="assignments">Assignments</TabsTrigger>
+            <TabsTrigger value="submissions">Submissions</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="courses" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle>Courses</CardTitle>
-                  <CardDescription>Manage your courses and subjects</CardDescription>
-                </div>
-                <Dialog open={isCreateCourseOpen} onOpenChange={setIsCreateCourseOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Course
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create New Course</DialogTitle>
-                      <DialogDescription>Add a new course or subject</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="courseName">Course Name *</Label>
-                        <Input
-                          id="courseName"
-                          value={courseTitle} // [FIX] Use correct state
-                          onChange={(e) => setCourseTitle(e.target.value)} // [FIX] Use correct state
-                          placeholder="e.g., Computer Science 101"
-                        />
-                      </div>
-                      
-                      {/* [FIX] Removed Course Code input, it's auto-generated */}
-
-                      <div>
-                        <Label htmlFor="courseDescription">Description</Label>
-                        <Textarea
-                          id="courseDescription"
-                          value={courseDescription}
-                          onChange={(e) => setCourseDescription(e.target.value)}
-                          placeholder="Course description..."
-                        />
-                      </div>
-                      <Button onClick={createCourse} disabled={loading} className="w-full">
-                        {loading ? "Creating..." : "Create Course"}
+          <TabsContent value="courses" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Courses</CardTitle>
+                    <CardDescription>
+                      Manage your courses and subjects
+                    </CardDescription>
+                  </div>
+                  <Dialog
+                    open={isCreateCourseOpen}
+                    onOpenChange={setIsCreateCourseOpen}
+                  >
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Course
                       </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {courses.length === 0 ? (
-                <p className="text-gray-600 text-center py-8">No courses created yet.</p>
-              ) : (
-                // [FIX] Updated to show clickable cards
-                <div className="grid gap-4 md:grid-cols-2">
-                  {courses.map((course) => (
-                    <Card 
-                      key={course.id} 
-                      className="hover:shadow-lg transition-shadow"
-                    >
-                      <CardHeader className="flex flex-row items-start justify-between gap-4">
-                        <div className="cursor-pointer" onClick={() => router.push(`/classroom/${course.id}`)}>
-                          <CardTitle>{course.name}</CardTitle>
-                          <CardDescription>Code: {course.courseCode}</CardDescription>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create New Course</DialogTitle>
+                        <DialogDescription>
+                          Add a new course or subject
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="courseName">Course Name *</Label>
+                          <Input
+                            id="courseName"
+                            value={courseTitle} // [FIX] Use correct state
+                            onChange={(e) => setCourseTitle(e.target.value)} // [FIX] Use correct state
+                            placeholder="e.g., Computer Science 101"
+                          />
+                        </div>
+
+                        {/* [FIX] Removed Course Code input, it's auto-generated */}
+
+                        <div>
+                          <Label htmlFor="courseDescription">Description</Label>
+                          <Textarea
+                            id="courseDescription"
+                            value={courseDescription}
+                            onChange={(e) =>
+                              setCourseDescription(e.target.value)
+                            }
+                            placeholder="Course description..."
+                          />
                         </div>
                         <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => deleteCourse(course.id)}
-                          title="Delete course"
+                          onClick={createCourse}
+                          disabled={loading}
+                          className="w-full"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {loading ? "Creating..." : "Create Course"}
                         </Button>
-                      </CardHeader>
-                      <CardContent className="cursor-pointer" onClick={() => router.push(`/classroom/${course.id}`)}>
-                        <p className="text-sm text-gray-600 truncate">{course.description || "No description."}</p>
-                        <div className="text-sm text-gray-500 mt-4">
-                          <p>{safeFormatDate(course.createdAt)}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="assignments" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle>Assignments</CardTitle>
-                  <CardDescription>Create and manage assignments</CardDescription>
-                </div>
-                <Dialog open={isCreateAssignmentOpen} onOpenChange={setIsCreateAssignmentOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Assignment
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Create New Assignment</DialogTitle>
-                      <DialogDescription>Add a new assignment for students</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="course">Course/Subject *</Label>
-                        <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a course" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {courses.map((course) => (
-                              <SelectItem key={course.id} value={course.id}>
-                                {course.name} ({course.courseCode}) {/* [FIX] Use courseCode */}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="title">Assignment Title *</Label>
-                        <Input
-                          id="title"
-                          value={assignmentTitle}
-                          onChange={(e) => setAssignmentTitle(e.target.value)}
-                          placeholder="Assignment title"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="description">Description *</Label>
-                        <Textarea
-                          id="description"
-                          value={assignmentDescription}
-                          onChange={(e) => setAssignmentDescription(e.target.value)}
-                          placeholder="Assignment description..."
-                          rows={4}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="deadline">Deadline *</Label>
-                        <Input
-                          id="deadline"
-                          type="datetime-local"
-                          value={assignmentDeadline}
-                          onChange={(e) => setAssignmentDeadline(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="file">Assignment File (Optional)</Label>
-                        <Input
-                          id="file"
-                          type="file"
-                          onChange={(e) => setAssignmentFile(e.target.files[0])}
-                          accept=".pdf,.doc,.docx,.txt,.zip"
-                        />
-                      </div>
-                      <Button onClick={createAssignment} disabled={loading} className="w-full">
-                        {loading ? "Creating..." : "Create Assignment"}
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {assignments.length === 0 ? (
-                <p className="text-gray-600 text-center py-8">No assignments created yet.</p>
-              ) : (
-                <div className="grid gap-4">
-                  {assignments.map((assignment) => (
-                    <div key={assignment.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg">{assignment.title}</h3>
-                          <p className="text-sm text-gray-600 mt-1">{assignment.description}</p>
-                          <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
-                            <div className="flex items-center gap-1">
-                              <BookOpen className="h-4 w-4" />
-                                  {assignment.courseTitle || courses.find(c => c.id === assignment.courseId || c.id === assignment.classId)?.name || "Unknown Course"}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              Deadline: {editingDeadline[assignment.id] ? (
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    type="datetime-local"
-                                    value={deadlineInputs[assignment.id] || ''}
-                                    onChange={(e) => setDeadlineInputs((p) => ({ ...p, [assignment.id]: e.target.value }))}
-                                    className="border px-2 py-1 rounded"
-                                  />
-                                  <Button onClick={() => saveDeadline(assignment.id)} size="sm" disabled={savingDeadline[assignment.id]}>
-                                    {savingDeadline[assignment.id] ? "Saving..." : "Save"}
-                                  </Button>
-                                  <Button onClick={() => cancelEditDeadline(assignment.id)} size="sm" variant="outline" disabled={savingDeadline[assignment.id]}>
-                                    Cancel
-                                  </Button>
-                                </div>
-                              ) : (
-                                <span 
-                                  onClick={() => startEditDeadline(assignment.id, assignment.deadline)} 
-                                  className="cursor-pointer underline text-blue-600 hover:text-blue-800"
-                                >
-                                  {safeFormatDate(assignment.deadline)}
-                                </span>
-                              )}
-                            </div>
+              </CardHeader>
+              <CardContent>
+                {courses.length === 0 ? (
+                  <p className="text-gray-600 text-center py-8">
+                    No courses created yet.
+                  </p>
+                ) : (
+                  // [FIX] Updated to show clickable cards
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {courses.map((course) => (
+                      <Card
+                        key={course.id}
+                        className="hover:shadow-lg transition-shadow"
+                      >
+                        <CardHeader className="flex flex-row items-start justify-between gap-4">
+                          <div
+                            className="cursor-pointer"
+                            onClick={() =>
+                              router.push(`/classroom/${course.id}`)
+                            }
+                          >
+                            <CardTitle>{course.name}</CardTitle>
+                            <CardDescription>
+                              Code: {course.courseCode}
+                            </CardDescription>
                           </div>
-                          {assignment.fileUrl && (
-                            <div className="mt-3">
-                              <Button variant="outline" size="sm" asChild>
-                                <a href={assignment.fileUrl} target="_blank" rel="noopener noreferrer">
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Download File
-                                </a>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => setCourseToDelete(course)}
+                            title="Delete course"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </CardHeader>
+                        <CardContent
+                          className="cursor-pointer"
+                          onClick={() => router.push(`/classroom/${course.id}`)}
+                        >
+                          <p className="text-sm text-gray-600 truncate">
+                            {course.description || "No description."}
+                          </p>
+                          <div className="text-sm text-gray-500 mt-4">
+                            <p>{safeFormatDate(course.createdAt)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="assignments" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Assignments</CardTitle>
+                    <CardDescription>
+                      Create and manage assignments
+                    </CardDescription>
+                  </div>
+                  <Dialog
+                    open={isCreateAssignmentOpen}
+                    onOpenChange={setIsCreateAssignmentOpen}
+                  >
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Assignment
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Create New Assignment</DialogTitle>
+                        <DialogDescription>
+                          Add a new assignment for students
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="course">Course/Subject *</Label>
+                          <Select
+                            value={selectedCourse}
+                            onValueChange={setSelectedCourse}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a course" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {courses.map((course) => (
+                                <SelectItem key={course.id} value={course.id}>
+                                  {course.name} ({course.courseCode}){" "}
+                                  {/* [FIX] Use courseCode */}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="title">Assignment Title *</Label>
+                          <Input
+                            id="title"
+                            value={assignmentTitle}
+                            onChange={(e) => setAssignmentTitle(e.target.value)}
+                            placeholder="Assignment title"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="description">Description *</Label>
+                          <Textarea
+                            id="description"
+                            value={assignmentDescription}
+                            onChange={(e) =>
+                              setAssignmentDescription(e.target.value)
+                            }
+                            placeholder="Assignment description..."
+                            rows={4}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="deadline">Deadline *</Label>
+                          <Input
+                            id="deadline"
+                            type="datetime-local"
+                            value={assignmentDeadline}
+                            onChange={(e) =>
+                              setAssignmentDeadline(e.target.value)
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="file">
+                            Assignment File (Optional)
+                          </Label>
+                          <Input
+                            id="file"
+                            type="file"
+                            onChange={(e) =>
+                              setAssignmentFile(e.target.files[0])
+                            }
+                            accept=".pdf,.doc,.docx,.txt,.zip"
+                          />
+                        </div>
+                        <Button
+                          onClick={createAssignment}
+                          disabled={loading}
+                          className="w-full"
+                        >
+                          {loading ? "Creating..." : "Create Assignment"}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {assignments.length === 0 ? (
+                  <p className="text-gray-600 text-center py-8">
+                    No assignments created yet.
+                  </p>
+                ) : (
+                  <div className="grid gap-4">
+                    {assignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className="border rounded-lg p-4"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg">
+                              {assignment.title}
+                            </h3>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {assignment.description}
+                            </p>
+                            <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <BookOpen className="h-4 w-4" />
+                                {assignment.courseTitle ||
+                                  courses.find(
+                                    (c) =>
+                                      c.id === assignment.courseId ||
+                                      c.id === assignment.classId
+                                  )?.name ||
+                                  "Unknown Course"}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                Deadline:{" "}
+                                {editingDeadline[assignment.id] ? (
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      type="datetime-local"
+                                      value={
+                                        deadlineInputs[assignment.id] || ""
+                                      }
+                                      onChange={(e) =>
+                                        setDeadlineInputs((p) => ({
+                                          ...p,
+                                          [assignment.id]: e.target.value,
+                                        }))
+                                      }
+                                      className="border px-2 py-1 rounded"
+                                    />
+                                    <Button
+                                      onClick={() =>
+                                        saveDeadline(assignment.id)
+                                      }
+                                      size="sm"
+                                      disabled={savingDeadline[assignment.id]}
+                                    >
+                                      {savingDeadline[assignment.id]
+                                        ? "Saving..."
+                                        : "Save"}
+                                    </Button>
+                                    <Button
+                                      onClick={() =>
+                                        cancelEditDeadline(assignment.id)
+                                      }
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={savingDeadline[assignment.id]}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span
+                                    onClick={() =>
+                                      startEditDeadline(
+                                        assignment.id,
+                                        assignment.deadline
+                                      )
+                                    }
+                                    className="cursor-pointer underline text-blue-600 hover:text-blue-800"
+                                  >
+                                    {safeFormatDate(assignment.deadline)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {assignment.fileUrl && (
+                              <div className="mt-3">
+                                <Button variant="outline" size="sm" asChild>
+                                  <a
+                                    href={assignment.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download File
+                                  </a>
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                viewAssignmentSubmissions(assignment)
+                              }
+                            >
+                              <Users className="h-4 w-4 mr-2" />
+                              View Submissions
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => setAssignmentToDelete(assignment)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {/* [NEW] Inline deadline editing */}
+                        <div className="mt-4">
+                          {editingDeadline[assignment.id] ? (
+                            <div className="flex gap-2">
+                              <Input
+                                type="datetime-local"
+                                value={deadlineInputs[assignment.id]}
+                                onChange={(e) =>
+                                  setDeadlineInputs({
+                                    ...deadlineInputs,
+                                    [assignment.id]: e.target.value,
+                                  })
+                                }
+                                className="flex-1"
+                              />
+                              <Button
+                                onClick={() => saveDeadline(assignment.id)}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() =>
+                                  cancelEditDeadline(assignment.id)
+                                }
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-500">
+                                Deadline: {safeFormatDate(assignment.deadline)}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  startEditDeadline(
+                                    assignment.id,
+                                    assignment.deadline
+                                  )
+                                }
+                              >
+                                Edit Deadline
                               </Button>
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => viewAssignmentSubmissions(assignment)}
-                          >
-                            <Users className="h-4 w-4 mr-2" />
-                            View Submissions
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteAssignment(assignment.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
                       </div>
-                      {/* [NEW] Inline deadline editing */}
-                      <div className="mt-4">
-                        {editingDeadline[assignment.id] ? (
-                          <div className="flex gap-2">
-                            <Input
-                              type="datetime-local"
-                              value={deadlineInputs[assignment.id]}
-                              onChange={(e) => setDeadlineInputs({ ...deadlineInputs, [assignment.id]: e.target.value })}
-                              className="flex-1"
-                            />
-                            <Button onClick={() => saveDeadline(assignment.id)}>
-                              Save
-                            </Button>
-                            <Button variant="outline" onClick={() => cancelEditDeadline(assignment.id)}>
-                              Cancel
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">
-                              Deadline: {safeFormatDate(assignment.deadline)}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => startEditDeadline(assignment.id, assignment.deadline)}
-                            >
-                              Edit Deadline
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="submissions" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Student Submissions</CardTitle>
-              <CardDescription>
-                {viewingSubmissions 
-                  ? `Submissions for "${viewingSubmissions.title}"`
-                  : "Select an assignment to view submissions"
-                }
-              </CardDescription>
-              {/* Assignment selector for viewing submissions */}
-              <div className="mt-4">
-                <Label className="mb-2 block">Choose assignment</Label>
-                <Select
-                  value={viewingSubmissions?.id || ""}
-                  onValueChange={handleSelectSubmissionAssignment}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an assignment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {assignments.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">No assignments available</div>
-                    ) : (
-                      assignments.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.title}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!viewingSubmissions ? (
-                <div className="text-center py-8">
-                  <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-600">Select an assignment above or go to the Assignments tab and click "View Submissions"</p>
-                </div>
-              ) : submissions.length === 0 ? (
-                <div className="text-center py-8">
-                  <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-600">No submissions yet for this assignment.</p>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {submissions.map((submission) => (
-                    <div key={submission.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold">{submission.studentName}</h3>
-                          <p className="text-sm text-gray-600">ID: {submission.studentId}</p>
-                          <p className="text-sm text-gray-500">
-                            Submitted: {safeFormatDate(submission.submittedAt)}
-                          </p>
+          <TabsContent value="submissions" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Student Submissions</CardTitle>
+                <CardDescription>
+                  {viewingSubmissions
+                    ? `Submissions for "${viewingSubmissions.title}"`
+                    : "Select an assignment to view submissions"}
+                </CardDescription>
+                {/* Assignment selector for viewing submissions */}
+                <div className="mt-4">
+                  <Label className="mb-2 block">Choose assignment</Label>
+                  <Select
+                    value={viewingSubmissions?.id || ""}
+                    onValueChange={handleSelectSubmissionAssignment}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an assignment" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignments.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">
+                          No assignments available
                         </div>
-                        {submission.fileUrl && (
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
-                              <Download className="h-4 w-4 mr-2" />
-                              Download
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      ) : (
+                        assignments.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.title}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+              </CardHeader>
+              <CardContent>
+                {!viewingSubmissions ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-600">
+                      Select an assignment above or go to the Assignments tab
+                      and click "View Submissions"
+                    </p>
+                  </div>
+                ) : submissions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-600">
+                      No submissions yet for this assignment.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {submissions.map((submission) => {
+                      const { displayName, displayEmail } =
+                        resolveSubmissionMeta(submission);
+                      return (
+                        <div
+                          key={submission.id}
+                          className="border rounded-lg p-4"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-semibold">{displayName}</h3>
+                              <p className="text-sm text-gray-600">
+                                ID: {submission.studentId}
+                              </p>
+                              {displayEmail && (
+                                <p className="text-sm text-gray-500">
+                                  Email: {displayEmail}
+                                </p>
+                              )}
+                              <p className="text-sm text-gray-500">
+                                Submitted:{" "}
+                                {safeFormatDate(submission.submittedAt)}
+                              </p>
+                            </div>
+                            {submission.fileUrl && (
+                              <Button variant="outline" size="sm" asChild>
+                                <a
+                                  href={submission.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Download
+                                </a>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <AlertDialog
+        open={!!assignmentToDelete}
+        onOpenChange={(open) => {
+          if (!open && !deletingAssignment) {
+            setAssignmentToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete assignment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`This will remove "${
+                assignmentToDelete?.title || "this assignment"
+              }" and all associated submissions.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="cursor-pointer"
+              disabled={deletingAssignment}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="cursor-pointer"
+              onClick={handleDeleteAssignment}
+              disabled={deletingAssignment}
+            >
+              {deletingAssignment ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!courseToDelete}
+        onOpenChange={(open) => {
+          if (!open && !deletingCourse) {
+            setCourseToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete course?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`This removes "${
+                courseToDelete?.name || "this course"
+              }" and related posts, assignments, and submissions.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="cursor-pointer"
+              disabled={deletingCourse}
+            >
+              Keep course
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="cursor-pointer"
+              onClick={handleDeleteCourse}
+              disabled={deletingCourse}
+            >
+              {deletingCourse ? "Deleting..." : "Delete course"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

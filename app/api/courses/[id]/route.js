@@ -5,7 +5,7 @@ import {
   getStreamsCollection,
   getAssignmentsCollection,
   getSubmissionsCollection,
-} from "../../../../lib/mongodb";
+} from "@/lib/mongodb";
 
 export async function DELETE(request, { params }) {
   try {

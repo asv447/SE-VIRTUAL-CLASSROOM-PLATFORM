@@ -1,6 +1,6 @@
 // app/api/users/route.js
 import { NextResponse } from "next/server";
-import { getUsersCollection } from "../../../lib/mongodb";
+import { getUsersCollection } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function GET(request) {
@@ -30,7 +30,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { uid, username, email, role = "student" } = await request.json();
+    const { uid, username, email, role = "student", emailVerified = false } = await request.json();
     if (!uid || !email) {
       return NextResponse.json({ error: "Missing uid or email" }, { status: 400 });
     }
@@ -49,6 +49,7 @@ export async function POST(request) {
       username,
       email,
       role,
+      emailVerified,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

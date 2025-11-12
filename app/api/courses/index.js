@@ -1,5 +1,5 @@
 // pages/api/courses/index.js
-import { getCoursesCollection } from "../../../lib/mongodb";
+import { getCoursesCollection } from "@/lib/mongodb";
 
 export default async function handler(req, res) {
   try {

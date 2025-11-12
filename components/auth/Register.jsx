@@ -1,12 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { auth } from "../../lib/firebase";
-import {
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
-  sendEmailVerification,
-} from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import Login from "./Login";
 
 export default function Register({ onBackToHome }) {
@@ -22,6 +18,8 @@ export default function Register({ onBackToHome }) {
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
+  const [emailVerificationStep, setEmailVerificationStep] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   useEffect(() => {
     function handleOnline() {
@@ -42,6 +40,104 @@ export default function Register({ onBackToHome }) {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+  const [resendDisabled, setResendDisabled] = useState(false);
+
+  // Send verification email on email submission
+  const handleEmailVerification = async (e) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!email) {
+      setError("Please enter an email.");
+      return;
+    }
+
+    if (!isOnline) {
+      setError("You're offline. Connect to the internet.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Send verification email
+      console.log("[Register] Sending verification email to:", email);
+      const res = await fetch("/api/auth/send-verification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send verification email");
+      }
+      setMessage("Verification email sent. Please check your inbox.");
+      setEmailVerificationStep(true);
+    } catch (err) {
+      console.error("Email verification error:", err);
+      setError(err.message || "Failed to send verification email.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if email is verified
+  const handleCheckEmailVerification = async () => {
+    setError("");
+    setMessage("");
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/auth/check-email-verified`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email }),
+      });
+      const data = await res.json();
+      if (data.emailVerified) {
+        console.log("[Register] Email verified!");
+        setMessage(
+          "Email verified successfully! Now complete your registration."
+        );
+        setEmailVerified(true);
+        setEmailVerificationStep(false);
+      } else {
+        setError("Email not verified yet. Please check your inbox.");
+      }
+    } catch (err) {
+      console.error("Check verification error:", err);
+      setError("Failed to check verification status.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resend verification email
+  const handleResendVerification = async () => {
+    if (!email) return;
+    try {
+      setResendDisabled(true);
+      setError("");
+      const res = await fetch("/api/auth/send-verification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to resend");
+      }
+      setMessage("Verification email resent. Check your inbox.");
+      setTimeout(() => setResendDisabled(false), 30 * 1000);
+    } catch (err) {
+      console.error("resend verification error:", err);
+      setError("Failed to resend verification email. Try again later.");
+      setResendDisabled(false);
+    }
+  };
 
   if (showLogin) {
     return (
@@ -58,10 +154,6 @@ export default function Register({ onBackToHome }) {
     setMessage("");
     console.log("[Register] Submit clicked. Email:", email);
 
-    if (!email) {
-      setError("Please enter an email.");
-      return;
-    }
     if (!password) {
       setError("Please enter a password.");
       return;
@@ -75,15 +167,12 @@ export default function Register({ onBackToHome }) {
       return;
     }
 
- 
     // Validate instructor credentials
     if (role === "instructor") {
       if (instructorPassword !== "instructor") {
         setError("Invalid instructor verification password.");
         return;
       }
-      // Force role to instructor if email is instructor domain
-      setRole("instructor");
     }
 
     setLoading(true);
@@ -103,57 +192,42 @@ export default function Register({ onBackToHome }) {
       });
 
       try {
-        console.log("[Register] Sending email verification...");
-        await sendEmailVerification(user);
-        setMessage(
-          "Verification email sent. Please check your inbox to verify your account."
-        );
-      } catch (verifErr) {
-        console.warn("sendEmailVerification error:", verifErr);
-        setError(
-          "Account created but failed to send verification email. Please check your email settings."
-        );
-      }
-
-      const username = email.split("@")[0];
-      console.log("[Register] Calling server API to create user doc:", {
-        uid: user?.uid,
-        username,
-        email,
-      });
-
-      // Try server-side API write first (recommended)
-      try {
-        const res = await fetch("/api/users", {
+        // Create user record with verified email
+        console.log("[Register] Creating user record in database...");
+        const username = (user.email || "").split("@")[0];
+        const userRes = await fetch("/api/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             uid: user.uid,
             username,
-            email,
+            email: user.email,
             role: role,
+            emailVerified: true,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) {
-          console.error("[Register] Server API write failed:", data);
-          throw new Error(data.error || "Server write failed");
-        }
-        console.log("[Register] Server API write success:", data);
+        const userData = await userRes.json();
+        console.log("[Register] User record created:", userData);
+
+        setMessage("Account created successfully!");
+
+        // Reset form
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        setEmailVerified(false);
+        setEmailVerificationStep(false);
+
+        // Go to home
+        setTimeout(() => {
+          onBackToHome && onBackToHome();
+        }, 1000);
       } catch (apiErr) {
         console.error("[Register] Server API error:", apiErr);
-
-        // Client-side fallback no longer needed - MongoDB handles all writes
+        setError(
+          "Account created but registration incomplete. Please refresh and try logging in."
+        );
       }
-
-      setError("");
-      setMessage((msg) =>
-        msg
-          ? msg + " Account created successfully!"
-          : "Account created successfully!"
-      );
-
-      onBackToHome && onBackToHome();
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
       console.error("[Register] Error during registration:", {
@@ -166,21 +240,39 @@ export default function Register({ onBackToHome }) {
         msg.toLowerCase().includes("network")
       ) {
         setError(
-          "Failed to contact server: you appear to be offline. Connect to the internet and try again."
+          "❌ Failed to contact server: you appear to be offline. Connect to the internet and try again."
         );
       } else {
         if (e.code === "auth/email-already-in-use") {
           setError(
-            "This email is already in use. Try logging in or use a different email."
+            "❌ This email is already registered. Please sign in instead or use a different email."
           );
         } else if (e.code === "auth/invalid-email") {
-          setError("Invalid email address.");
+          setError("❌ Invalid email address. Please check and try again.");
         } else if (e.code === "auth/weak-password") {
           setError(
-            "Password is too weak. Choose a stronger password (at least 6 characters)."
+            "❌ Password is too weak. Choose a stronger password (at least 6 characters)."
+          );
+        } else if (e.code === "auth/invalid-credential") {
+          setError(
+            "❌ Invalid credentials. Please check your details and try again."
+          );
+        } else if (e.code === "auth/too-many-requests") {
+          setError(
+            "❌ Too many registration attempts. Please try again later."
+          );
+        } else if (e.code === "auth/operation-not-allowed") {
+          setError(
+            "❌ Registration is currently disabled. Please contact support."
+          );
+        } else if (e.code === "auth/network-request-failed") {
+          setError(
+            "❌ Network error. Please check your internet connection and try again."
           );
         } else {
-          setError(msg);
+          setError(
+            "❌ Registration failed. Please try again or contact support."
+          );
         }
       }
       setMessage("");
@@ -190,58 +282,164 @@ export default function Register({ onBackToHome }) {
     }
   };
 
-  const handleGoogleRegister = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+  // Step 1: Email verification
+  if (emailVerificationStep) {
+    return (
+      <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
+        <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+          <button
+            type="button"
+            onClick={() => onBackToHome?.()}
+            className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="Close registration dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <h2 className="text-center text-2xl font-bold mb-4">
+            📧 Verify Your Email
+          </h2>
+          {error && (
+            <div className="text-red-600 text-sm text-center mb-4 p-3 bg-red-50 rounded">
+              {error}
+            </div>
+          )}
+          {message && (
+            <div className="text-green-600 text-sm text-center mb-4 p-3 bg-green-50 rounded">
+              {message}
+            </div>
+          )}
 
-      // Try server-side API write for Google registration
-      try {
-        const username = (user.email || "").split("@")[0];
-        const res = await fetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uid: user.uid,
-            username,
-            email: user.email,
-            role: "student",
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          console.error("[Google Register] Server API write failed:", data);
-          throw new Error(data.error || "Server write failed");
-        }
-        console.log("[Google Register] Server API write success:", data);
-      } catch (apiErr) {
-        console.error("[Google Register] Server API error:", apiErr);
-        throw new Error("Failed to create user record in database.");
-      }
+          <p className="mt-4 text-center text-sm text-gray-700">
+            A verification link was sent to
+            <br />
+            <strong className="block mt-2">{email}</strong>
+          </p>
 
-      onBackToHome && onBackToHome();
-    } catch (err) {
-      console.error("Google register error:", err);
-      const msg = err?.message || String(err);
-      if (msg.toLowerCase().includes("permission")) {
-        setError(
-          "Permission denied: Database write failed. Check server configuration."
-        );
-      } else if (msg.toLowerCase().includes("popup")) {
-        setError("Google sign-in popup blocked or closed. Try again.");
-      } else {
-        setError(msg);
-      }
-      setMessage("");
-    }
-  };
+          <p className="mt-4 text-center text-xs text-gray-600">
+            Please check your inbox and spam folder. Click the verification link
+            to activate your email.
+          </p>
 
+          <div className="mt-8 space-y-3">
+            <button
+              type="button"
+              onClick={handleCheckEmailVerification}
+              disabled={loading}
+              className="w-full py-3 px-4 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors disabled:bg-gray-400"
+            >
+              {loading ? "Checking..." : "✓ I have verified — Check Now"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resendDisabled}
+              className={`w-full py-2 px-4 rounded-xl font-medium transition-colors ${
+                resendDisabled
+                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {resendDisabled
+                ? "⏳ Please wait before resending..."
+                : "📤 Resend Verification Email"}
+            </button>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-gray-500 border-t pt-4">
+            ℹ️ Complete this step before proceeding with registration.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Step 2: Email verification done, but user hasn't entered password yet
+  if (!emailVerified) {
+    return (
+      <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
+        <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+          <button
+            type="button"
+            onClick={() => onBackToHome?.()}
+            className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="Close registration dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
+            Create your account
+          </h2>
+
+          <form className="mt-6 space-y-6" onSubmit={handleEmailVerification}>
+            {error && (
+              <div className="text-red-600 text-sm text-center">{error}</div>
+            )}
+            {message && (
+              <div className="text-green-600 text-sm text-center">
+                {message}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Email
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer disabled:bg-gray-400"
+            >
+              {loading ? "Sending..." : "Verify Email"}
+            </button>
+
+            <div className="text-center space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLogin(true)}
+                className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium"
+              >
+                Already have an account? Login
+              </button>
+              {onBackToHome && (
+                <button
+                  type="button"
+                  onClick={onBackToHome}
+                  className="text-gray-600 hover:text-gray-500 text-sm block cursor-pointer"
+                >
+                  Back to Home
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Step 3: Show password and role form after email is verified
   return (
     <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-      <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+      <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+        <button
+          type="button"
+          onClick={() => onBackToHome?.()}
+          className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          aria-label="Close registration dialog"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
-          Create your account
+          Complete Registration
         </h2>
 
         <form className="mt-6 space-y-6" onSubmit={handleRegister}>
@@ -254,14 +452,13 @@ export default function Register({ onBackToHome }) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Email
+              Email (Verified)
             </label>
             <input
               type="email"
-              required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              disabled
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-gray-100 cursor-not-allowed"
             />
           </div>
 
@@ -323,24 +520,28 @@ export default function Register({ onBackToHome }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
+            className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer disabled:bg-gray-400"
           >
             {loading ? "Creating..." : "Sign up"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleGoogleRegister}
-            className="w-full py-2 px-4 rounded-xl bg-white border border-gray-300 text-gray-700 font-medium shadow-md hover:bg-gray-100 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
-          >
-            Sign up with Google
           </button>
 
           <div className="text-center space-y-2 pt-2">
             <button
               type="button"
-              onClick={() => setShowLogin(true)}
+              onClick={() => {
+                setEmail("");
+                setEmailVerified(false);
+                setError("");
+                setMessage("");
+              }}
               className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium"
+            >
+              Use Different Email
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowLogin(true)}
+              className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium block"
             >
               Already have an account? Login
             </button>

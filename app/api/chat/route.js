@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getClassroomChatsCollection,
   getUsersCollection,
-} from "../../../lib/mongodb";
+} from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function GET(request) {
@@ -43,15 +43,20 @@ export async function GET(request) {
             createdAt: 1,
             author: {
               name: {
-                $ifNull: ["$authorDetails.username", "$authorDetails.name", "Unknown"],
+                $ifNull: [
+                  "$authorDetails.username",
+                  "$authorDetails.name",
+                  "Unknown",
+                ],
               },
               id: "$authorId",
+              photoUrl: "$authorDetails.photoUrl",
             },
           },
         },
       ])
       .toArray();
-    
+
     // Format the _id to id for the frontend
     const formattedMessages = messages.map((msg) => ({
       ...msg,

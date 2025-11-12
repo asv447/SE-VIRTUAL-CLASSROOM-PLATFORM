@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import SharedNavbar from '../components/navigation/shared-navbar'
+import AIBubble from '../components/ai-bubble/AIBubble'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <SharedNavbar />
         <main>{children}</main>
+        <AIBubble />
         <Analytics />
       </body>
     </html>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getCoursesCollection,
   getUsersCollection,
-} from "../../../../lib/mongodb";
+} from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function POST(request) {
