@@ -52,6 +52,9 @@ interface QuizHistoryItem {
   total: number;
   questions: QuizQuestion[];
   userAnswers: number[];
+  quizType: "mcq" | "tf";
+  grade: string;
+  numQuestions: number;
 }
 
 /* ===================== Component ===================== */
@@ -72,7 +75,10 @@ export default function QAInterface() {
   const [showQaHistory, setShowQaHistory] = useState(false);
 
   /* ---------- Quiz State ---------- */
+  const [quizType, setQuizType] = useState<"mcq" | "tf">("mcq"); // new
   const [quizTopic, setQuizTopic] = useState("");
+  const [grade, setGrade] = useState("Grade 9"); // default grade
+  const [numQuestions, setNumQuestions] = useState<number>(5);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [userAnswers, setUserAnswers] = useState<number[]>([]);
   const [quizLoading, setQuizLoading] = useState(false);
@@ -171,6 +177,9 @@ export default function QAInterface() {
     setUserAnswers([]);
     setSubmitted(false);
     setScore(null);
+    setQuizType("mcq");
+    setGrade("Grade 9");
+    setNumQuestions(5);
   };
 
   const clearQuizHistory = () => {
@@ -194,6 +203,17 @@ export default function QAInterface() {
       });
       return;
     }
+
+    // Validate numQuestions: max 20 and multiple of 5
+    if (numQuestions <= 0 || numQuestions > 20 || numQuestions % 5 !== 0) {
+      toast({
+        title: "Invalid number of questions",
+        description: "Please select 5, 10, 15 or 20 questions (max 20).",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setQuizLoading(true);
     setQuestions([]);
     setUserAnswers([]);
@@ -204,7 +224,12 @@ export default function QAInterface() {
       const res = await fetch(`${backendUrl}/api/generate-quiz`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: quizTopic }),
+        body: JSON.stringify({
+          topic: quizTopic,
+          quizType,
+          grade,
+          numQuestions,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate quiz");
@@ -239,6 +264,9 @@ export default function QAInterface() {
       total: questions.length,
       questions,
       userAnswers,
+      quizType,
+      grade,
+      numQuestions,
     };
     setQuizHistory((prev) => [entry, ...prev]);
   };
@@ -447,22 +475,74 @@ export default function QAInterface() {
                     <CardTitle>Generate Quiz</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <Input
-                      placeholder="Enter topic for quiz"
-                      value={quizTopic}
-                      onChange={(e) => setQuizTopic(e.target.value)}
-                    />
-                    <Button
-                      disabled={quizLoading}
-                      onClick={generateQuiz}
-                      className="bg-black text-white"
-                    >
-                      {quizLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Generate Quiz"
-                      )}
-                    </Button>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <Input
+                        placeholder="Enter topic for quiz"
+                        value={quizTopic}
+                        onChange={(e) => setQuizTopic(e.target.value)}
+                      />
+
+                      {/* Quiz Type selector */}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant={quizType === "mcq" ? undefined : "outline"}
+                          onClick={() => setQuizType("mcq")}
+                        >
+                          MCQ
+                        </Button>
+                        <Button
+                          variant={quizType === "tf" ? undefined : "outline"}
+                          onClick={() => setQuizType("tf")}
+                        >
+                          True / False
+                        </Button>
+                      </div>
+
+                      {/* Grade selector */}
+                      <select
+                        value={grade}
+                        onChange={(e) => setGrade(e.target.value)}
+                        className="rounded-md border p-2"
+                      >
+                        <option>Grade 5</option>
+                        <option>Grade 6</option>
+                        <option>Grade 7</option>
+                        <option>Grade 8</option>
+                        <option>Grade 9</option>
+                        <option>Grade 10</option>
+                        <option>Grade 11</option>
+                        <option>Grade 12</option>
+                        <option>Undergraduate</option>
+                      </select>
+                    </div>
+
+                    {/* Number of questions */}
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm">No. of questions:</label>
+                      <select
+                        value={numQuestions}
+                        onChange={(e) => setNumQuestions(Number(e.target.value))}
+                        className="rounded-md border p-2"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={15}>15</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <div className="ml-auto">
+                        <Button
+                          disabled={quizLoading}
+                          onClick={generateQuiz}
+                          className="bg-black text-white"
+                        >
+                          {quizLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Generate Quiz"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -470,7 +550,7 @@ export default function QAInterface() {
                 {questions.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle>MCQ Test</CardTitle>
+                      <CardTitle>Test — {quizType === "mcq" ? "MCQ" : "True/False"}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {questions.map((q, qi) => (
@@ -545,7 +625,7 @@ export default function QAInterface() {
                           <div key={h.id} className="border rounded-md p-2">
                             <p className="text-xs text-purple-500">{h.topic}</p>
                             <p className="text-sm">
-                              Score: {h.score}/{h.total}
+                              Type: {h.quizType.toUpperCase()} • {h.grade} • Score: {h.score}/{h.total}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {h.timestamp}

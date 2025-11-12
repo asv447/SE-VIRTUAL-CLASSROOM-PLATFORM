@@ -554,6 +554,31 @@ export default function AssignmentsPage() {
                   </a>
                 </Button>
               )}
+              {(submission.grade !== null && submission.grade !== undefined) ||
+              (submission.feedback && submission.feedback.trim() !== "") ? (
+                <div className="rounded-md border border-green-100 bg-green-50 p-3 text-sm">
+                  {submission.grade !== null &&
+                  submission.grade !== undefined ? (
+                    <p className="font-medium text-green-700">
+                      Grade: {submission.grade}
+                      {submission.maxScore !== null &&
+                      submission.maxScore !== undefined
+                        ? ` / ${submission.maxScore}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {submission.feedback && submission.feedback.trim() !== "" ? (
+                    <p className="mt-1 text-green-600">
+                      Feedback: {submission.feedback}
+                    </p>
+                  ) : null}
+                  {submission.gradedAt ? (
+                    <p className="mt-1 text-xs text-green-500">
+                      Graded on {safeFormatDate(submission.gradedAt)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : showSubmitButton ? (
             <div className="space-y-3">
