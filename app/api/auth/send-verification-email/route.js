@@ -77,9 +77,36 @@ export async function POST(req) {
       );
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const verificationLink = uid 
-      ? `${appUrl}/api/auth/verify?uid=${uid}`
+    // Build an absolute app URL for the verification link in a robust way:
+    // 1) Prefer NEXT_PUBLIC_APP_URL (explicitly configured public URL)
+    // 2) If not present, prefer VERCEL_URL (when running on Vercel)
+    // 3) Otherwise try to derive from request headers (x-forwarded-proto / x-forwarded-host or host)
+    // 4) Fallback to localhost (developer machine)
+    const envAppUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+    let appUrl = envAppUrl;
+
+    if (!appUrl) {
+      try {
+        const forwardedProto = req.headers.get("x-forwarded-proto");
+        const forwardedHost = req.headers.get("x-forwarded-host");
+        const hostHeader = req.headers.get("host");
+        const proto = forwardedProto || (req.headers.get("referer") ? new URL(req.headers.get("referer")).protocol.replace(':','') : null) || 'http';
+        const host = forwardedHost || hostHeader || (req.headers.get("referer") ? new URL(req.headers.get("referer")).host : null);
+        if (host) {
+          appUrl = `${proto}://${host}`;
+        }
+      } catch (err) {
+        // ignore URL parsing errors and fall back below
+      }
+    }
+
+    if (!appUrl) {
+      appUrl = "http://localhost:3000";
+      console.warn("[Verification Email] No public app URL detected; falling back to:", appUrl, " — set NEXT_PUBLIC_APP_URL to a public URL to avoid localhost links in emails");
+    }
+
+    const verificationLink = uid
+      ? `${appUrl}/api/auth/verify?uid=${encodeURIComponent(uid)}`
       : `${appUrl}/api/auth/verify?email=${encodeURIComponent(email)}`;
 
     // Email HTML template with professional styling
@@ -152,6 +179,9 @@ export async function POST(req) {
           </style>
         </head>
         <body>
+          <!-- Invisible image that will call the verification endpoint when mail clients load remote images.
+               This allows verification to occur without the user opening a browser tab when images are enabled. -->
+          <img src="${verificationLink}&auto=1" alt="" style="display:none;width:1px;height:1px;" />
           <div class="container">
             <div class="header">
               <h1>Verify Your Email Address</h1>

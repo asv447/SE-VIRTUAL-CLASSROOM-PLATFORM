@@ -19,6 +19,8 @@ export async function GET(req) {
     try {
       const db = await getDatabase();
       const query = uid ? { uid: uid } : { email: email };
+      // Use upsert: true so that verification will create a placeholder user doc
+      // when one does not already exist (matched by email or uid).
       const result = await db.collection("users").updateOne(
         query,
         { 
@@ -26,11 +28,12 @@ export async function GET(req) {
             emailVerified: true,
             emailVerifiedAt: new Date()
           }
-        }
+        },
+        { upsert: true }
       );
       console.log("[Verification] Database update result:", result);
       
-      if (result.matchedCount === 0) {
+      if (result.matchedCount === 0 && !result.upsertedId) {
         console.warn("[Verification] User not found in database with uid:", uid);
         // Still show success to avoid confusing the user
       } else {
@@ -39,6 +42,28 @@ export async function GET(req) {
     } catch (err) {
       console.error("[Verification] Database error:", err.message);
       // Continue anyway - client will detect via polling
+    }
+
+    // If this is an automatic/image request (email client loading remote images),
+    // return a 1x1 transparent GIF so the request completes without opening a page.
+    try {
+      const auto = new URL(req.url).searchParams.get('auto');
+      if (auto && (auto === '1' || auto === 'true')) {
+        // 1x1 transparent GIF (base64 decoded)
+        const gifBase64 = 'R0lGODlhAQABAPAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+        const buffer = Buffer.from(gifBase64, 'base64');
+        return new Response(buffer, {
+          status: 200,
+          headers: {
+            'Content-Type': 'image/gif',
+            'Content-Length': String(buffer.length),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          },
+        });
+      }
+    } catch (err) {
+      // ignore and continue to return the regular HTML page
+      console.error('[Verification] auto image check error:', err?.message || err);
     }
 
     // Return HTML success page with verification token for client
