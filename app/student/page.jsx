@@ -664,11 +664,22 @@ export default function AssignmentsPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Assignments</h1>
-        <p className="text-gray-600">
-          Manage and submit your course assignments
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Assignments</h1>
+          <p className="text-gray-600">
+            Manage and submit your course assignments
+          </p>
+        </div>
+        {/* Only show progress button for students, not instructors */}
+        {userProfile?.role !== "instructor" && (
+          <Button asChild variant="outline">
+            <a href="/student/progress">
+              <BookOpen className="w-4 h-4 mr-2" />
+              View My Progress
+            </a>
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="pending" className="space-y-4">

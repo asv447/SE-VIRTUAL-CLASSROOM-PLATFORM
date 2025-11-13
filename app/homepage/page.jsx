@@ -321,26 +321,41 @@ export default function ClassyncDashboard() {
                       <span className="text-sm">Assignments</span>
                     </a>
                   </Button>
+                  <Button
+                    variant="outline"
+                    className="h-20 flex-col gap-2 bg-transparent"
+                    asChild
+                  >
+                    <a href="/instructor/analytics">
+                      <BarChart3 className="w-6 h-6" />
+                      <span className="text-sm">Course Analytics</span>
+                    </a>
+                  </Button>
                 </>
               ) : (
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 bg-transparent"
-                  asChild
-                >
-                  <a href="/assignments">
-                    <FileText className="w-6 h-6" />
-                    <span className="text-sm">Assignments</span>
-                  </a>
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    className="h-20 flex-col gap-2 bg-transparent"
+                    asChild
+                  >
+                    <a href="/assignments">
+                      <FileText className="w-6 h-6" />
+                      <span className="text-sm">Assignments</span>
+                    </a>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-20 flex-col gap-2 bg-transparent"
+                    asChild
+                  >
+                    <a href="/student/progress">
+                      <BarChart3 className="w-6 h-6" />
+                      <span className="text-sm">My Progress</span>
+                    </a>
+                  </Button>
+                </>
               )}
-              <Button
-                variant="outline"
-                className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
-              >
-                <BarChart3 className="w-6 h-6" />
-                <span className="text-sm">View Analytics</span>
-              </Button>
               <Button
                 variant="outline"
                 className="h-20 flex-col gap-2 bg-transparent"
