@@ -11,7 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon, Trash2, Pencil } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, LogOut } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -382,6 +382,40 @@ export default function ClassroomPage() {
       navigator.clipboard.writeText(classroom.courseCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Handler for unenrolling from course (students only)
+  const handleUnenroll = async () => {
+    if (!user || !id) {
+      toast.error("Unable to unenroll. Please try again.");
+      return;
+    }
+
+    const loadingToastId = toast.loading("Unenrolling from course...");
+
+    try {
+      const response = await fetch("/api/courses/unenroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId: id,
+          userId: user.uid,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to unenroll from course");
+      }
+
+      toast.success("Unenrolled successfully!", { id: loadingToastId });
+      
+      // Redirect to homepage after successful unenrollment
+      window.location.href = "/homepage";
+    } catch (err) {
+      toast.error(`Error: ${err.message}`, { id: loadingToastId });
     }
   };
 
