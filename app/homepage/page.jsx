@@ -59,6 +59,8 @@ import {
   BarChart3,
   Sparkles,
   LogOut,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
 
 import { auth } from "../../lib/firebase";
@@ -73,6 +75,7 @@ export default function ClassyncDashboard() {
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState([]);
   const [courseProgress, setCourseProgress] = useState({}); // Store progress for each course
+  const [urgentAssignments, setUrgentAssignments] = useState([]);
 
   // [NEW] State for student joining a course
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
@@ -137,6 +140,56 @@ export default function ClassyncDashboard() {
     }
   };
 
+  // Fetch urgent assignments (due within 24 hours)
+  const fetchUrgentAssignments = async (uid) => {
+    if (!uid) {
+      setUrgentAssignments([]);
+      return;
+    }
+    
+    try {
+      const res = await fetch(`/api/assignments?role=student&userId=${encodeURIComponent(uid)}`);
+      if (!res.ok) {
+        setUrgentAssignments([]);
+        return;
+      }
+      
+      const assignments = await res.json();
+      const now = new Date();
+      const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      
+      // Filter for unsubmitted assignments due within 24 hours
+      const urgent = [];
+      
+      for (const assignment of assignments) {
+        const deadline = new Date(assignment.deadline);
+        if (deadline > now && deadline <= next24Hours) {
+          // Check if already submitted
+          try {
+            const subRes = await fetch(`/api/submissions?assignmentId=${assignment.id}&studentId=${uid}`);
+            if (subRes.ok) {
+              const submissions = await subRes.json();
+              if (!submissions || submissions.length === 0) {
+                urgent.push(assignment);
+              }
+            } else {
+              // If submission check fails, assume not submitted
+              urgent.push(assignment);
+            }
+          } catch (err) {
+            // If error checking submission, include it to be safe
+            urgent.push(assignment);
+          }
+        }
+      }
+      
+      setUrgentAssignments(urgent);
+    } catch (error) {
+      console.error("Error fetching urgent assignments:", error);
+      setUrgentAssignments([]);
+    }
+  };
+
   // Courses state
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
@@ -169,6 +222,11 @@ export default function ClassyncDashboard() {
 
             // [CHANGE] Call fetchCourses *after* we know the user's role
             await fetchCourses(userRole, currentUser.uid);
+            
+            // Fetch urgent assignments for students
+            if (userRole === "student") {
+              await fetchUrgentAssignments(currentUser.uid);
+            }
           } else {
             // User not found
             setUsername(currentUser.email.split("@")[0]);
@@ -364,34 +422,33 @@ export default function ClassyncDashboard() {
                 </Button>
                 <Button
                   variant="outline"
+                  className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+                >
+                  <BarChart3 className="w-6 h-6" />
+                  <span className="text-sm">View Analytics</span>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
                   className="h-20 flex-col gap-2 bg-transparent"
                   asChild
                 >
                   <a href="/assignments">
-                    <BookOpen className="w-6 h-6" />
+                    <FileText className="w-6 h-6" />
                     <span className="text-sm">Assignments</span>
                   </a>
                 </Button>
+                <Button
+                  variant="outline"
+                  className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+                >
+                  <BarChart3 className="w-6 h-6" />
+                  <span className="text-sm">View Analytics</span>
+                </Button>
               </>
-            ) : (
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2 bg-transparent"
-                asChild
-              >
-                <a href="/assignments">
-                  <FileText className="w-6 h-6" />
-                  <span className="text-sm">Assignments</span>
-                </a>
-              </Button>
             )}
-            <Button
-              variant="outline"
-              className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
-            >
-              <BarChart3 className="w-6 h-6" />
-              <span className="text-sm">View Analytics</span>
-            </Button>
             <Button
               variant="outline"
               className="h-20 flex-col gap-2 bg-transparent"
@@ -573,6 +630,72 @@ export default function ClassyncDashboard() {
                   )}
               </div>
             </div>
+            {/* Urgent Assignments Alert - Students Only */}
+            {!isAdmin && urgentAssignments.length > 0 && (
+              <Card className="border-red-500 border-2 urgent-assignment-alert bg-red-50 dark:bg-red-950 mb-4">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="urgent-badge-blink rounded-full p-1.5 shrink-0">
+                      <AlertCircle className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-red-700 dark:text-red-400 text-sm mb-1">
+                        ⚠️ {urgentAssignments.length} Assignment
+                        {urgentAssignments.length > 1 ? "s" : ""} Due Within 24
+                        Hours!
+                      </h3>
+                      <div className="space-y-2">
+                        {urgentAssignments.slice(0, 3).map((assignment) => {
+                          const deadline = new Date(assignment.deadline);
+                          const hoursLeft = Math.floor(
+                            (deadline - new Date()) / (1000 * 60 * 60)
+                          );
+                          const minutesLeft = Math.floor(
+                            ((deadline - new Date()) % (1000 * 60 * 60)) /
+                              (1000 * 60)
+                          );
+
+                          return (
+                            <div
+                              key={assignment.id}
+                              className="flex items-center justify-between gap-2 text-xs bg-white dark:bg-gray-900 rounded p-2 border-l-2 border-red-500"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                  {assignment.title}
+                                </p>
+                                <div className="flex items-center gap-1 text-red-600 dark:text-red-400 mt-0.5">
+                                  <Clock className="h-3 w-3 shrink-0" />
+                                  <span className="font-medium">
+                                    {hoursLeft}h {minutesLeft}m left
+                                  </span>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push("/student");
+                                }}
+                              >
+                                Submit
+                              </Button>
+                            </div>
+                          );
+                        })}
+                        {urgentAssignments.length > 3 && (
+                          <p className="text-xs text-red-600 dark:text-red-400 font-medium text-center">
+                            +{urgentAssignments.length - 3} more urgent assignment
+                            {urgentAssignments.length - 3 > 1 ? "s" : ""}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {loading ? (
               <Card className="p-12 text-center">
@@ -620,153 +743,153 @@ export default function ClassyncDashboard() {
                         {course.description}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4 flex-1 flex flex-col">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">
-                            Instructor: {course.instructorName}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Users className="w-4 h-4" />
-                          <span>{course.students?.length || 0}</span>
-                        </div>
-                      </div>
+                     <CardContent className="space-y-4 flex-1 flex flex-col">
+                       <div className="flex items-center justify-between text-sm">
+                         <div className="flex items-center gap-2">
+                           <Badge variant="secondary" className="text-xs">
+                             Instructor: {course.instructorName}
+                           </Badge>
+                         </div>
+                         <div className="flex items-center gap-1 text-muted-foreground">
+                           <Users className="w-4 h-4" />
+                           <span>{course.students?.length || 0}</span>
+                         </div>
+                       </div>
 
-                      {/* Show assignment progress for students only */}
-                      {!isAdmin && courseProgress[course.id] && (
-                        <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground font-medium">
-                              Assignment Progress
-                            </span>
-                            <span className="font-semibold text-primary">
-                              {courseProgress[course.id].submittedAssignments}/
-                              {courseProgress[course.id].totalAssignments}
-                            </span>
-                          </div>
-                          {courseProgress[course.id].totalAssignments > 0 ? (
-                            <>
-                              <Progress
-                                value={courseProgress[course.id].percentage}
-                                className="h-2.5"
-                              />
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">
-                                  {courseProgress[course.id].totalAssignments -
-                                    courseProgress[course.id]
-                                      .submittedAssignments}{" "}
-                                  remaining
-                                </span>
-                                <span className="font-medium text-primary">
-                                  {courseProgress[course.id].percentage}%
-                                  complete
-                                </span>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-xs text-muted-foreground text-center py-1">
-                              No assignments yet
-                            </div>
-                          )}
-                        </div>
-                      )}
+                       {/* Show assignment progress for students only */}
+                       {!isAdmin && courseProgress[course.id] && (
+                         <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+                           <div className="flex items-center justify-between text-sm">
+                             <span className="text-muted-foreground font-medium">
+                               Assignment Progress
+                             </span>
+                             <span className="font-semibold text-primary">
+                               {courseProgress[course.id].submittedAssignments}/
+                               {courseProgress[course.id].totalAssignments}
+                             </span>
+                           </div>
+                           {courseProgress[course.id].totalAssignments > 0 ? (
+                             <>
+                               <Progress
+                                 value={courseProgress[course.id].percentage}
+                                 className="h-2.5"
+                               />
+                               <div className="flex items-center justify-between text-xs">
+                                 <span className="text-muted-foreground">
+                                   {courseProgress[course.id].totalAssignments -
+                                     courseProgress[course.id]
+                                       .submittedAssignments}{" "}
+                                   remaining
+                                 </span>
+                                 <span className="font-medium text-primary">
+                                   {courseProgress[course.id].percentage}%
+                                   complete
+                                 </span>
+                               </div>
+                             </>
+                           ) : (
+                             <div className="text-xs text-muted-foreground text-center py-1">
+                               No assignments yet
+                             </div>
+                           )}
+                         </div>
+                       )}
 
-                      {/* Keep the old progress bar for backward compatibility (if exists in course data) */}
-                      {course.progress > 0 && isAdmin && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">
-                              Progress
-                            </span>
-                            <span className="font-medium">
-                              {course.progress}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-secondary rounded-full h-2">
-                            <div
-                              className="bg-foreground h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${course.progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
+                       {/* Keep the old progress bar for backward compatibility (if exists in course data) */}
+                       {course.progress > 0 && isAdmin && (
+                         <div className="space-y-2">
+                           <div className="flex items-center justify-between text-sm">
+                             <span className="text-muted-foreground">
+                               Progress
+                             </span>
+                             <span className="font-medium">
+                               {course.progress}%
+                             </span>
+                           </div>
+                           <div className="w-full bg-secondary rounded-full h-2">
+                             <div
+                               className="bg-foreground h-2 rounded-full transition-all duration-300"
+                               style={{ width: `${course.progress}%` }}
+                             />
+                           </div>
+                         </div>
+                       )}
 
-                      <div className="flex items-center justify-between pt-2">
-                        <div className="flex gap-2">
-                          {course.assignments > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {course.assignments} assignments
-                            </Badge>
-                          )}
-                          <Badge variant="outline" className="text-xs">
-                            <Brain className="w-3 h-3 mr-1" />
-                            AI Enhanced
-                          </Badge>
-                        </div>
-                      </div>
-                      {course.nextClass && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-                          <Calendar className="w-4 h-4" />
-                          <span>Next: {course.nextClass}</span>
-                        </div>
-                      )}
+                       <div className="flex items-center justify-between pt-2">
+                         <div className="flex gap-2">
+                           {course.assignments > 0 && (
+                             <Badge variant="secondary" className="text-xs">
+                               {course.assignments} assignments
+                             </Badge>
+                           )}
+                           <Badge variant="outline" className="text-xs">
+                             <Brain className="w-3 h-3 mr-1" />
+                             AI Enhanced
+                           </Badge>
+                         </div>
+                       </div>
+                       {course.nextClass && (
+                         <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
+                           <Calendar className="w-4 h-4" />
+                           <span>Next: {course.nextClass}</span>
+                         </div>
+                       )}
 
-                      {/* Unenroll button for students only */}
-                      {!isAdmin && user && (
-                        <div className="pt-3 border-t mt-auto">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full border-red-400 text-red-600 hover:bg-red-50"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <LogOut className="w-4 h-4 mr-1" />
-                                Unenroll from Course
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Unenroll from {course.name}?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to unenroll from this
-                                  course? You will lose access to all course
-                                  materials, assignments, and class discussions.
-                                  You can re-enroll later using the course code:{" "}
-                                  <strong>{course.courseCode}</strong>
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  Cancel
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleUnenrollFromCourse(
-                                      course.id,
-                                      course.name
-                                    );
-                                  }}
-                                  className="bg-red-600 text-white hover:bg-red-700"
-                                >
-                                  Unenroll
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                       {/* Unenroll button for students only */}
+                       {!isAdmin && user && (
+                         <div className="pt-3 border-t mt-auto">
+                           <AlertDialog>
+                             <AlertDialogTrigger asChild>
+                               <Button
+                                 variant="outline"
+                                 size="sm"
+                                 className="w-full border-red-400 text-red-600 hover:bg-red-50"
+                                 onClick={(e) => e.stopPropagation()}
+                               >
+                                 <LogOut className="w-4 h-4 mr-1" />
+                                 Unenroll from Course
+                               </Button>
+                             </AlertDialogTrigger>
+                             <AlertDialogContent
+                               onClick={(e) => e.stopPropagation()}
+                             >
+                               <AlertDialogHeader>
+                                 <AlertDialogTitle>
+                                   Unenroll from {course.name}?
+                                 </AlertDialogTitle>
+                                 <AlertDialogDescription>
+                                   Are you sure you want to unenroll from this
+                                   course? You will lose access to all course
+                                   materials, assignments, and class discussions.
+                                   You can re-enroll later using the course code:{" "}
+                                   <strong>{course.courseCode}</strong>
+                                 </AlertDialogDescription>
+                               </AlertDialogHeader>
+                               <AlertDialogFooter>
+                                 <AlertDialogCancel
+                                   onClick={(e) => e.stopPropagation()}
+                                 >
+                                   Cancel
+                                 </AlertDialogCancel>
+                                 <AlertDialogAction
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     handleUnenrollFromCourse(
+                                       course.id,
+                                       course.name
+                                     );
+                                   }}
+                                   className="bg-red-600 text-white hover:bg-red-700"
+                                 >
+                                   Unenroll
+                                 </AlertDialogAction>
+                               </AlertDialogFooter>
+                             </AlertDialogContent>
+                           </AlertDialog>
+                         </div>
+                       )}
+              </CardContent>
+            </Card>
                 ))}
               </div>
             )}
