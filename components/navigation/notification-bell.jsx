@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Check, Bell, X, Trash2 } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
@@ -125,13 +125,31 @@ export default function NotificationBell() {
       const res = await fetch(`/api/notifications`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "markAll", uid: user.uid }),
+        body: JSON.stringify({ action: "markAllAndDelete", uid: user.uid }),
       });
       if (res.ok) {
-        setNotifications((prev) => prev.map((p) => ({ ...p, read: true })));
+        // Remove all notifications from UI after marking as read and deleting
+        setNotifications([]);
+        toast({
+          title: "Success",
+          description: "All notifications have been cleared.",
+        });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        console.error("markAllAsRead failed:", err);
+        toast({
+          title: "Error",
+          description: "Failed to clear notifications.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("markAllAsRead error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to clear notifications.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -162,7 +180,7 @@ export default function NotificationBell() {
           } `}
       >
         <div className="flex justify-between items-start">
-          <div>
+          <div className="flex-1 pr-2">
             <div className="font-medium text-sm">
               {n.title || "Notification"}
             </div>
@@ -173,16 +191,14 @@ export default function NotificationBell() {
                 : ""}
             </div>
           </div>
-          <div className="ml-3 text-right flex flex-col items-end gap-2">
-            <div>
-              <button
-                onClick={() => deleteNotification(id)}
-                className="rounded-full text-sm px-1.5 py-1.5 bg-black text-white"
-                title="Delete notification"
-              >
-                <Check className="w-3 h-3" />
-              </button>
-            </div>
+          <div className="ml-2 flex items-center gap-1">
+            <button
+              onClick={() => deleteNotification(id)}
+              className="rounded-full text-sm p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              title="Dismiss notification"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
           </div>
         </div>
       </div>
