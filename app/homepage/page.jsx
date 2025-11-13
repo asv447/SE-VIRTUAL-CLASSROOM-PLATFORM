@@ -21,6 +21,17 @@ import {
   DialogTrigger,
   DialogClose, // [NEW] Added DialogClose
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,6 +58,7 @@ import {
   FileText,
   BarChart3,
   Sparkles,
+  LogOut,
 } from "lucide-react";
 
 import { auth } from "../../lib/firebase";
@@ -289,6 +301,40 @@ export default function ClassyncDashboard() {
     }
   };
 
+  // [NEW] Function to handle student unenrolling from a course
+  const handleUnenrollFromCourse = async (courseId, courseName) => {
+    if (!user) {
+      toast.error("You must be logged in to unenroll.");
+      return;
+    }
+
+    const loadingToastId = toast.loading("Unenrolling from course...");
+
+    try {
+      const response = await fetch("/api/courses/unenroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId: courseId,
+          userId: user.uid,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to unenroll from course");
+      }
+
+      toast.success(`Unenrolled from ${courseName} successfully!`, { id: loadingToastId });
+
+      // Refresh the course list to remove the unenrolled course
+      await fetchCourses(isAdmin ? "instructor" : "student", user.uid);
+    } catch (err) {
+      toast.error(`Error: ${err.message}`, { id: loadingToastId });
+    }
+  };
+
   // ... (Commented out navbar remains) ...
 
   return (
@@ -309,26 +355,6 @@ export default function ClassyncDashboard() {
                     <a href="/admin">
                       <FileText className="w-6 h-6" />
                       <span className="text-sm">Admin Dashboard</span>
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-20 flex-col gap-2 bg-transparent"
-                    asChild
-                  >
-                    <a href="/assignments">
-                      <Upload className="w-6 h-6" />
-                      <span className="text-sm">Assignments</span>
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-20 flex-col gap-2 bg-transparent"
-                    asChild
-                  >
-                    <a href="/instructor/analytics">
-                      <BarChart3 className="w-6 h-6" />
-                      <span className="text-sm">Course Analytics</span>
                     </a>
                   </Button>
                 </>
@@ -667,6 +693,49 @@ export default function ClassyncDashboard() {
                           <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
                             <Calendar className="w-4 h-4" />
                             <span>Next: {course.nextClass}</span>
+                          </div>
+                        )}
+                        
+                        {/* Unenroll button for students only */}
+                        {!isAdmin && user && (
+                          <div className="pt-3 border-t mt-auto">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full border-red-400 text-red-600 hover:bg-red-50"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <LogOut className="w-4 h-4 mr-1" />
+                                  Unenroll from Course
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Unenroll from {course.name}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to unenroll from this course? 
+                                    You will lose access to all course materials, assignments, and class discussions.
+                                    You can re-enroll later using the course code: <strong>{course.courseCode}</strong>
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                                    Cancel
+                                  </AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUnenrollFromCourse(course.id, course.name);
+                                    }}
+                                    className="bg-red-600 text-white hover:bg-red-700"
+                                  >
+                                    Unenroll
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         )}
                       </CardContent>

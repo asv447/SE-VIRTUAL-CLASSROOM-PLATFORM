@@ -13,12 +13,29 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Missing id or classId" }, { status: 400 });
     }
 
+    // Authorization: require instructor ownership. Accept role/userId query or x-uid header.
+    const role = searchParams.get("role");
+    const userId = searchParams.get("userId") || request.headers.get("x-uid");
+    if (!role && !userId) {
+      // defensive: deny if we can't determine caller
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const assignmentsCollection = await getAssignmentsCollection();
-    
+    // Verify ownership
+    const existing = await assignmentsCollection.findOne({ _id: new ObjectId(id) });
+    if (!existing) {
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+    }
+    if (role === "instructor" || userId) {
+      const uid = userId;
+      if (!uid || (existing.instructorId || "") !== uid) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
     // Delete assignment from MongoDB
-    const result = await assignmentsCollection.deleteOne({ 
-      _id: new ObjectId(id) 
-    });
+    const result = await assignmentsCollection.deleteOne({ _id: new ObjectId(id) });
     
     // Delete related submissions
     // const submissionsCollection = await getSubmissionsCollection();
@@ -40,9 +57,47 @@ export async function GET(request, { params }) {
     const { id } = params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get("role");
+    const userId = searchParams.get("userId");
+
     const assignmentsCollection = await getAssignmentsCollection();
     const assignment = await assignmentsCollection.findOne({ _id: new ObjectId(id) });
     if (!assignment) return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+
+    // Enforce access rules when role/userId are provided
+    try {
+      if (role === "instructor" && userId) {
+        // Instructor may only access assignments they created
+        if ((assignment.instructorId || "") !== userId) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      }
+      if (role === "student" && userId) {
+        // Student may only access if enrolled in the course
+        const cid = assignment.classId || assignment.courseId;
+        if (cid) {
+          try {
+            const courses = await getCoursesCollection();
+            const cidObj = (() => { try { return new ObjectId(cid); } catch { return null; } })();
+            let courseDoc = null;
+            if (cidObj) courseDoc = await courses.findOne({ _id: cidObj });
+            else courseDoc = await courses.findOne({ _id: cid });
+            const enrolled = (courseDoc?.students || []).some(s => s?.userId === userId);
+            if (!enrolled) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+          } catch (e) {
+            console.error("Failed to verify student enrollment:", e);
+            return NextResponse.json({ error: "Failed to verify enrollment" }, { status: 500 });
+          }
+        } else {
+          // No course associated, deny access for students
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      }
+    } catch (e) {
+      console.error("Access check failed:", e);
+      // Fall through to returning the assignment only if we can't determine (defensive)
+    }
 
     // Enrich with course title
     let courseTitle = null;
@@ -76,6 +131,14 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: "Missing assignment id" }, { status: 400 });
     }
 
+    // Authorization: only instructor who created the assignment may PATCH
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get("role");
+    const userId = searchParams.get("userId") || request.headers.get("x-uid");
+    if (!role && !userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { deadline } = body;
     if (!deadline) {
@@ -83,6 +146,13 @@ export async function PATCH(request, { params }) {
     }
 
     const assignmentsCollection = await getAssignmentsCollection();
+
+    const existing = await assignmentsCollection.findOne({ _id: new ObjectId(id) });
+    if (!existing) return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+    const uid = userId;
+    if (!uid || (existing.instructorId || "") !== uid) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const update = {
       updatedAt: new Date(),

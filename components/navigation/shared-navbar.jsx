@@ -50,6 +50,7 @@ export default function SharedNavbar() {
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -120,6 +121,7 @@ export default function SharedNavbar() {
             const data = await res.json();
             setUsername(data.user.username || currentUser.email.split("@")[0]);
             setIsAdmin(data.user.role === "instructor");
+            setUserRole(data.user.role || null);
             // prefer photo stored in Mongo (photoBase64) or fallback to photoURL
             if (data.user?.photoBase64) {
               setUserPhoto(
@@ -133,6 +135,7 @@ export default function SharedNavbar() {
           } else {
             setUsername(currentUser.email.split("@")[0]);
             setIsAdmin(false);
+            setUserRole(null);
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
@@ -145,6 +148,7 @@ export default function SharedNavbar() {
         setUser(null);
         setUsername("");
         setIsAdmin(false);
+        setUserRole(null);
         setUserPhoto("");
         setLoading(false);
       }
@@ -514,12 +518,15 @@ export default function SharedNavbar() {
               {/* Setup link removed (was used for dummy data) */}
               {user && (
                 <>
-                  <Link
-                    href="/assignments"
-                    className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                  >
-                    Assignments
-                  </Link>
+                  {/* Show Assignments only for students (role-based) */}
+                  {userRole === "student" && (
+                    <Link
+                      href="/assignments"
+                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                    >
+                      Assignments
+                    </Link>
+                  )}
                   {(isAdmin ||
                     user?.email?.includes("@instructor.com") ||
                     user?.email?.includes("@admin.com")) && (
@@ -578,12 +585,14 @@ export default function SharedNavbar() {
               {/* Setup link removed (was used for dummy data) */}
               {user && (
                 <>
-                  <Link
-                    href="/assignments"
-                    className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                  >
-                    Assignments
-                  </Link>
+                  {userRole === "student" && (
+                    <Link
+                      href="/assignments"
+                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                    >
+                      Assignments
+                    </Link>
+                  )}
                   {(isAdmin ||
                     user?.email?.includes("@instructor.com") ||
                     user?.email?.includes("@admin.com")) && (

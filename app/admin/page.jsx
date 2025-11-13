@@ -66,7 +66,6 @@ export default function AdminDashboard() {
   const [submissions, setSubmissions] = useState([]);
   const [studentDirectory, setStudentDirectory] = useState({});
   const [gradingSubmission, setGradingSubmission] = useState(null);
-  const [gradeDialogOpen, setGradeDialogOpen] = useState(false);
   const [gradeForm, setGradeForm] = useState({
     grade: "",
     maxScore: "",
@@ -225,7 +224,12 @@ export default function AdminDashboard() {
 
   const loadAssignments = async () => {
     try {
-      const res = await fetch("/api/assignments");
+      // Only fetch assignments belonging to this instructor
+      const res = await fetch(
+        `/api/assignments?role=instructor&userId=${encodeURIComponent(
+          user?.uid || ""
+        )}`
+      );
       if (res.ok) {
         const data = await res.json();
         setAssignments(data);
@@ -381,7 +385,9 @@ export default function AdminDashboard() {
       const classId = assignment?.classId || assignment?.courseId;
 
       const res = await fetch(
-        `/api/assignments/${assignment.id}?classId=${classId}`,
+        `/api/assignments/${assignment.id}?classId=${classId}&role=instructor&userId=${encodeURIComponent(
+          user?.uid || ""
+        )}`,
         {
           method: "DELETE",
         }
@@ -518,11 +524,9 @@ export default function AdminDashboard() {
       maxScore: normalizeNumberInput(submission?.maxScore),
       feedback: submission?.feedback || "",
     });
-    setGradeDialogOpen(true);
   };
 
   const closeGradeDialog = () => {
-    setGradeDialogOpen(false);
     setGradingSubmission(null);
     setGradeForm({ grade: "", maxScore: "", feedback: "" });
   };
@@ -1158,7 +1162,7 @@ export default function AdminDashboard() {
       </div>
 
       <Dialog
-        open={gradeDialogOpen}
+        open={!!gradingSubmission}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) {
             closeGradeDialog();
