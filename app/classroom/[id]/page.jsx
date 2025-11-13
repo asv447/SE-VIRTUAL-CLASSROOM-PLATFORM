@@ -11,7 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, LogOut } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, FileText, Download, Upload, X, LogOut } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { auth } from "../../../lib/firebase"; // Corrected path
 import { onAuthStateChanged } from "firebase/auth";
+import { formatFileSize } from "@/lib/utils-client";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -78,6 +79,7 @@ const createInitialPostState = () => ({
   pollOptions: ["", ""],
   allowMultiplePollSelections: false,
   isPinned: false,
+  file: null, // NEW: for file attachment
 });
 
 export default function ClassroomPage() {
@@ -100,10 +102,13 @@ export default function ClassroomPage() {
   const [editingPostId, setEditingPostId] = useState(null);
   const [editPostData, setEditPostData] = useState(createInitialPostState);
   const [editingPollOptionIds, setEditingPollOptionIds] = useState([]);
+  const [isUploadingFile, setIsUploadingFile] = useState(false); // NEW: upload state
+  const fileInputRef = useRef(null); // NEW: for file input
 
   // [NEW] Chat state (back to simple version)
   const [chatMessages, setChatMessages] = useState([]);
   const [isChatLoading, setIsChatLoading] = useState(true);
+  const [chatInput, setChatInput] = useState(""); // NEW: chat input state
   const [pollSelections, setPollSelections] = useState({});
   const [pollSubmitting, setPollSubmitting] = useState({});
   const messagesEndRef = useRef(null); // For auto-scrolling chat
@@ -385,40 +390,6 @@ export default function ClassroomPage() {
     }
   };
 
-  // Handler for unenrolling from course (students only)
-  const handleUnenroll = async () => {
-    if (!user || !id) {
-      toast.error("Unable to unenroll. Please try again.");
-      return;
-    }
-
-    const loadingToastId = toast.loading("Unenrolling from course...");
-
-    try {
-      const response = await fetch("/api/courses/unenroll", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          courseId: id,
-          userId: user.uid,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to unenroll from course");
-      }
-
-      toast.success("Unenrolled successfully!", { id: loadingToastId });
-      
-      // Redirect to homepage after successful unenrollment
-      window.location.href = "/homepage";
-    } catch (err) {
-      toast.error(`Error: ${err.message}`, { id: loadingToastId });
-    }
-  };
-
   // Handler for creating a new advanced post (stream)
   const handleCreatePost = async () => {
     if (!newPostData.title.trim() || !newPostData.content.trim() || !user) {
@@ -455,6 +426,48 @@ export default function ClassroomPage() {
     const linkUrl = (newPostData.linkUrl || "").trim();
     const linkText = (newPostData.linkText || "").trim();
     const loadingToastId = toast.loading("Creating post...");
+
+    // NEW: Upload file to Google Drive if present
+    let attachmentData = null;
+    if (newPostData.file) {
+      try {
+        setIsUploadingFile(true);
+        toast.loading("Uploading file to Google Drive...", { id: loadingToastId });
+        
+        const formData = new FormData();
+        formData.append('file', newPostData.file);
+        
+        const uploadResponse = await fetch('/api/files/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.error || 'Upload failed');
+        }
+        
+        const uploadResult = await uploadResponse.json();
+        attachmentData = {
+          fileId: uploadResult.file.fileId,
+          fileName: uploadResult.file.fileName,
+          fileSize: uploadResult.file.fileSize,
+          contentType: uploadResult.file.contentType,
+          viewLink: uploadResult.file.viewLink,
+          downloadLink: uploadResult.file.downloadLink,
+        };
+        
+        toast.loading("Creating post...", { id: loadingToastId });
+      } catch (error) {
+        console.error("File upload error:", error);
+        toast.error(`File upload failed: ${error.message}`, { id: loadingToastId });
+        setIsUploadingFile(false);
+        return;
+      } finally {
+        setIsUploadingFile(false);
+      }
+    }
+
     const optimisticPost = {
       id: `temp-${Date.now()}`,
       classId: id,
@@ -463,6 +476,7 @@ export default function ClassroomPage() {
       isImportant: newPostData.isImportant,
       isUrgent: newPostData.isUrgent,
       link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
+      attachment: attachmentData, // NEW: include attachment
       createdAt: new Date().toISOString(),
       author: { name: username, id: user.uid },
       comments: [],
@@ -482,6 +496,10 @@ export default function ClassroomPage() {
     setStreamPosts((prev) => sortStreamPosts([optimisticPost, ...prev]));
     setIsCreatePostOpen(false);
     setNewPostData(createInitialPostState());
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    
     try {
       const response = await fetch("/api/stream", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -490,6 +508,7 @@ export default function ClassroomPage() {
           content: newPostData.content, isImportant: newPostData.isImportant,
           isUrgent: newPostData.isUrgent,
           link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
+          attachment: attachmentData, // NEW: send attachment data
           isPinned: newPostData.isPinned,
           poll: pollPayload,
         }),
@@ -1018,6 +1037,56 @@ export default function ClassroomPage() {
                           />
                         </div>
                       </div>
+
+                      {/* NEW: File Upload Section */}
+                      <div className="grid gap-2 border-t border-gray-200 pt-4">
+                        <Label htmlFor="post-file">Attach File (Optional)</Label>
+                        <p className="text-xs text-gray-500 mb-2">
+                          Upload course materials, lecture notes, PDFs, DOCX files (max 15MB)
+                        </p>
+                        
+                        {!newPostData.file ? (
+                          <div className="flex gap-2">
+                            <input
+                              id="post-file"
+                              ref={fileInputRef}
+                              type="file"
+                              accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
+                              onChange={handleFileSelect}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="w-full"
+                            >
+                              <Upload className="w-4 h-4 mr-2" />
+                              Choose File
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-200">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{newPostData.file.name}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(newPostData.file.size)}</p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleRemoveFile}
+                              className="ml-2"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex flex-wrap items-center gap-4 pt-2">
                         <div className="flex items-center space-x-2">
                           <Checkbox
@@ -1150,9 +1219,11 @@ export default function ClassroomPage() {
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline" disabled={isUploadingFile}>Cancel</Button>
                       </DialogClose>
-                      <Button onClick={handleCreatePost}>Post</Button>
+                      <Button onClick={handleCreatePost} disabled={isUploadingFile}>
+                        {isUploadingFile ? "Uploading..." : "Post"}
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -1478,6 +1549,54 @@ export default function ClassroomPage() {
                               <LinkIcon className="w-3 h-3" />
                               {post.link.text || 'Annotated Material'}
                             </a>
+                          </div>
+                        )}
+
+                        {/* NEW: File Attachment Display */}
+                        {post.attachment && post.attachment.fileId && (
+                          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-blue-900 truncate">
+                                    {post.attachment.fileName || "Course Material"}
+                                  </p>
+                                  <p className="text-xs text-blue-600">
+                                    {post.attachment.fileSize ? formatFileSize(post.attachment.fileSize) : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 flex-shrink-0">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  asChild
+                                >
+                                  <a
+                                    href={post.attachment.viewLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FileText className="w-4 h-4 mr-1" />
+                                    Open
+                                  </a>
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  asChild
+                                >
+                                  <a
+                                    href={post.attachment.downloadLink}
+                                    download={post.attachment.fileName}
+                                  >
+                                    <Download className="w-4 h-4 mr-1" />
+                                    Download
+                                  </a>
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         )}
 

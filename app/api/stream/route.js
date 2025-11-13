@@ -56,6 +56,7 @@ export async function GET(request) {
             isUrgent: 1,
             link: 1,
             assignment: 1,
+            attachment: 1, // NEW: include attachment field
             comments: 1,
             poll: 1,
             createdAt: 1,
@@ -101,6 +102,7 @@ export async function POST(request) {
       assignment,
       poll,
       isPinned,
+      attachment, // NEW: file attachment info from Firebase Storage
     } = await request.json();
 
     // [UPDATE] Validate title and content
@@ -151,6 +153,7 @@ export async function POST(request) {
       isUrgent: isUrgent || false,
       link: link || null,
       assignment: assignment || null,
+      attachment: attachment || null, // NEW: store file attachment info
       comments: [],
       poll: pollData,
       isPinned: Boolean(isPinned),
