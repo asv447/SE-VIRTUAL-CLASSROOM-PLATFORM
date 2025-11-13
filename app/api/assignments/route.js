@@ -1,138 +1,143 @@
-// API routes for assignments
-import { NextResponse } from "next/server";
-import { getAssignmentsCollection, getStreamsCollection, getCoursesCollection, getNotificationsCollection } from "@/lib/mongodb";
-import { prepareFileForStorage } from "@/lib/file-upload";
-import { ObjectId } from "mongodb";
+// app/api/assignments/route.js
 
+import { NextResponse } from "next/server";
+import {
+  getAssignmentsCollection,
+  getCoursesCollection,
+  getGroupsCollection, // <-- Requires this
+  getNotificationsCollection, // <-- Requires this
+} from "@/lib/mongodb";
+import { ObjectId } from "mongodb";
+// Note: This file handles file uploads. For Vercel, you'd need a blob storage.
+// This example saves file info but doesn't handle the actual file storage.
+
+// --- GET All Assignments (for a user) ---
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const classId = searchParams.get("classId");
-    const userId = searchParams.get("userId");
     const role = searchParams.get("role");
+    const userId = searchParams.get("userId");
+    const classId = searchParams.get("classId"); // For student filtering
 
-    console.log("[API /api/assignments GET] Params:", { classId, userId, role });
-
-  const assignmentsCollection = await getAssignmentsCollection();
-  const coursesCollection = await getCoursesCollection();
-  let query = {};
-  const conditions = [];
-
-    if (classId) {
-      // Support legacy records that may use either classId or courseId
-      conditions.push({ $or: [{ classId: classId }, { courseId: classId }] });
-    }
-    if (role === "instructor" && userId) {
-      // Instructors should only see assignments they created
-      conditions.push({ instructorId: userId });
+    if (!role || !userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (role === "student" && userId) {
-      // Students should only see assignments for courses they are enrolled in
-      // If a specific classId is requested, verify enrollment
-      try {
-        if (classId) {
-          // verify that the student is enrolled in this class
-          const cidObj = (() => {
-            try { return new ObjectId(classId); } catch { return null; }
-          })();
-          let courseDoc = null;
-          if (cidObj) {
-            courseDoc = await coursesCollection.findOne({ _id: cidObj });
-          } else {
-            // fallback: look by string id if not ObjectId
-            courseDoc = await coursesCollection.findOne({ _id: classId });
-          }
-          const enrolled = (courseDoc?.students || []).some(s => s?.userId === userId);
-          if (!enrolled) {
-            // Not enrolled -> return empty set early
-            return NextResponse.json([], { status: 200 });
-          }
-          // else allow the existing classId condition below to filter
-        } else {
-          // No classId provided: find all course ids the student is enrolled in
-          const studentCourses = await coursesCollection.find({ "students.userId": userId }).project({ _id: 1 }).toArray();
-          const ids = studentCourses.map(c => c._id?.toString()).filter(Boolean);
-          if (ids.length === 0) {
-            // Student not enrolled anywhere
-            return NextResponse.json([], { status: 200 });
-          }
-          // Limit assignments to those whose classId/courseId is in the student's courses
-          conditions.push({ $or: [{ classId: { $in: ids } }, { courseId: { $in: ids } }] });
-        }
-      } catch (e) {
-        console.error("Error resolving student course membership:", e);
-        return NextResponse.json({ error: "Failed to resolve student courses" }, { status: 500 });
+    const assignmentsCollection = await getAssignmentsCollection();
+    const coursesCollection = await getCoursesCollection();
+    const groupsCollection = await getGroupsCollection();
+
+    let assignments = [];
+
+    if (role === "instructor") {
+      // --- Instructor Logic: Get all assignments they created ---
+      assignments = await assignmentsCollection
+        .find({ instructorId: userId })
+        .sort({ createdAt: -1 })
+        .toArray();
+    } else {
+      // --- Student Logic: Get relevant assignments ---
+      if (!classId) {
+        return NextResponse.json(
+          { error: "Missing classId for student" },
+          { status: 400 }
+        );
       }
+      
+      // 1. Get the user's group memberships for this course
+      const myGroups = await groupsCollection
+        .find({
+          courseId: new ObjectId(classId),
+          "members.userId": userId,
+        })
+        .toArray();
+      const myGroupIds = myGroups.map((g) => g._id.toString());
+
+      // 2. Find all assignments for this class
+      const allAssignments = await assignmentsCollection
+        .find({ $or: [{ courseId: classId }, { classId: classId }] }) // Handle both keys
+        .sort({ deadline: 1 })
+        .toArray();
+
+      // 3. Filter for relevance
+      assignments = allAssignments.filter((assignment) => {
+        // If no audience or 'class', show it
+        if (!assignment.audience || assignment.audience.type === "class") {
+          return true;
+        }
+        // If 'group', check if user is in any of the assigned groups
+        if (assignment.audience.type === "group") {
+          const assignedGroupIds = assignment.audience.groupIds || [];
+          return assignedGroupIds.some((id) => myGroupIds.includes(id));
+        }
+        return false;
+      });
     }
 
-    if (conditions.length === 1) {
-      query = conditions[0];
-    } else if (conditions.length > 1) {
-      query = { $and: conditions };
+    // --- Enrich assignments with Course Titles (for Admin Dashboard) ---
+    const courseMap = new Map();
+    const allCourses = await coursesCollection.find().toArray();
+    for (const course of allCourses) {
+      courseMap.set(course._id.toString(), course.title);
     }
 
-    console.log("[API /api/assignments GET] Query:", JSON.stringify(query));
-
-    const assignments = await assignmentsCollection.find(query).toArray();
-
-    console.log("[API /api/assignments GET] Found assignments:", assignments.length);
-
-    // Build a map of courseId -> course title for enrichment (avoid client Unknown Course labels)
-    const courseIds = [...new Set(assignments.map(a => a.classId || a.courseId).filter(Boolean))];
-    let courseMap = {};
-    if (courseIds.length > 0) {
-      const courseDocs = await coursesCollection.find({ _id: { $in: courseIds.map(cid => {
-        try { return new ObjectId(cid); } catch { return null; }
-      }).filter(Boolean) }}).toArray();
-      courseDocs.forEach(c => { courseMap[c._id.toString()] = c.title; });
-    }
-
-    const formattedAssignments = assignments.map((assignment) => ({
-      id: assignment._id.toString(),
-      ...assignment,
-      courseTitle: courseMap[assignment.classId || assignment.courseId] || null,
-      _id: undefined,
+    const populatedAssignments = assignments.map((a) => ({
+      ...a, // [FIX] This line ensures all fields, including audience, are returned
+      id: a._id.toString(),
+      courseId: a.courseId || a.classId, // Standardize courseId
+      courseTitle: courseMap.get(a.courseId) || courseMap.get(a.classId) || "Unknown Course",
+      _id: undefined, // Remove _id
     }));
 
-    return NextResponse.json(formattedAssignments, { status: 200 });
+    return NextResponse.json(populatedAssignments, { status: 200 });
   } catch (err) {
-    console.error("[API /api/assignments GET] Error:", err);
+    console.error("[API /api/assignments] GET Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
+// --- POST a new Assignment ---
 export async function POST(request) {
   try {
     const formData = await request.formData();
-
-    const courseId = formData.get("courseId");
+    
+    // --- 1. Get all fields from FormData ---
     const title = formData.get("title");
     const description = formData.get("description");
     const deadline = formData.get("deadline");
-    const file = formData.get("file");
+    const courseId = formData.get("courseId");
     const instructorId = formData.get("instructorId");
     const instructorName = formData.get("instructorName");
-    
-    // Strict validation: all fields required except file
-    if (!courseId || !title || !description || !deadline || !instructorId || !instructorName) {
-      return NextResponse.json({ error: "Missing required fields: courseId, title, description, deadline, instructorId, instructorName" }, { status: 400 });
+    const maxScore = formData.get("maxScore");
+    const file = formData.get("file"); // This is a File object
+
+    // [NEW] Get Audience Fields
+    const audienceType = formData.get("audienceType"); // "class" or "group"
+    const audienceGroupIdsJSON = formData.get("audienceGroupIds"); // A JSON string '["id1", "id2"]'
+
+    // --- 2. Validation ---
+    if (!title || !description || !deadline || !courseId || !instructorId) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const assignmentsCollection = await getAssignmentsCollection();
-    const assignmentId = new ObjectId();
-    let fileData = null;
-    let fileUrl = "";
-
-    if (file && file.size > 0) {
+    // --- 3. Handle Audience ---
+    let audience = { type: "class", groupIds: [] }; // Default
+    if (audienceType === "group") {
       try {
-        fileData = await prepareFileForStorage(file);
-        fileUrl = `/api/download/assignment/${assignmentId.toString()}`;
-      } catch (uploadError) {
-        console.error("File processing failed:", uploadError);
+        const groupIds = JSON.parse(audienceGroupIdsJSON);
+        if (Array.isArray(groupIds) && groupIds.length > 0) {
+          audience = { type: "group", groupIds };
+        } else {
+          // If "group" is selected but no groups, default to class
+          audience = { type: "class", groupIds: [] };
+        }
+      } catch (e) {
+         // If JSON is invalid, default to class
+        audience = { type: "class", groupIds: [] };
       }
     }
 
+<<<<<<< HEAD
     // Build assignment object. For file-only uploads, fill minimal metadata.
     const newAssignment = {
       _id: new ObjectId(assignmentId),
@@ -169,65 +174,98 @@ export async function POST(request) {
       });
     } catch (streamError) {
       console.error("Failed to sync assignment with stream:", streamError);
+=======
+    // --- 4. Handle File Upload (Simplified) ---
+    // This is a stub. You will need a real file upload service for production.
+    let fileUrl = null;
+    let fileName = null;
+    if (file && file.name && file.size > 0) {
+      // ---
+      // YOUR_UPLOAD_FUNCTION(file) would go here
+      // ---
+      fileName = file.name;
+      fileUrl = `/uploads/assignments/${fileName}`; // Example path
+      console.log(`[File Stub] "Uploading" ${fileName}`);
+    } else {
+      // Match the fileUrl: "" from your console log if no file is given
+      fileUrl = ""; 
+>>>>>>> cb18a5b3c9257b87998e8e23ac9136be656a755a
     }
 
-    // ✅ Create notifications for all enrolled students in this course
+    // --- 5. Prepare Database Object ---
+    const newAssignment = {
+      title,
+      description,
+      deadline: new Date(deadline),
+      courseId,
+      classId: courseId, // Add this for consistency
+      instructorId,
+      instructorName,
+      maxScore: maxScore ? Number(maxScore) : null,
+      fileUrl,
+      fileName,
+      audience, // [CRITICAL] Save the audience object
+      createdAt: new Date(),
+      updatedAt: new Date(), // Add updatedAt
+    };
+
+    const assignmentsCollection = await getAssignmentsCollection();
+    const result = await assignmentsCollection.insertOne(newAssignment);
+
+    // --- 6. [NEW] Create Notifications ---
     try {
-      if (courseId) {
-        const coursesCollection = await getCoursesCollection();
-        const notificationsCollection = await getNotificationsCollection();
+      const coursesCollection = await getCoursesCollection();
+      const groupsCollection = await getGroupsCollection();
+      const notificationsCollection = await getNotificationsCollection();
 
-        // Find course by its _id
-        let courseDoc = null;
-        try {
-          courseDoc = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
-        } catch (_) {
-          // If courseId is not an ObjectId, skip notification fanout safely
-        }
+      let studentRecipients = []; // { userId: '...' }
 
-        const students = courseDoc?.students || [];
-        if (students.length > 0) {
-          const notifDocs = students
-            .filter((s) => s?.userId && s.userId !== instructorId)
-            .map((s) => ({
-              userId: s.userId,
-              title: "New assignment",
-              message: `${title} has been posted by ${instructorName}`,
-              read: false,
-              createdAt: new Date(),
-              extra: {
-                type: "assignment",
-                courseId,
-                assignmentId: result.insertedId.toString(),
-                deadline: deadline || null,
-              },
-            }));
-          if (notifDocs.length > 0) {
-            await notificationsCollection.insertMany(notifDocs, { ordered: false });
+      if (audience.type === "class") {
+        const course = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
+        studentRecipients = course?.students || [];
+      } else {
+        // 'group'
+        const groups = await groupsCollection.find({ 
+          _id: { $in: audience.groupIds.map(id => new ObjectId(id)) } 
+        }).toArray();
+        
+        const studentMap = new Map();
+        for (const group of groups) {
+          for (const member of group.members) {
+            studentMap.set(member.userId, member); // Auto-de-duplicates
           }
+        }
+        studentRecipients = Array.from(studentMap.values());
+      }
+      
+      if (studentRecipients.length > 0) {
+        const notifDocs = studentRecipients
+          .filter(s => s?.userId && s.userId !== instructorId) // Don't notify instructor
+          .map(s => ({
+            userId: s.userId,
+            title: `New Assignment: ${title}`,
+            message: description.slice(0, 100) + "...",
+            read: false,
+            createdAt: new Date(),
+            extra: {
+              type: "assignment",
+              courseId: courseId,
+              assignmentId: result.insertedId.toString(),
+            },
+          }));
+        
+        if (notifDocs.length > 0) {
+          await notificationsCollection.insertMany(notifDocs, { ordered: false });
         }
       }
     } catch (notifError) {
       console.error("Failed to create assignment notifications:", notifError);
-      // Do not fail the request because of notification fanout issues
     }
+    
+    return NextResponse.json({ message: "Assignment created", id: result.insertedId }, { status: 201 });
 
-    return NextResponse.json(
-      {
-        id: result.insertedId.toString(),
-        classId: courseId,
-        courseId: courseId,
-        title,
-        description,
-        deadline,
-        fileUrl,
-        createdAt: newAssignment.createdAt,
-        updatedAt: newAssignment.updatedAt,
-      },
-      { status: 201 }
-    );
   } catch (err) {
-    console.error("[API /api/assignments] Error:", err);
+    console.error("[API /api/assignments] POST Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

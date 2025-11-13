@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"; // [FIX] Import useRouter
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   BookOpen,
   Plus,
@@ -52,7 +53,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "sonner"; // [FIX] Import toast
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
+import { ChevronDown } from "lucide-react";
 
 export default function AdminDashboard() {
   const router = useRouter(); // [FIX] Add router
@@ -89,9 +102,14 @@ export default function AdminDashboard() {
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [assignmentDescription, setAssignmentDescription] = useState("");
   const [assignmentDeadline, setAssignmentDeadline] = useState("");
+  const [assignmentMaxScore, setAssignmentMaxScore] = useState("");
   const [assignmentFile, setAssignmentFile] = useState(null);
   const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
   const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
+  const [courseGroups, setCourseGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [audienceType, setAudienceType] = useState("class"); // "class" or "group"
+  const [selectedGroupIds, setSelectedGroupIds] = useState(new Set());
   const [viewingSubmissions, setViewingSubmissions] = useState(null);
   const [editingDeadline, setEditingDeadline] = useState({});
   const [deadlineInputs, setDeadlineInputs] = useState({});
@@ -167,6 +185,39 @@ export default function AdminDashboard() {
     }
   }, [user]);
 
+<<<<<<< HEAD
+=======
+  // [FIXED] This hook fetches groups when the selectedCourse state changes.
+  // It is now at the top level of the component, which is correct.
+  useEffect(() => {
+    const fetchGroupsForCourse = async () => {
+      if (!selectedCourse) {
+        setCourseGroups([]);
+        return;
+      }
+      setLoadingGroups(true);
+      try {
+        const res = await fetch(`/api/groups?courseId=${selectedCourse}`);
+        if (!res.ok) throw new Error("Failed to fetch groups");
+        const data = await res.json();
+        setCourseGroups(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error fetching course groups:", err);
+        setCourseGroups([]);
+        toast.error(err.message);
+      } finally {
+        setLoadingGroups(false);
+      }
+    };
+
+    fetchGroupsForCourse();
+    // Also reset group selections when course changes
+    setSelectedGroupIds(new Set());
+  }, [selectedCourse]);
+
+  // [FIXED] This function is now defined at the top level,
+  // *before* it is called in loadData.
+>>>>>>> cb18a5b3c9257b87998e8e23ac9136be656a755a
   const loadStudentDirectory = async () => {
     if (!user) return;
     try {
@@ -191,6 +242,10 @@ export default function AdminDashboard() {
     }
   };
 
+<<<<<<< HEAD
+=======
+  // [FIXED] loadData now correctly calls the functions defined above it.
+>>>>>>> cb18a5b3c9257b87998e8e23ac9136be656a755a
   const loadData = async () => {
     setPageLoading(true);
     try {
@@ -242,6 +297,13 @@ export default function AdminDashboard() {
         return;
       }
       const data = await res.json();
+      
+      // --- THIS IS YOUR DEBUG LOG ---
+      // After fixing the ReferenceError, this log will now work
+      // and show the real assignment data.
+      console.log("Assignments loaded from API:", data);
+      // -------------------------------
+
       const assignmentsPayload = Array.isArray(data) ? data : [];
       setAssignments(assignmentsPayload);
       setViewingSubmissions((current) => {
@@ -347,6 +409,12 @@ export default function AdminDashboard() {
       toast.error("Please fill all required fields"); // [FIX] Use toast
       return;
     }
+    
+    // [NEW] Validate group selection
+    if (audienceType === "group" && selectedGroupIds.size === 0) {
+      toast.error("Please select at least one group for the assignment.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -366,6 +434,17 @@ export default function AdminDashboard() {
       formData.append("deadline", assignmentDeadline);
       formData.append("instructorId", instructorId);
       formData.append("instructorName", instructorName);
+
+      // [NEW] Add Audience data to FormData
+      formData.append("audienceType", audienceType);
+      formData.append(
+        "audienceGroupIds",
+        JSON.stringify(Array.from(selectedGroupIds))
+      );
+      
+      if (assignmentMaxScore && assignmentMaxScore.trim() !== "") {
+        formData.append("maxScore", assignmentMaxScore);
+      }
       if (assignmentFile) {
         formData.append("file", assignmentFile);
       }
@@ -380,7 +459,12 @@ export default function AdminDashboard() {
         setAssignmentTitle("");
         setAssignmentDescription("");
         setAssignmentDeadline("");
+        setAssignmentMaxScore("");
         setAssignmentFile(null);
+        // [NEW] Reset audience state
+        setAudienceType("class");
+        setSelectedGroupIds(new Set());
+        setCourseGroups([]);
         setIsCreateAssignmentOpen(false);
         await loadAssignments();
         toast.success("Assignment created successfully!"); // [FIX] Use toast
@@ -539,10 +623,14 @@ export default function AdminDashboard() {
   const openGradeDialog = (submission) => {
     const normalizeNumberInput = (value) =>
       value === null || value === undefined ? "" : String(value);
+
+    // Try to get maxScore from submission, otherwise from viewingSubmissions (assignment)
+    const maxScoreValue = submission?.maxScore ?? viewingSubmissions?.maxScore;
+
     setGradingSubmission(submission);
     setGradeForm({
       grade: normalizeNumberInput(submission?.grade),
-      maxScore: normalizeNumberInput(submission?.maxScore),
+      maxScore: normalizeNumberInput(maxScoreValue),
       feedback: submission?.feedback || "",
     });
   };
@@ -803,7 +891,7 @@ export default function AdminDashboard() {
                           Add a new assignment for students
                         </DialogDescription>
                       </DialogHeader>
-                      <div className="space-y-4">
+                      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                         <div>
                           <Label htmlFor="course">Course/Subject *</Label>
                           <Select
@@ -823,6 +911,76 @@ export default function AdminDashboard() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="grid gap-2 border-t pt-4">
+                          <Label>Audience</Label>
+                          <RadioGroup
+                            value={audienceType}
+                            onValueChange={setAudienceType}
+                            className="flex gap-4"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="class" id="r-class" />
+                              <Label htmlFor="r-class">Whole Class</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="group" id="r-group" />
+                              <Label htmlFor="r-group">Specific Group(s)</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+
+                        {audienceType === "group" && (
+                          <div className="grid gap-2">
+                            <Label htmlFor="group-select">
+                              Select Group(s)
+                            </Label>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full justify-between"
+                                  disabled={
+                                    loadingGroups || courseGroups.length === 0
+                                  }
+                                >
+                                  <span>
+                                    {loadingGroups
+                                      ? "Loading groups..."
+                                      : selectedGroupIds.size === 0
+                                      ? "Select groups..."
+                                      : `${selectedGroupIds.size} group(s) selected`}
+                                  </span>
+                                  <ChevronDown className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-full">
+                                <DropdownMenuLabel>
+                                  Assign to...
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {courseGroups.map((group) => (
+                                  <DropdownMenuCheckboxItem
+                                    key={group._id}
+                                    checked={selectedGroupIds.has(group._id)}
+                                    onCheckedChange={(checked) => {
+                                      setSelectedGroupIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (checked) {
+                                          next.add(group._id);
+                                        } else {
+                                          next.delete(group._id);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    {group.name}
+                                  </DropdownMenuCheckboxItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        )}
                         <div>
                           <Label htmlFor="title">Assignment Title *</Label>
                           <Input
@@ -853,6 +1011,19 @@ export default function AdminDashboard() {
                             onChange={(e) =>
                               setAssignmentDeadline(e.target.value)
                             }
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="maxScore">Max Score (Optional)</Label>
+                          <Input
+                            id="maxScore"
+                            type="number"
+                            value={assignmentMaxScore}
+                            onChange={(e) =>
+                              setAssignmentMaxScore(e.target.value)
+                            }
+                            placeholder="e.g., 100"
+                            min="0"
                           />
                         </div>
                         <div>
@@ -897,7 +1068,23 @@ export default function AdminDashboard() {
                             <h3 className="font-semibold text-lg">
                               {assignment.title}
                             </h3>
-                            <p className="text-sm text-gray-600 mt-1">
+                            {/* --- [NEW] Audience Badge --- */}
+                            <div className="flex items-center gap-2 mt-1">
+                              {(!assignment.audience ||
+                                assignment.audience.type === "class") ? (
+                                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium flex items-center">
+                                  <Users className="w-3 h-3 inline-block mr-1" />
+                                  Whole Class
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium flex items-center">
+                                  <Users className="w-3 h-3 inline-block mr-1" />
+                                  {assignment.audience.groupIds?.length || 0} Group(s)
+                                </span>
+                              )}
+                            </div>
+                            {/* --- [END NEW] --- */}
+                            <p className="text-sm text-gray-600 mt-2">
                               {assignment.description}
                             </p>
                             <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
@@ -965,6 +1152,12 @@ export default function AdminDashboard() {
                                   </span>
                                 )}
                               </div>
+                              {assignment.maxScore && (
+                                <div className="flex items-center gap-1">
+                                  <span className="font-medium">Max Score:</span>
+                                  <span>{assignment.maxScore}</span>
+                                </div>
+                              )}
                             </div>
                             {assignment.fileUrl && (
                               <div className="mt-3">
