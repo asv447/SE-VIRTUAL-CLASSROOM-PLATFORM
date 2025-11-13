@@ -17,11 +17,17 @@ export default function Sidebar() {
   const [courses, setCourses] = useState([]);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("");
+  const [isMounted, setIsMounted] = useState(false);
   const sidebarRef = useRef(null);
   const toggleRef = useRef(null);
 
   const minWidth = 64; // minimum width (w-16)
   const maxWidth = 400; // maximum width
+
+  // Prevent hydration errors by only rendering after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const navigate = (path) => {
     router.push(path);
@@ -185,6 +191,24 @@ export default function Sidebar() {
       setCourses([]);
     }
   };
+
+  // Don't render on server to prevent hydration errors
+  if (!isMounted) {
+    return (
+      <div
+        className="fixed left-0 bg-gray-50 z-10"
+        style={{ 
+          width: '256px',
+          top: '64px',
+          height: 'calc(100vh - 64px)'
+        }}
+      >
+        <aside className="h-full bg-white border-r border-gray-200" style={{ width: '256px' }}>
+          {/* Empty placeholder during SSR */}
+        </aside>
+      </div>
+    );
+  }
 
   return (
     <div
