@@ -137,8 +137,7 @@ export async function POST(request) {
       }
     }
 
-<<<<<<< HEAD
-    // Build assignment object. For file-only uploads, fill minimal metadata.
+    // Build assignment object
     const newAssignment = {
       _id: new ObjectId(assignmentId),
       classId: courseId,
@@ -174,95 +173,63 @@ export async function POST(request) {
       });
     } catch (streamError) {
       console.error("Failed to sync assignment with stream:", streamError);
-=======
-    // --- 4. Handle File Upload (Simplified) ---
-    // This is a stub. You will need a real file upload service for production.
-    let fileUrl = null;
-    let fileName = null;
-    if (file && file.name && file.size > 0) {
-      // ---
-      // YOUR_UPLOAD_FUNCTION(file) would go here
-      // ---
-      fileName = file.name;
-      fileUrl = `/uploads/assignments/${fileName}`; // Example path
-      console.log(`[File Stub] "Uploading" ${fileName}`);
-    } else {
-      // Match the fileUrl: "" from your console log if no file is given
-      fileUrl = ""; 
->>>>>>> cb18a5b3c9257b87998e8e23ac9136be656a755a
     }
 
-    // --- 5. Prepare Database Object ---
-    const newAssignment = {
-      title,
-      description,
-      deadline: new Date(deadline),
-      courseId,
-      classId: courseId, // Add this for consistency
-      instructorId,
-      instructorName,
-      maxScore: maxScore ? Number(maxScore) : null,
-      fileUrl,
-      fileName,
-      audience, // [CRITICAL] Save the audience object
-      createdAt: new Date(),
-      updatedAt: new Date(), // Add updatedAt
-    };
-
-    const assignmentsCollection = await getAssignmentsCollection();
-    const result = await assignmentsCollection.insertOne(newAssignment);
-
-    // --- 6. [NEW] Create Notifications ---
+    // ✅ Create notifications for all enrolled students in this course
     try {
-      const coursesCollection = await getCoursesCollection();
-      const groupsCollection = await getGroupsCollection();
-      const notificationsCollection = await getNotificationsCollection();
+      if (courseId) {
+        const coursesCollection = await getCoursesCollection();
+        const notificationsCollection = await getNotificationsCollection();
 
-      let studentRecipients = []; // { userId: '...' }
-
-      if (audience.type === "class") {
-        const course = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
-        studentRecipients = course?.students || [];
-      } else {
-        // 'group'
-        const groups = await groupsCollection.find({ 
-          _id: { $in: audience.groupIds.map(id => new ObjectId(id)) } 
-        }).toArray();
-        
-        const studentMap = new Map();
-        for (const group of groups) {
-          for (const member of group.members) {
-            studentMap.set(member.userId, member); // Auto-de-duplicates
-          }
+        // Find course by its _id
+        let courseDoc = null;
+        try {
+          courseDoc = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
+        } catch (_) {
+          // If courseId is not an ObjectId, skip notification fanout safely
         }
-        studentRecipients = Array.from(studentMap.values());
-      }
-      
-      if (studentRecipients.length > 0) {
-        const notifDocs = studentRecipients
-          .filter(s => s?.userId && s.userId !== instructorId) // Don't notify instructor
-          .map(s => ({
-            userId: s.userId,
-            title: `New Assignment: ${title}`,
-            message: description.slice(0, 100) + "...",
-            read: false,
-            createdAt: new Date(),
-            extra: {
-              type: "assignment",
-              courseId: courseId,
-              assignmentId: result.insertedId.toString(),
-            },
-          }));
-        
-        if (notifDocs.length > 0) {
-          await notificationsCollection.insertMany(notifDocs, { ordered: false });
+
+        const students = courseDoc?.students || [];
+        if (students.length > 0) {
+          const notifDocs = students
+            .filter((s) => s?.userId && s.userId !== instructorId)
+            .map((s) => ({
+              userId: s.userId,
+              title: "New assignment",
+              message: `${title} has been posted by ${instructorName}`,
+              read: false,
+              createdAt: new Date(),
+              extra: {
+                type: "assignment",
+                courseId,
+                assignmentId: result.insertedId.toString(),
+                deadline: deadline || null,
+              },
+            }));
+          if (notifDocs.length > 0) {
+            await notificationsCollection.insertMany(notifDocs, { ordered: false });
+          }
         }
       }
     } catch (notifError) {
       console.error("Failed to create assignment notifications:", notifError);
+      // Do not fail the request because of notification fanout issues
     }
-    
-    return NextResponse.json({ message: "Assignment created", id: result.insertedId }, { status: 201 });
+
+    return NextResponse.json(
+      {
+        id: result.insertedId.toString(),
+        classId: courseId,
+        courseId: courseId,
+        title,
+        description,
+        deadline,
+        fileUrl,
+        createdAt: newAssignment.createdAt,
+        updatedAt: newAssignment.updatedAt,
+      },
+      { status: 201 }
+    );
 
   } catch (err) {
     console.error("[API /api/assignments] POST Error:", err);

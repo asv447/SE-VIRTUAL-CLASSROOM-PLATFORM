@@ -185,39 +185,6 @@ export default function AdminDashboard() {
     }
   }, [user]);
 
-<<<<<<< HEAD
-=======
-  // [FIXED] This hook fetches groups when the selectedCourse state changes.
-  // It is now at the top level of the component, which is correct.
-  useEffect(() => {
-    const fetchGroupsForCourse = async () => {
-      if (!selectedCourse) {
-        setCourseGroups([]);
-        return;
-      }
-      setLoadingGroups(true);
-      try {
-        const res = await fetch(`/api/groups?courseId=${selectedCourse}`);
-        if (!res.ok) throw new Error("Failed to fetch groups");
-        const data = await res.json();
-        setCourseGroups(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Error fetching course groups:", err);
-        setCourseGroups([]);
-        toast.error(err.message);
-      } finally {
-        setLoadingGroups(false);
-      }
-    };
-
-    fetchGroupsForCourse();
-    // Also reset group selections when course changes
-    setSelectedGroupIds(new Set());
-  }, [selectedCourse]);
-
-  // [FIXED] This function is now defined at the top level,
-  // *before* it is called in loadData.
->>>>>>> cb18a5b3c9257b87998e8e23ac9136be656a755a
   const loadStudentDirectory = async () => {
     if (!user) return;
     try {
@@ -242,10 +209,6 @@ export default function AdminDashboard() {
     }
   };
 
-<<<<<<< HEAD
-=======
-  // [FIXED] loadData now correctly calls the functions defined above it.
->>>>>>> cb18a5b3c9257b87998e8e23ac9136be656a755a
   const loadData = async () => {
     setPageLoading(true);
     try {
