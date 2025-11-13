@@ -13,17 +13,57 @@ export async function GET(request) {
 
     console.log("[API /api/assignments GET] Params:", { classId, userId, role });
 
-    const assignmentsCollection = await getAssignmentsCollection();
-    const coursesCollection = await getCoursesCollection();
-    let query = {};
-    const conditions = [];
+  const assignmentsCollection = await getAssignmentsCollection();
+  const coursesCollection = await getCoursesCollection();
+  let query = {};
+  const conditions = [];
 
     if (classId) {
       // Support legacy records that may use either classId or courseId
       conditions.push({ $or: [{ classId: classId }, { courseId: classId }] });
     }
     if (role === "instructor" && userId) {
+      // Instructors should only see assignments they created
       conditions.push({ instructorId: userId });
+    }
+
+    if (role === "student" && userId) {
+      // Students should only see assignments for courses they are enrolled in
+      // If a specific classId is requested, verify enrollment
+      try {
+        if (classId) {
+          // verify that the student is enrolled in this class
+          const cidObj = (() => {
+            try { return new ObjectId(classId); } catch { return null; }
+          })();
+          let courseDoc = null;
+          if (cidObj) {
+            courseDoc = await coursesCollection.findOne({ _id: cidObj });
+          } else {
+            // fallback: look by string id if not ObjectId
+            courseDoc = await coursesCollection.findOne({ _id: classId });
+          }
+          const enrolled = (courseDoc?.students || []).some(s => s?.userId === userId);
+          if (!enrolled) {
+            // Not enrolled -> return empty set early
+            return NextResponse.json([], { status: 200 });
+          }
+          // else allow the existing classId condition below to filter
+        } else {
+          // No classId provided: find all course ids the student is enrolled in
+          const studentCourses = await coursesCollection.find({ "students.userId": userId }).project({ _id: 1 }).toArray();
+          const ids = studentCourses.map(c => c._id?.toString()).filter(Boolean);
+          if (ids.length === 0) {
+            // Student not enrolled anywhere
+            return NextResponse.json([], { status: 200 });
+          }
+          // Limit assignments to those whose classId/courseId is in the student's courses
+          conditions.push({ $or: [{ classId: { $in: ids } }, { courseId: { $in: ids } }] });
+        }
+      } catch (e) {
+        console.error("Error resolving student course membership:", e);
+        return NextResponse.json({ error: "Failed to resolve student courses" }, { status: 500 });
+      }
     }
 
     if (conditions.length === 1) {

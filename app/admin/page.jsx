@@ -224,7 +224,12 @@ export default function AdminDashboard() {
 
   const loadAssignments = async () => {
     try {
-      const res = await fetch("/api/assignments");
+      // Only fetch assignments belonging to this instructor
+      const res = await fetch(
+        `/api/assignments?role=instructor&userId=${encodeURIComponent(
+          user?.uid || ""
+        )}`
+      );
       if (res.ok) {
         const data = await res.json();
         setAssignments(data);
@@ -380,7 +385,9 @@ export default function AdminDashboard() {
       const classId = assignment?.classId || assignment?.courseId;
 
       const res = await fetch(
-        `/api/assignments/${assignment.id}?classId=${classId}`,
+        `/api/assignments/${assignment.id}?classId=${classId}&role=instructor&userId=${encodeURIComponent(
+          user?.uid || ""
+        )}`,
         {
           method: "DELETE",
         }

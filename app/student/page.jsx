@@ -170,7 +170,7 @@ export default function AssignmentsPage() {
         try {
           const url = `/api/assignments?classId=${encodeURIComponent(
             courseId
-          )}`;
+          )}&role=student&userId=${encodeURIComponent(user.uid)}`;
           console.log(`Fetching assignments from: ${url}`);
           const res = await fetch(url);
           if (res.ok) {
@@ -222,7 +222,11 @@ export default function AssignmentsPage() {
   const loadAssignments = async () => {
     if (!user?.uid) return;
     try {
-      const res = await fetch("/api/assignments");
+      const res = await fetch(
+        `/api/assignments?role=student&userId=${encodeURIComponent(
+          user.uid
+        )}`
+      );
       if (res.ok) {
         const data = await res.json();
         setAssignments(data);
