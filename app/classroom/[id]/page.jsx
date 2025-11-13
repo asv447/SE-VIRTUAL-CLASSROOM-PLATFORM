@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { auth } from "../../../lib/firebase"; // Corrected path
+import { auth } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
@@ -42,6 +42,19 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"; // <-- ADD THIS
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group"; // <-- ADD THIS
+import Link from "next/link"; // <-- ADD THIS
+import { Users, UserPlus } from "lucide-react"; // <-- ADD THIS
 // [DELETED] All socket.io imports are gone
 
 const MAX_POLL_OPTIONS = 6;
@@ -76,10 +89,139 @@ const createInitialPostState = () => ({
   includePoll: false,
   pollQuestion: "",
   pollOptions: ["", ""],
+  audienceType: "class", // 'class' or 'group'
+  audienceGroupId: null, // The _id of the selected group
   allowMultiplePollSelections: false,
   isPinned: false,
 });
 
+const CreateGroupDialog = ({open,
+  onOpenChange,
+  onSubmit,
+  classroom,
+  newGroupData,
+  setNewGroupData,}) => {
+  const students = classroom?.students || [];
+
+  const handleMemberToggle = (checked, userId) => {
+    setNewGroupData((prev) => {
+      const newMemberIds = new Set(prev.memberIds);
+      if (checked) {
+        newMemberIds.add(userId);
+      } else {
+        newMemberIds.delete(userId);
+        // If unchecking the rep, clear the rep
+        if (prev.representativeId === userId) {
+          prev.representativeId = "";
+        }
+      }
+      return { ...prev, memberIds: newMemberIds };
+    });
+  };
+
+  const handleRepChange = (userId) => {
+    setNewGroupData((prev) => {
+      const newMemberIds = new Set(prev.memberIds);
+      newMemberIds.add(userId); // Automatically add rep to members
+      return {
+        ...prev,
+        representativeId: userId,
+        memberIds: newMemberIds,
+      };
+    });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Create New Group</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4 overflow-y-auto">
+          <div className="grid gap-2">
+            <Label htmlFor="group-name">Group Name</Label>
+            <Input
+              id="group-name"
+              placeholder="e.g., Project Group A"
+              value={newGroupData.name}
+              onChange={(e) =>
+                setNewGroupData((prev) => ({ ...prev, name: e.target.value }))
+              }
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Group Representative</Label>
+            <Select
+              value={newGroupData.representativeId}
+              onValueChange={handleRepChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a representative" />
+              </SelectTrigger>
+              <SelectContent>
+                {students.map((student) => (
+                  <SelectItem key={student.userId} value={student.userId}>
+                    {student.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Group Members</Label>
+            <Card className="max-h-[250px] overflow-y-auto p-4">
+              <div className="space-y-3">
+                {students.map((student) => {
+                  const isRep =
+                    student.userId === newGroupData.representativeId;
+                  return (
+                    <div
+                      key={student.userId}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`member-${student.userId}`}
+                        checked={
+                          newGroupData.memberIds.has(student.userId) || isRep
+                        }
+                        disabled={isRep} // Rep is always checked
+                        onCheckedChange={(checked) =>
+                          handleMemberToggle(checked, student.userId)
+                        }
+                      />
+                      <Label
+                        htmlFor={`member-${student.userId}`}
+                        className="font-normal"
+                      >
+                        {student.name}{" "}
+                        {isRep && (
+                          <span className="text-xs text-yellow-600">
+                            (Rep)
+                          </span>
+                        )}
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button onClick={onSubmit}>Create</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 export default function ClassroomPage() {
   const { id } = useParams(); // This is the Course ID
   const [classroom, setClassroom] = useState(null);
@@ -91,7 +233,15 @@ export default function ClassroomPage() {
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("Student");
   const [isInstructor, setIsInstructor] = useState(false);
-
+  //group state
+  const [groups, setGroups] = useState([]);
+  const [isGroupsLoading, setIsGroupsLoading] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [newGroupData, setNewGroupData] = useState({
+    name: "",
+    representativeId: "",
+    memberIds: new Set(),
+  });
   // Stream state
   const [streamPosts, setStreamPosts] = useState([]);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
@@ -164,13 +314,38 @@ export default function ClassroomPage() {
       // no-op for assignments here
     }
   };
-
+  // Fetch groups for this class
+  const fetchGroups = async () => {
+    if (!id) return;
+    setIsGroupsLoading(true);
+    try {
+      const res = await fetch(`/api/groups?courseId=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error("Failed to fetch groups");
+      const data = await res.json();
+      setGroups(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching groups:", err);
+      setGroups([]);
+    } finally {
+      setIsGroupsLoading(false);
+    }
+  };
   // Fetch stream posts for this class
   const fetchStreamPosts = async () => {
-    if (!id) return;
+    if (!id || !user?.uid) return;
     try {
-      const res = await fetch(`/api/stream?classId=${encodeURIComponent(id)}`);
+     
+      const res = await fetch(
+        `/api/stream?classId=${encodeURIComponent(id)}`, 
+        {
+          headers: {
+            "x-uid": user.uid,
+          },
+        }
+      );
+      
       if (!res.ok) throw new Error("Failed to fetch stream posts");
+      
       const posts = await res.json();
       setStreamPosts(sortStreamPosts(Array.isArray(posts) ? posts : []));
     } catch (err) {
@@ -284,10 +459,13 @@ export default function ClassroomPage() {
 
     if (activeTab === "stream") {
       fetchStreamPosts();
+      fetchGroups();
     } else if (activeTab === "chat") {
       fetchChatMessages();
     } else if (activeTab === "assignments") {
       fetchAssignments();
+    }else if (activeTab === "people") {
+      fetchGroups(); // <-- ADD THIS
     }
     }, [id, user, activeTab]);
   // [NEW] useEffect for chat polling (auto-refresh)
@@ -385,39 +563,76 @@ export default function ClassroomPage() {
     }
   };
 
-  // Handler for unenrolling from course (students only)
-  const handleUnenroll = async () => {
-    if (!user || !id) {
-      toast.error("Unable to unenroll. Please try again.");
-      return;
+  const handleCreateGroup = async () => {
+    const { name, representativeId, memberIds } = newGroupData;
+
+    if (!name.trim()) {
+      return toast.error("Group name is required.");
+    }
+    if (!representativeId) {
+      return toast.error("Please select a group representative.");
+    }
+    if (memberIds.size === 0) {
+      return toast.error("Please select at least one group member.");
     }
 
-    const loadingToastId = toast.loading("Unenrolling from course...");
+    // Get the full student objects for the selected IDs
+    const allStudents = classroom?.students || [];
+
+    const getStudent = (userId) =>
+      allStudents.find((s) => s.userId === userId);
+
+    const representative = getStudent(representativeId);
+    if (!representative) {
+      return toast.error("Representative details not found.");
+    }
+    
+    // Ensure rep is also in the member list
+    const finalMemberIds = new Set(memberIds);
+    finalMemberIds.add(representativeId);
+
+    const members = Array.from(finalMemberIds)
+      .map(getStudent)
+      .filter(Boolean); // Filter out any undefined
+
+    const loadingId = toast.loading("Creating group...");
 
     try {
-      const response = await fetch("/api/courses/unenroll", {
+      const res = await fetch("/api/groups", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-uid": user.uid },
         body: JSON.stringify({
           courseId: id,
-          userId: user.uid,
+          name: name.trim(),
+          representative: {
+            userId: representative.userId,
+            name: representative.name,
+          },
+          members: members.map((m) => ({ userId: m.userId, name: m.name })),
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to unenroll from course");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create group");
       }
 
-      toast.success("Unenrolled successfully!", { id: loadingToastId });
-      
-      // Redirect to homepage after successful unenrollment
-      window.location.href = "/homepage";
+      toast.success("Group created!", { id: loadingId });
+      setIsCreateGroupOpen(false);
+      setNewGroupData({
+        name: "",
+        representativeId: "",
+        memberIds: new Set(),
+      });
+      fetchGroups(); // Refresh the group list
     } catch (err) {
-      toast.error(`Error: ${err.message}`, { id: loadingToastId });
+      console.error("Create group error:", err);
+      toast.error(err.message, { id: loadingId });
     }
   };
+
+  
+ 
 
   // Handler for creating a new advanced post (stream)
   const handleCreatePost = async () => {
@@ -479,6 +694,18 @@ export default function ClassroomPage() {
           }
         : null,
     };
+    const audiencePayload = {
+      type: newPostData.audienceType,
+      groupId:
+        newPostData.audienceType === "group"
+          ? newPostData.audienceGroupId
+          : null,
+    };
+
+    if (audiencePayload.type === "group" && !audiencePayload.groupId) {
+      toast.error("Please select a group to post to.");
+      return;
+    }
     setStreamPosts((prev) => sortStreamPosts([optimisticPost, ...prev]));
     setIsCreatePostOpen(false);
     setNewPostData(createInitialPostState());
@@ -492,6 +719,7 @@ export default function ClassroomPage() {
           link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
           isPinned: newPostData.isPinned,
           poll: pollPayload,
+          audience: audiencePayload,
         }),
       });
       if (!response.ok) throw new Error("Failed to save post");
@@ -1018,6 +1246,61 @@ export default function ClassroomPage() {
                           />
                         </div>
                       </div>
+                      <div className="grid gap-2 border-t pt-4">
+                    <Label>Audience</Label>
+                    <RadioGroup
+                      value={newPostData.audienceType}
+                      onValueChange={(value) =>
+                        setNewPostData({
+                          ...newPostData,
+                          audienceType: value,
+                          audienceGroupId: null, // Reset group on change
+                        })
+                      }
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="class" id="r-class" />
+                        <Label htmlFor="r-class">Whole Class</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="group" id="r-group" />
+                        <Label htmlFor="r-group">Specific Group</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {newPostData.audienceType === "group" && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="group-select">Select Group</Label>
+                      <Select
+                        value={newPostData.audienceGroupId}
+                        onValueChange={(value) =>
+                          setNewPostData({
+                            ...newPostData,
+                            audienceGroupId: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger id="group-select">
+                          <SelectValue placeholder="Select a group..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {groups.length === 0 ? (
+                            <SelectItem disabled>
+                              No groups found.
+                            </SelectItem>
+                          ) : (
+                            groups.map((group) => (
+                              <SelectItem key={group._id} value={group._id}>
+                                {group.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                       <div className="flex flex-wrap items-center gap-4 pt-2">
                         <div className="flex items-center space-x-2">
                           <Checkbox
@@ -1442,6 +1725,13 @@ export default function ClassroomPage() {
                         {/* Post Title & Badges */}
                         <div className="flex items-center gap-2 mb-2">
                           <h3 className="text-lg font-semibold">{post.title}</h3>
+                          {isInstructor && post.audience?.type === "group" && (
+                        <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium flex items-center">
+                          <Users className="w-3 h-3 inline-block mr-1" />
+                          {/* Find the group name from the state */}
+                          {groups.find((g) => g._id === post.audience.groupId)?.name || "Group Post"}
+                        </span>
+                      )}
                           {post.isPinned && (
                             <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-xs font-medium">
                               PINNED
@@ -1773,6 +2063,54 @@ export default function ClassroomPage() {
                   )}
                 </CardContent>
               </Card>
+              <Card className="border border-gray-300">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-xl">
+                    Groups ({groups.length})
+                  </CardTitle>
+                  {isInstructor && (
+                    <Button
+                      size="sm"
+                      onClick={() => setIsCreateGroupOpen(true)}
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Create Group
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isGroupsLoading && <p>Loading groups...</p>}
+                  {!isGroupsLoading && groups.length === 0 && (
+                    <p className="text-gray-600">No groups created yet.</p>
+                  )}
+                  {!isGroupsLoading && groups.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {groups.map((group) => (
+                        <Link
+                          key={group._id}
+                          href={`/classroom/${id}/group/${group._id}`}
+                        >
+                          <Card className="hover:shadow-md transition-shadow">
+                            <CardHeader>
+                              <CardTitle className="text-lg text-blue-700 hover:underline">
+                                {group.name}
+                              </CardTitle>
+                              <CardDescription>
+                                {group.members.length} member(s)
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <p className="text-sm font-medium">
+                                Rep: {group.representative.name}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>
@@ -1787,6 +2125,14 @@ export default function ClassroomPage() {
             authorName={username}
           />
         )}
+        {isInstructor && <CreateGroupDialog
+    open={isCreateGroupOpen}
+    onOpenChange={setIsCreateGroupOpen}
+    onSubmit={handleCreateGroup}
+    classroom={classroom}
+    newGroupData={newGroupData}
+    setNewGroupData={setNewGroupData}
+  />}
       </div>
     </div>
   );

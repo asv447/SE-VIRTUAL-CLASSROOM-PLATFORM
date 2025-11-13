@@ -4,6 +4,7 @@ import {
   getUsersCollection,
   getCoursesCollection,
   getNotificationsCollection,
+  getGroupsCollection,
 } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
@@ -17,7 +18,28 @@ export async function GET(request) {
     if (!classId) {
       return NextResponse.json({ error: "Missing classId" }, { status: 400 });
     }
+    const uid = request.headers.get("x-uid");
+    if (!uid) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
+    // --- [NEW] Get User Role & Group Memberships ---
+    const coursesCollection = await getCoursesCollection();
+    const groupsCol = await getGroupsCollection();
+
+    const course = await coursesCollection.findOne({
+      _id: new ObjectId(classId),
+    });
+    const isInstructor = course?.instructorId === uid;
+
+    const myGroups = await groupsCol
+      .find({
+        courseId: new ObjectId(classId),
+        "members.userId": uid,
+      })
+      .toArray();
+    // Get a list of group ID strings the user belongs to
+    const myGroupIds = myGroups.map((g) => g._id.toString());
     const streamsCollection = await getStreamsCollection();
 
     const posts = await streamsCollection
@@ -60,6 +82,7 @@ export async function GET(request) {
             poll: 1,
             createdAt: 1,
             isPinned: 1,
+            audience: 1,
             author: {
               name: {
                 $ifNull: [
@@ -73,12 +96,29 @@ export async function GET(request) {
         },
       ])
       .toArray();
-
-    const formattedPosts = posts.map((post) => ({
-      ...post,
-      id: post._id.toString(),
-      _id: undefined,
-    }));
+      const visiblePosts = posts.filter((post) => {
+        // Instructor sees all posts
+        if (isInstructor) {
+          return true;
+        }
+  
+        // If post is public (no audience, or type is 'class')
+        if (!post.audience || post.audience.type === "class") {
+          return true;
+        }
+  
+        // If post is for a group, check if user is in that group
+        if (post.audience.type === "group") {
+          return myGroupIds.includes(post.audience.groupId);
+        }
+  
+        return false; // Default to hiding
+      });
+      const formattedPosts = visiblePosts.map((post) => ({
+        ...post,
+        id: post._id.toString(),
+        _id: undefined,
+      }));
 
     return NextResponse.json(formattedPosts, { status: 200 });
   } catch (err) {
@@ -101,6 +141,7 @@ export async function POST(request) {
       assignment,
       poll,
       isPinned,
+      audience
     } = await request.json();
 
     // [UPDATE] Validate title and content
@@ -154,6 +195,7 @@ export async function POST(request) {
       comments: [],
       poll: pollData,
       isPinned: Boolean(isPinned),
+      audience: audience || { type: "class", groupId: null },
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -165,17 +207,29 @@ export async function POST(request) {
       if (classId) {
         const coursesCollection = await getCoursesCollection();
         const notificationsCollection = await getNotificationsCollection();
-
+        let notifRecipients = [];
         let courseDoc = null;
         try {
           courseDoc = await coursesCollection.findOne({ _id: new ObjectId(classId) });
         } catch (_) {
           // classId might not be an ObjectId; skip fanout safely
         }
+        if (audience?.type === "group" && audience.groupId) {
+          // If it's a group post, only get group members
+          const groupsCol = await getGroupsCollection();
+          const group = await groupsCol.findOne({
+            _id: new ObjectId(audience.groupId),
+          });
+          notifRecipients = group?.members || [];
+        } else {
+          // It's a class post, get all students
+          notifRecipients = courseDoc?.students || [];
+        }
 
-        const students = courseDoc?.students || [];
-        if (students.length > 0) {
-          const notifDocs = students
+       
+        if (notifRecipients.length > 0) {
+          const notifDocs = notifRecipients
+
             .filter((s) => s?.userId && s.userId !== authorId)
             .map((s) => ({
               userId: s.userId,
@@ -354,6 +408,23 @@ export async function PATCH(request) {
         };
         hasUpdates = true;
       }
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, "audience")) {
+      if (
+        updates.audience &&
+        typeof updates.audience === "object" &&
+        (updates.audience.type === "class" ||
+          (updates.audience.type === "group" && updates.audience.groupId))
+      ) {
+        updateDoc.$set.audience = {
+          type: updates.audience.type,
+          groupId: updates.audience.type === "group" ? updates.audience.groupId : null,
+        };
+      } else {
+        // Default to class
+        updateDoc.$set.audience = { type: "class", groupId: null };
+      }
+      hasUpdates = true;
     }
 
     if (!hasUpdates) {
