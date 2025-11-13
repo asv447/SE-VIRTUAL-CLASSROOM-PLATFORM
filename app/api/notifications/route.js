@@ -52,7 +52,24 @@ export async function PATCH(request) {
       return NextResponse.json({ message: "Marked as read" }, { status: 200 });
     }
 
-    // Mark all for a user as read
+    // Mark all for a user as read AND delete them
+    if (payload.action === "markAllAndDelete" && payload.uid) {
+      // First mark as read (for logging/history purposes if needed)
+      await col.updateMany(
+        { userId: payload.uid, read: { $ne: true } },
+        { $set: { read: true, readAt: new Date() } }
+      );
+      
+      // Then delete all notifications for this user
+      const deleteResult = await col.deleteMany({ userId: payload.uid });
+      
+      return NextResponse.json({ 
+        message: `Cleared ${deleteResult.deletedCount} notifications`,
+        deletedCount: deleteResult.deletedCount 
+      }, { status: 200 });
+    }
+
+    // Mark all for a user as read (keep in DB)
     if (payload.action === "markAll" && payload.uid) {
       const result = await col.updateMany(
         { userId: payload.uid, read: { $ne: true } },

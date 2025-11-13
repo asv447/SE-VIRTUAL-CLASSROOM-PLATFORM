@@ -422,34 +422,33 @@ export default function ClassyncDashboard() {
                 </Button>
                 <Button
                   variant="outline"
+                  className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+                >
+                  <BarChart3 className="w-6 h-6" />
+                  <span className="text-sm">View Analytics</span>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
                   className="h-20 flex-col gap-2 bg-transparent"
                   asChild
                 >
                   <a href="/assignments">
-                    <BookOpen className="w-6 h-6" />
+                    <FileText className="w-6 h-6" />
                     <span className="text-sm">Assignments</span>
                   </a>
                 </Button>
+                <Button
+                  variant="outline"
+                  className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+                >
+                  <BarChart3 className="w-6 h-6" />
+                  <span className="text-sm">View Analytics</span>
+                </Button>
               </>
-            ) : (
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2 bg-transparent"
-                asChild
-              >
-                <a href="/assignments">
-                  <FileText className="w-6 h-6" />
-                  <span className="text-sm">Assignments</span>
-                </a>
-              </Button>
             )}
-            <Button
-              variant="outline"
-              className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
-            >
-              <BarChart3 className="w-6 h-6" />
-              <span className="text-sm">View Analytics</span>
-            </Button>
             <Button
               variant="outline"
               className="h-20 flex-col gap-2 bg-transparent"
