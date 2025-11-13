@@ -17,12 +17,30 @@ import {
 
 export default function NavigationBar() {
   const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (usr) => {
+    const unsubscribe = onAuthStateChanged(auth, async (usr) => {
       setUser(usr);
+      if (usr && usr.uid) {
+        try {
+          const res = await fetch(`/api/users/${usr.uid}`);
+          if (res.ok) {
+            const json = await res.json().catch(() => ({}));
+            const role = json?.user?.role || null;
+            setUserRole(role);
+          } else {
+            setUserRole(null);
+          }
+        } catch (e) {
+          console.error("Failed to fetch user role for navbar:", e);
+          setUserRole(null);
+        }
+      } else {
+        setUserRole(null);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -35,7 +53,11 @@ export default function NavigationBar() {
     }
   };
 
-  const isAdmin = user?.email?.includes("@instructor.com") || user?.email?.includes("@admin.com");
+  // Determine role from server-side user profile. Avoid relying on email heuristics.
+  // Show Assignments only to students. Treat any non-student role as instructor/admin.
+  const isStudent = userRole === "student";
+  const isInstructor = userRole === "instructor";
+  const isAdmin = userRole === "admin" || userRole === "instructor";
   const isHomepage = pathname === "/" || pathname === "/homepage";
   const showNavLinks = !isHomepage;
 
@@ -61,13 +83,16 @@ export default function NavigationBar() {
                 </Link>
                 {user && (
                   <>
-                    <Link 
-                      href="/assignments" 
-                      className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      <User className="h-4 w-4" />
-                      Assignments
-                    </Link>
+                    {/* Show Assignments link only for students (role-based) */}
+                    {isStudent && (
+                      <Link 
+                        href="/assignments" 
+                        className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        <User className="h-4 w-4" />
+                        Assignments
+                      </Link>
+                    )}
                     {isAdmin && (
                       <Link 
                         href="/admin" 
@@ -144,14 +169,16 @@ export default function NavigationBar() {
                   </Link>
                   {user && (
                     <>
-                      <Link 
-                        href="/assignments" 
-                        className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        <User className="h-4 w-4" />
-                        Assignments
-                      </Link>
+                      {isStudent && (
+                        <Link 
+                          href="/assignments" 
+                          className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <User className="h-4 w-4" />
+                          Assignments
+                        </Link>
+                      )}
                       {isAdmin && (
                         <Link 
                           href="/admin" 

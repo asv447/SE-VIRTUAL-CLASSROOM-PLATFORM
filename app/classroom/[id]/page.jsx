@@ -201,7 +201,14 @@ export default function ClassroomPage() {
     if (!id) return;
     setIsAssignmentsLoading(true);
     try {
-      const res = await fetch(`/api/assignments?classId=${encodeURIComponent(id)}`);
+      // include the current user's role and id so the API can enforce access control
+      const role = isInstructor ? "instructor" : "student";
+      const userId = user?.uid || "";
+      const res = await fetch(
+        `/api/assignments?classId=${encodeURIComponent(id)}&role=${encodeURIComponent(
+          role
+        )}&userId=${encodeURIComponent(userId)}`
+      );
       if (!res.ok) throw new Error("Failed to fetch assignments");
       const list = await res.json();
       setAssignments(Array.isArray(list) ? list : []);
