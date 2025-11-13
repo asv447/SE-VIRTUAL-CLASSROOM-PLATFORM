@@ -5,6 +5,7 @@ import { Check, Bell, X, Trash2 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "@/hooks/use-toast";
 
 export default function NotificationBell() {
   const [user, setUser] = useState(null);
@@ -12,6 +13,8 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const ref = useRef(null);
+  const seenNotificationsRef = useRef(new Set());
+  const initialLoadRef = useRef(true);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -21,8 +24,17 @@ export default function NotificationBell() {
   }, []);
 
   useEffect(() => {
+    seenNotificationsRef.current = new Set();
+    initialLoadRef.current = true;
+    if (!user) {
+      setNotifications([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user) return;
-    fetchNotifications();
+  fetchNotifications(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -30,12 +42,12 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
-      fetchNotifications();
+      fetchNotifications(true);
     }, 30000); // 30s
 
-    const onFocus = () => fetchNotifications();
+    const onFocus = () => fetchNotifications(true);
     const onVisibility = () => {
-      if (document.visibilityState === "visible") fetchNotifications();
+      if (document.visibilityState === "visible") fetchNotifications(true);
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
@@ -54,13 +66,32 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
-  async function fetchNotifications() {
+  async function fetchNotifications(showToastForNew = false) {
     setLoading(true);
     try {
       const res = await fetch(`/api/notifications?uid=${user.uid}`);
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications || []);
+        const incoming = data.notifications || [];
+
+        if (!initialLoadRef.current && showToastForNew) {
+          const seen = seenNotificationsRef.current;
+          incoming
+            .filter((n) => !seen.has(n.id) && !n.read)
+            .forEach((n) => {
+              toast({
+                title: n.title || "New notification",
+                description: n.message || "You have a new notification.",
+              });
+            });
+        }
+
+        incoming.forEach((n) => {
+          seenNotificationsRef.current.add(n.id);
+        });
+
+        setNotifications(incoming);
+        initialLoadRef.current = false;
       }
     } catch (err) {
       console.error("Fetch notifications error:", err);
