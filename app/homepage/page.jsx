@@ -357,16 +357,6 @@ export default function ClassyncDashboard() {
                       <span className="text-sm">Admin Dashboard</span>
                     </a>
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="h-20 flex-col gap-2 bg-transparent"
-                    asChild
-                  >
-                    <a href="/assignments">
-                      <Upload className="w-6 h-6" />
-                      <span className="text-sm">Assignments</span>
-                    </a>
-                  </Button>
                 </>
               ) : (
                 <Button
