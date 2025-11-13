@@ -140,9 +140,9 @@ export async function PATCH(request, { params }) {
     }
 
     const body = await request.json();
-    const { deadline } = body;
-    if (!deadline) {
-      return NextResponse.json({ error: "Missing deadline field" }, { status: 400 });
+    const { deadline, maxScore } = body;
+    if (!deadline && maxScore === undefined) {
+      return NextResponse.json({ error: "Missing deadline or maxScore field" }, { status: 400 });
     }
 
     const assignmentsCollection = await getAssignmentsCollection();
@@ -159,12 +159,24 @@ export async function PATCH(request, { params }) {
     };
 
     // attempt to parse deadline into a Date
-    const parsed = new Date(deadline);
-    if (!isNaN(parsed.getTime())) {
-      update.deadline = parsed;
-    } else {
-      // if parsing failed, store as string
-      update.deadline = deadline;
+    if (deadline) {
+      const parsed = new Date(deadline);
+      if (!isNaN(parsed.getTime())) {
+        update.deadline = parsed;
+      } else {
+        // if parsing failed, store as string
+        update.deadline = deadline;
+      }
+    }
+
+    // Update maxScore if provided
+    if (maxScore !== undefined) {
+      const parsedMaxScore = maxScore === null || maxScore === "" ? null : Number(maxScore);
+      if (parsedMaxScore !== null && !isNaN(parsedMaxScore)) {
+        update.maxScore = parsedMaxScore;
+      } else if (parsedMaxScore === null) {
+        update.maxScore = null;
+      }
     }
 
     const result = await assignmentsCollection.findOneAndUpdate(
@@ -177,7 +189,11 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ id, deadline: result.value.deadline }, { status: 200 });
+    return NextResponse.json({ 
+      id, 
+      deadline: result.value.deadline,
+      maxScore: result.value.maxScore 
+    }, { status: 200 });
   } catch (err) {
     console.error("[API /api/assignments/[id]] PATCH Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });

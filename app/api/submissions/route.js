@@ -202,6 +202,8 @@ export async function PATCH(request) {
     const body = await request.json();
     const { submissionId, grade, maxScore, feedback } = body || {};
 
+    console.log("[PATCH /api/submissions] Request:", { submissionId, grade, maxScore, feedback, graderId });
+
     if (!submissionId) {
       return NextResponse.json(
         { error: "submissionId is required" },
@@ -211,7 +213,7 @@ export async function PATCH(request) {
 
     if (!graderId) {
       return NextResponse.json(
-        { error: "Missing grader identity" },
+        { error: "Missing grader identity. Please ensure you are logged in." },
         { status: 401 }
       );
     }
@@ -242,17 +244,36 @@ export async function PATCH(request) {
       );
     }
 
+    console.log("[PATCH /api/submissions] Found submission:", submission._id);
+
     const assignmentId = submission.assignmentId;
     const assignmentDoc = await findAssignmentDocument(
       assignmentsCollection,
       assignmentId
     );
 
+    console.log("[PATCH /api/submissions] Assignment doc:", { 
+      id: assignmentDoc?._id, 
+      instructorId: assignmentDoc?.instructorId 
+    });
+
     const courseId = assignmentDoc?.courseId || assignmentDoc?.classId;
     const courseDoc = await findCourseDocument(coursesCollection, courseId);
 
+    console.log("[PATCH /api/submissions] Course doc:", { 
+      id: courseDoc?._id, 
+      instructorId: courseDoc?.instructorId 
+    });
+
     const instructorId =
       assignmentDoc?.instructorId || courseDoc?.instructorId || null;
+    
+    console.log("[PATCH /api/submissions] Authorization check:", { 
+      instructorId, 
+      graderId, 
+      matches: instructorId === graderId 
+    });
+
     if (instructorId && instructorId !== graderId) {
       return NextResponse.json(
         { error: "You are not allowed to grade this submission" },
@@ -295,13 +316,21 @@ export async function PATCH(request) {
       gradedBy: parsedGrade !== null ? graderId : null,
     };
 
+    console.log("[PATCH /api/submissions] Updating with:", update);
+
     const result = await submissionsCollection.findOneAndUpdate(
       { _id: submissionObjectId },
       { $set: update },
       { returnDocument: "after" }
     );
 
-    if (!result.value) {
+    console.log("[PATCH /api/submissions] Update result:", { 
+      hasValue: !!result.value,
+      ok: result.ok 
+    });
+
+    if (!result.value && !result) {
+      console.error("[PATCH /api/submissions] Update failed - no result");
       return NextResponse.json(
         { error: "Failed to update submission" },
         { status: 500 }
@@ -310,22 +339,39 @@ export async function PATCH(request) {
 
     // Notify the student of grading (best-effort)
     try {
-      if (submission.studentId) {
+      if (submission.studentId && parsedGrade !== null) {
+        // Check if this is the first time grading or an update
+        const isFirstTimeGrading = submission.grade === null || submission.grade === undefined;
+        
+        // Build grade display string
+        let gradeDisplay = `${parsedGrade}`;
+        if (parsedMaxScore !== null) {
+          gradeDisplay += ` / ${parsedMaxScore}`;
+        }
+        
+        // Different messages for first-time grading vs updates
+        const notificationTitle = isFirstTimeGrading 
+          ? "Assignment graded" 
+          : "Grade updated";
+        
+        const notificationMessage = isFirstTimeGrading
+          ? `Your submission for "${assignmentDoc?.title || "an assignment"}" has been graded. Grade: ${gradeDisplay}${normalizedFeedback ? ' - Check feedback!' : ''}`
+          : `Your grade for "${assignmentDoc?.title || "an assignment"}" has been updated to: ${gradeDisplay}${normalizedFeedback ? ' - New feedback available!' : ''}`;
+        
         await notificationsCollection.insertOne({
           userId: submission.studentId,
-          title: "Assignment graded",
-          message: `Your submission for ${
-            assignmentDoc?.title || "an assignment"
-          } has been graded.`,
+          title: notificationTitle,
+          message: notificationMessage,
           read: false,
           createdAt: new Date(),
           extra: {
-            type: "submission-graded",
+            type: isFirstTimeGrading ? "submission-graded" : "grade-updated",
             assignmentId: assignmentId || null,
             submissionId: submissionId,
             courseId: courseId || null,
             grade: parsedGrade,
             maxScore: parsedMaxScore,
+            hasFeedback: !!normalizedFeedback,
           },
         });
       }
@@ -333,7 +379,11 @@ export async function PATCH(request) {
       console.error("Failed to notify student of grade:", notifyErr);
     }
 
-    const { _id, fileData, ...rest } = result.value;
+    // Handle both old and new MongoDB driver response formats
+    const updatedDoc = result.value || result;
+    const { _id, fileData, ...rest } = updatedDoc;
+
+    console.log("[PATCH /api/submissions] Success! Updated submission:", _id);
 
     return NextResponse.json(
       {
@@ -344,6 +394,7 @@ export async function PATCH(request) {
     );
   } catch (err) {
     console.error("[API /api/submissions PATCH] Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[API /api/submissions PATCH] Stack trace:", err.stack);
+    return NextResponse.json({ error: err.message || "Failed to update submission" }, { status: 500 });
   }
 }
