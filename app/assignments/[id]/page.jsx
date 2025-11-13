@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { useParams, useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,26 +14,58 @@ export default function AssignmentDetailPage() {
   const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
-    const fetchAssignment = async () => {
+    let unsub = () => {};
+    const fetchAssignment = async (role, uid) => {
       if (!id) return;
       try {
-        const res = await fetch(`/api/assignments/${id}`);
+        const rolePart = role ? `?role=${encodeURIComponent(role)}&userId=${encodeURIComponent(uid)}` : "";
+        const res = await fetch(`/api/assignments/${id}${rolePart}`);
         if (!res.ok) {
-          setError("Failed to load assignment");
+          const errText = await res.text().catch(() => "");
+          setError("Failed to load assignment: " + errText);
           setLoading(false);
           return;
         }
         const data = await res.json();
-        setAssignment(data); // route returns { id, deadline } currently; could be expanded later
+        setAssignment(data);
       } catch (e) {
         setError("Network error loading assignment");
       } finally {
         setLoading(false);
       }
     };
-    fetchAssignment();
+
+    // subscribe to auth to determine current user and role
+    unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        setUser(null);
+        setUserRole(null);
+        // fetch without role (fallback)
+        fetchAssignment(null, null);
+        return;
+      }
+      setUser(u);
+      try {
+        const res = await fetch(`/api/users/${u.uid}`);
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          const role = json?.user?.role || null;
+          setUserRole(role);
+          fetchAssignment(role, u.uid);
+        } else {
+          // fallback: fetch without explicit role
+          fetchAssignment(null, null);
+        }
+      } catch (e) {
+        fetchAssignment(null, null);
+      }
+    });
+
+    return () => unsub();
   }, [id]);
 
   const safeFormatDate = (date) => {

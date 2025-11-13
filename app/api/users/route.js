@@ -36,14 +36,33 @@ export async function POST(request) {
     }
 
     const usersCollection = await getUsersCollection();
-    
-    // Check if user already exists
-    const existing = await usersCollection.findOne({ uid });
-    if (existing) {
+    // First, check if a user exists by uid
+    const existingByUid = await usersCollection.findOne({ uid });
+    if (existingByUid) {
       return NextResponse.json({ message: "User doc already exists" }, { status: 200 });
     }
 
-    // Create new user
+    // If a user exists by email (e.g. created by a prior verification step),
+    // update that document to attach the uid and other provided fields.
+    const existingByEmail = await usersCollection.findOne({ email });
+    if (existingByEmail) {
+      await usersCollection.updateOne(
+        { _id: existingByEmail._id },
+        {
+          $set: {
+            uid,
+            username,
+            role,
+            // Preserve emailVerified true if already verified; otherwise use provided value
+            emailVerified: existingByEmail.emailVerified || emailVerified,
+            updatedAt: new Date(),
+          },
+        }
+      );
+      return NextResponse.json({ message: "Existing user updated with uid" }, { status: 200 });
+    }
+
+    // Otherwise create new user
     const newUser = {
       uid,
       username,
@@ -56,9 +75,9 @@ export async function POST(request) {
 
     const result = await usersCollection.insertOne(newUser);
 
-    return NextResponse.json({ 
-      message: "User doc created", 
-      userId: result.insertedId.toString() 
+    return NextResponse.json({
+      message: "User doc created",
+      userId: result.insertedId.toString(),
     }, { status: 201 });
   } catch (err) {
     console.error("[API /api/users] Error:", err);

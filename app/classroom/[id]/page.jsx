@@ -11,7 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon, Trash2 } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, LogOut } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { auth } from "../../../lib/firebase"; // Corrected path
+import { auth } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
@@ -42,9 +42,42 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"; // <-- ADD THIS
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group"; // <-- ADD THIS
+import Link from "next/link"; // <-- ADD THIS
+import { Users, UserPlus } from "lucide-react"; // <-- ADD THIS
 // [DELETED] All socket.io imports are gone
 
 const MAX_POLL_OPTIONS = 6;
+
+const sortStreamPosts = (posts) => {
+  if (!Array.isArray(posts)) {
+    return [];
+  }
+
+  return [...posts].sort((a, b) => {
+    const aPinned = a?.isPinned ? 1 : 0;
+    const bPinned = b?.isPinned ? 1 : 0;
+
+    if (aPinned !== bPinned) {
+      return bPinned - aPinned;
+    }
+
+    const aDate = new Date(a?.createdAt || 0).getTime();
+    const bDate = new Date(b?.createdAt || 0).getTime();
+
+    return bDate - aDate;
+  });
+};
 
 const createInitialPostState = () => ({
   title: "",
@@ -56,9 +89,139 @@ const createInitialPostState = () => ({
   includePoll: false,
   pollQuestion: "",
   pollOptions: ["", ""],
+  audienceType: "class", // 'class' or 'group'
+  audienceGroupId: null, // The _id of the selected group
   allowMultiplePollSelections: false,
+  isPinned: false,
 });
 
+const CreateGroupDialog = ({open,
+  onOpenChange,
+  onSubmit,
+  classroom,
+  newGroupData,
+  setNewGroupData,}) => {
+  const students = classroom?.students || [];
+
+  const handleMemberToggle = (checked, userId) => {
+    setNewGroupData((prev) => {
+      const newMemberIds = new Set(prev.memberIds);
+      if (checked) {
+        newMemberIds.add(userId);
+      } else {
+        newMemberIds.delete(userId);
+        // If unchecking the rep, clear the rep
+        if (prev.representativeId === userId) {
+          prev.representativeId = "";
+        }
+      }
+      return { ...prev, memberIds: newMemberIds };
+    });
+  };
+
+  const handleRepChange = (userId) => {
+    setNewGroupData((prev) => {
+      const newMemberIds = new Set(prev.memberIds);
+      newMemberIds.add(userId); // Automatically add rep to members
+      return {
+        ...prev,
+        representativeId: userId,
+        memberIds: newMemberIds,
+      };
+    });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Create New Group</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4 overflow-y-auto">
+          <div className="grid gap-2">
+            <Label htmlFor="group-name">Group Name</Label>
+            <Input
+              id="group-name"
+              placeholder="e.g., Project Group A"
+              value={newGroupData.name}
+              onChange={(e) =>
+                setNewGroupData((prev) => ({ ...prev, name: e.target.value }))
+              }
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Group Representative</Label>
+            <Select
+              value={newGroupData.representativeId}
+              onValueChange={handleRepChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a representative" />
+              </SelectTrigger>
+              <SelectContent>
+                {students.map((student) => (
+                  <SelectItem key={student.userId} value={student.userId}>
+                    {student.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Group Members</Label>
+            <Card className="max-h-[250px] overflow-y-auto p-4">
+              <div className="space-y-3">
+                {students.map((student) => {
+                  const isRep =
+                    student.userId === newGroupData.representativeId;
+                  return (
+                    <div
+                      key={student.userId}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`member-${student.userId}`}
+                        checked={
+                          newGroupData.memberIds.has(student.userId) || isRep
+                        }
+                        disabled={isRep} // Rep is always checked
+                        onCheckedChange={(checked) =>
+                          handleMemberToggle(checked, student.userId)
+                        }
+                      />
+                      <Label
+                        htmlFor={`member-${student.userId}`}
+                        className="font-normal"
+                      >
+                        {student.name}{" "}
+                        {isRep && (
+                          <span className="text-xs text-yellow-600">
+                            (Rep)
+                          </span>
+                        )}
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button onClick={onSubmit}>Create</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 export default function ClassroomPage() {
   const { id } = useParams(); // This is the Course ID
   const [classroom, setClassroom] = useState(null);
@@ -70,15 +233,26 @@ export default function ClassroomPage() {
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("Student");
   const [isInstructor, setIsInstructor] = useState(false);
-
+  //group state
+  const [groups, setGroups] = useState([]);
+  const [isGroupsLoading, setIsGroupsLoading] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [newGroupData, setNewGroupData] = useState({
+    name: "",
+    representativeId: "",
+    memberIds: new Set(),
+  });
   // Stream state
   const [streamPosts, setStreamPosts] = useState([]);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [newPostData, setNewPostData] = useState(createInitialPostState);
+  const [isEditPostOpen, setIsEditPostOpen] = useState(false);
+  const [editingPostId, setEditingPostId] = useState(null);
+  const [editPostData, setEditPostData] = useState(createInitialPostState);
+  const [editingPollOptionIds, setEditingPollOptionIds] = useState([]);
 
   // [NEW] Chat state (back to simple version)
   const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(true);
   const [pollSelections, setPollSelections] = useState({});
   const [pollSubmitting, setPollSubmitting] = useState({});
@@ -140,15 +314,40 @@ export default function ClassroomPage() {
       // no-op for assignments here
     }
   };
-
+  // Fetch groups for this class
+  const fetchGroups = async () => {
+    if (!id) return;
+    setIsGroupsLoading(true);
+    try {
+      const res = await fetch(`/api/groups?courseId=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error("Failed to fetch groups");
+      const data = await res.json();
+      setGroups(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching groups:", err);
+      setGroups([]);
+    } finally {
+      setIsGroupsLoading(false);
+    }
+  };
   // Fetch stream posts for this class
   const fetchStreamPosts = async () => {
-    if (!id) return;
+    if (!id || !user?.uid) return;
     try {
-      const res = await fetch(`/api/stream?classId=${encodeURIComponent(id)}`);
+     
+      const res = await fetch(
+        `/api/stream?classId=${encodeURIComponent(id)}`, 
+        {
+          headers: {
+            "x-uid": user.uid,
+          },
+        }
+      );
+      
       if (!res.ok) throw new Error("Failed to fetch stream posts");
+      
       const posts = await res.json();
-      setStreamPosts(Array.isArray(posts) ? posts : []);
+      setStreamPosts(sortStreamPosts(Array.isArray(posts) ? posts : []));
     } catch (err) {
       console.error("Error fetching stream posts:", err);
       setStreamPosts([]);
@@ -177,7 +376,14 @@ export default function ClassroomPage() {
     if (!id) return;
     setIsAssignmentsLoading(true);
     try {
-      const res = await fetch(`/api/assignments?classId=${encodeURIComponent(id)}`);
+      // include the current user's role and id so the API can enforce access control
+      const role = isInstructor ? "instructor" : "student";
+      const userId = user?.uid || "";
+      const res = await fetch(
+        `/api/assignments?classId=${encodeURIComponent(id)}&role=${encodeURIComponent(
+          role
+        )}&userId=${encodeURIComponent(userId)}`
+      );
       if (!res.ok) throw new Error("Failed to fetch assignments");
       const list = await res.json();
       setAssignments(Array.isArray(list) ? list : []);
@@ -253,10 +459,13 @@ export default function ClassroomPage() {
 
     if (activeTab === "stream") {
       fetchStreamPosts();
+      fetchGroups();
     } else if (activeTab === "chat") {
       fetchChatMessages();
     } else if (activeTab === "assignments") {
       fetchAssignments();
+    }else if (activeTab === "people") {
+      fetchGroups(); // <-- ADD THIS
     }
     }, [id, user, activeTab]);
   // [NEW] useEffect for chat polling (auto-refresh)
@@ -354,6 +563,77 @@ export default function ClassroomPage() {
     }
   };
 
+  const handleCreateGroup = async () => {
+    const { name, representativeId, memberIds } = newGroupData;
+
+    if (!name.trim()) {
+      return toast.error("Group name is required.");
+    }
+    if (!representativeId) {
+      return toast.error("Please select a group representative.");
+    }
+    if (memberIds.size === 0) {
+      return toast.error("Please select at least one group member.");
+    }
+
+    // Get the full student objects for the selected IDs
+    const allStudents = classroom?.students || [];
+
+    const getStudent = (userId) =>
+      allStudents.find((s) => s.userId === userId);
+
+    const representative = getStudent(representativeId);
+    if (!representative) {
+      return toast.error("Representative details not found.");
+    }
+    
+    // Ensure rep is also in the member list
+    const finalMemberIds = new Set(memberIds);
+    finalMemberIds.add(representativeId);
+
+    const members = Array.from(finalMemberIds)
+      .map(getStudent)
+      .filter(Boolean); // Filter out any undefined
+
+    const loadingId = toast.loading("Creating group...");
+
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-uid": user.uid },
+        body: JSON.stringify({
+          courseId: id,
+          name: name.trim(),
+          representative: {
+            userId: representative.userId,
+            name: representative.name,
+          },
+          members: members.map((m) => ({ userId: m.userId, name: m.name })),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create group");
+      }
+
+      toast.success("Group created!", { id: loadingId });
+      setIsCreateGroupOpen(false);
+      setNewGroupData({
+        name: "",
+        representativeId: "",
+        memberIds: new Set(),
+      });
+      fetchGroups(); // Refresh the group list
+    } catch (err) {
+      console.error("Create group error:", err);
+      toast.error(err.message, { id: loadingId });
+    }
+  };
+
+  
+ 
+
   // Handler for creating a new advanced post (stream)
   const handleCreatePost = async () => {
     if (!newPostData.title.trim() || !newPostData.content.trim() || !user) {
@@ -387,8 +667,9 @@ export default function ClassroomPage() {
           options: pollOptions.map((text) => ({ text })),
         }
       : null;
-
-  const loadingToastId = toast.loading("Creating post...");
+    const linkUrl = (newPostData.linkUrl || "").trim();
+    const linkText = (newPostData.linkText || "").trim();
+    const loadingToastId = toast.loading("Creating post...");
     const optimisticPost = {
       id: `temp-${Date.now()}`,
       classId: id,
@@ -396,10 +677,11 @@ export default function ClassroomPage() {
       content: newPostData.content,
       isImportant: newPostData.isImportant,
       isUrgent: newPostData.isUrgent,
-      link: newPostData.linkUrl ? { url: newPostData.linkUrl, text: newPostData.linkText || "View Link" } : null,
+      link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
       createdAt: new Date().toISOString(),
       author: { name: username, id: user.uid },
       comments: [],
+      isPinned: newPostData.isPinned,
       poll: pollPayload
         ? {
             question: pollPayload.question,
@@ -412,7 +694,19 @@ export default function ClassroomPage() {
           }
         : null,
     };
-  setStreamPosts((prev) => [optimisticPost, ...prev]);
+    const audiencePayload = {
+      type: newPostData.audienceType,
+      groupId:
+        newPostData.audienceType === "group"
+          ? newPostData.audienceGroupId
+          : null,
+    };
+
+    if (audiencePayload.type === "group" && !audiencePayload.groupId) {
+      toast.error("Please select a group to post to.");
+      return;
+    }
+    setStreamPosts((prev) => sortStreamPosts([optimisticPost, ...prev]));
     setIsCreatePostOpen(false);
     setNewPostData(createInitialPostState());
     try {
@@ -422,8 +716,10 @@ export default function ClassroomPage() {
           classId: id, authorId: user.uid, title: newPostData.title,
           content: newPostData.content, isImportant: newPostData.isImportant,
           isUrgent: newPostData.isUrgent,
-          link: newPostData.linkUrl ? { url: newPostData.linkUrl, text: newPostData.linkText || "View Link" } : null,
+          link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
+          isPinned: newPostData.isPinned,
           poll: pollPayload,
+          audience: audiencePayload,
         }),
       });
       if (!response.ok) throw new Error("Failed to save post");
@@ -431,7 +727,170 @@ export default function ClassroomPage() {
       fetchStreamPosts();
     } catch (err) {
       toast.error(`Error: ${err.message}`, { id: loadingToastId });
-      setStreamPosts((prev) => prev.filter((p) => (p._id ?? p.id) !== optimisticPost.id));
+      setStreamPosts((prev) =>
+        sortStreamPosts(prev.filter((p) => (p._id ?? p.id) !== optimisticPost.id))
+      );
+    }
+  };
+
+  const resetEditState = () => {
+    setEditingPostId(null);
+    setEditPostData(createInitialPostState());
+    setEditingPollOptionIds([]);
+  };
+
+  const handleEditDialogChange = (open) => {
+    if (!open) {
+      resetEditState();
+    }
+    setIsEditPostOpen(open);
+  };
+
+  const handleOpenEditPost = (post) => {
+    if (!post) return;
+
+    const pid = (post._id ?? post.id)?.toString?.();
+    if (!pid) return;
+
+    const baseState = createInitialPostState();
+    baseState.title = post.title || "";
+    baseState.content = post.content || "";
+    baseState.isImportant = !!post.isImportant;
+    baseState.isUrgent = !!post.isUrgent;
+    baseState.isPinned = !!post.isPinned;
+    baseState.linkUrl = post.link?.url || "";
+    baseState.linkText = post.link?.text || "";
+
+    const hasPoll = Boolean(post.poll);
+    baseState.includePoll = hasPoll;
+    baseState.pollQuestion = hasPoll ? post.poll?.question || "" : "";
+    baseState.allowMultiplePollSelections = hasPoll ? !!post.poll?.allowMultiple : false;
+
+    if (hasPoll) {
+      const existingOptions = (post.poll?.options || []).slice(0, MAX_POLL_OPTIONS);
+      const sanitizedOptions = existingOptions.map((option) =>
+        typeof option?.text === "string" ? option.text : ""
+      );
+      while (sanitizedOptions.length < 2) {
+        sanitizedOptions.push("");
+      }
+      baseState.pollOptions = sanitizedOptions.length ? sanitizedOptions : ["", ""];
+
+      const optionIds = existingOptions.map((option) => option?.id || null);
+      while (optionIds.length < baseState.pollOptions.length) {
+        optionIds.push(null);
+      }
+      setEditingPollOptionIds(optionIds);
+    } else {
+      baseState.pollOptions = ["", ""];
+      setEditingPollOptionIds([]);
+    }
+
+    setEditingPostId(pid);
+    setEditPostData(baseState);
+    setIsEditPostOpen(true);
+  };
+
+  const addEditPollOption = () => {
+    if (editPostData.pollOptions.length >= MAX_POLL_OPTIONS) return;
+
+    setEditPostData((prev) => ({
+      ...prev,
+      pollOptions: [...prev.pollOptions, ""],
+    }));
+    setEditingPollOptionIds((prev) => [...prev, null]);
+  };
+
+  const removeEditPollOption = (index) => {
+    if (editPostData.pollOptions.length <= 2) return;
+
+    setEditPostData((prev) => ({
+      ...prev,
+      pollOptions: prev.pollOptions.filter((_, optionIndex) => optionIndex !== index),
+    }));
+    setEditingPollOptionIds((prev) => prev.filter((_, optionIndex) => optionIndex !== index));
+  };
+
+  const handleUpdatePost = async () => {
+    if (!editingPostId || !user) return;
+
+    const title = editPostData.title.trim();
+    const content = editPostData.content.trim();
+
+    if (!title || !content) {
+      toast.error("Title and Content are required.");
+      return;
+    }
+
+    const pollQuestion = editPostData.includePoll ? editPostData.pollQuestion.trim() : "";
+    const trimmedOptions = editPostData.includePoll
+      ? editPostData.pollOptions.map((option) => option.trim()).filter(Boolean)
+      : [];
+
+    if (editPostData.includePoll) {
+      if (!pollQuestion) {
+        toast.error("Poll question is required.");
+        return;
+      }
+
+      if (trimmedOptions.length < 2) {
+        toast.error("Add at least two poll options.");
+        return;
+      }
+    }
+
+    const linkUrl = (editPostData.linkUrl || "").trim();
+    const linkText = (editPostData.linkText || "").trim();
+
+    const pollPayload = editPostData.includePoll
+      ? {
+          question: pollQuestion,
+          allowMultiple: editPostData.allowMultiplePollSelections,
+          options: editPostData.pollOptions
+            .map((option, index) => ({
+              id: editingPollOptionIds[index] || null,
+              text: option.trim(),
+            }))
+            .filter((option) => option.text),
+        }
+      : null;
+
+    const updatesPayload = {
+      title,
+      content,
+      isImportant: !!editPostData.isImportant,
+      isUrgent: !!editPostData.isUrgent,
+      isPinned: !!editPostData.isPinned,
+      link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
+      poll: pollPayload,
+    };
+
+    const loadingId = toast.loading("Updating post...");
+
+    try {
+      const res = await fetch("/api/stream", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId: editingPostId,
+          requesterId: user.uid,
+          classId: id,
+          updates: updatesPayload,
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to update post");
+      }
+
+      toast.success("Post updated", { id: loadingId });
+      setIsEditPostOpen(false);
+      resetEditState();
+      fetchStreamPosts();
+    } catch (error) {
+      console.error("Error updating stream post:", error);
+      toast.error(error.message || "Failed to update post", { id: loadingId });
     }
   };
 
@@ -443,10 +902,12 @@ export default function ClassroomPage() {
     const loadingId = toast.loading("Deleting post...");
 
     setStreamPosts((prev) =>
-      prev.filter((candidate) => {
-        const candidateId = (candidate._id ?? candidate.id)?.toString();
-        return candidateId !== pid;
-      })
+      sortStreamPosts(
+        prev.filter((candidate) => {
+          const candidateId = (candidate._id ?? candidate.id)?.toString();
+          return candidateId !== pid;
+        })
+      )
     );
 
     try {
@@ -466,11 +927,15 @@ export default function ClassroomPage() {
       }
 
       toast.success("Post deleted", { id: loadingId });
+      if (editingPostId === pid) {
+        setIsEditPostOpen(false);
+        resetEditState();
+      }
       fetchStreamPosts();
     } catch (error) {
       console.error("Error deleting stream post:", error);
       toast.error(error.message || "Failed to delete post", { id: loadingId });
-      setStreamPosts(initialPosts);
+      setStreamPosts(sortStreamPosts(initialPosts));
     }
   };
 
@@ -781,7 +1246,62 @@ export default function ClassroomPage() {
                           />
                         </div>
                       </div>
-                      <div className="flex items-center space-x-6 pt-2">
+                      <div className="grid gap-2 border-t pt-4">
+                    <Label>Audience</Label>
+                    <RadioGroup
+                      value={newPostData.audienceType}
+                      onValueChange={(value) =>
+                        setNewPostData({
+                          ...newPostData,
+                          audienceType: value,
+                          audienceGroupId: null, // Reset group on change
+                        })
+                      }
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="class" id="r-class" />
+                        <Label htmlFor="r-class">Whole Class</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="group" id="r-group" />
+                        <Label htmlFor="r-group">Specific Group</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {newPostData.audienceType === "group" && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="group-select">Select Group</Label>
+                      <Select
+                        value={newPostData.audienceGroupId}
+                        onValueChange={(value) =>
+                          setNewPostData({
+                            ...newPostData,
+                            audienceGroupId: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger id="group-select">
+                          <SelectValue placeholder="Select a group..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {groups.length === 0 ? (
+                            <SelectItem disabled>
+                              No groups found.
+                            </SelectItem>
+                          ) : (
+                            groups.map((group) => (
+                              <SelectItem key={group._id} value={group._id}>
+                                {group.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                      <div className="flex flex-wrap items-center gap-4 pt-2">
                         <div className="flex items-center space-x-2">
                           <Checkbox
                             id="post-important"
@@ -801,6 +1321,16 @@ export default function ClassroomPage() {
                             }
                           />
                           <Label htmlFor="post-urgent">Urgent</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="post-pinned"
+                            checked={newPostData.isPinned}
+                            onCheckedChange={(checked) =>
+                              setNewPostData({ ...newPostData, isPinned: checked })
+                            }
+                          />
+                          <Label htmlFor="post-pinned">Pin to top</Label>
                         </div>
                       </div>
                       <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
@@ -911,6 +1441,220 @@ export default function ClassroomPage() {
                 </Dialog>
               )}
 
+              {isInstructor && (
+                <Dialog open={isEditPostOpen} onOpenChange={handleEditDialogChange}>
+                  <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Edit Announcement</DialogTitle>
+                      <DialogDescription>
+                        Make updates to your announcement. Changes will be visible to everyone immediately.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-post-title">Title</Label>
+                        <Input
+                          id="edit-post-title"
+                          placeholder="e.g., Updated schedule"
+                          value={editPostData.title}
+                          onChange={(e) =>
+                            setEditPostData((prev) => ({ ...prev, title: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-post-content">Content</Label>
+                        <Textarea
+                          id="edit-post-content"
+                          placeholder="Share your updates..."
+                          className="min-h-[120px]"
+                          value={editPostData.content}
+                          onChange={(e) =>
+                            setEditPostData((prev) => ({ ...prev, content: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="edit-post-link-url">Link URL (Optional)</Label>
+                          <Input
+                            id="edit-post-link-url"
+                            placeholder="https://example.com"
+                            value={editPostData.linkUrl}
+                            onChange={(e) =>
+                              setEditPostData((prev) => ({ ...prev, linkUrl: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="edit-post-link-text">Link Text (Optional)</Label>
+                          <Input
+                            id="edit-post-link-text"
+                            placeholder="e.g., View Resource"
+                            value={editPostData.linkText}
+                            onChange={(e) =>
+                              setEditPostData((prev) => ({ ...prev, linkText: e.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-4 pt-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="edit-post-important"
+                            checked={editPostData.isImportant}
+                            onCheckedChange={(checked) =>
+                              setEditPostData((prev) => ({ ...prev, isImportant: checked }))
+                            }
+                          />
+                          <Label htmlFor="edit-post-important">Important</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="edit-post-urgent"
+                            checked={editPostData.isUrgent}
+                            onCheckedChange={(checked) =>
+                              setEditPostData((prev) => ({ ...prev, isUrgent: checked }))
+                            }
+                          />
+                          <Label htmlFor="edit-post-urgent">Urgent</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="edit-post-pinned"
+                            checked={editPostData.isPinned}
+                            onCheckedChange={(checked) =>
+                              setEditPostData((prev) => ({ ...prev, isPinned: checked }))
+                            }
+                          />
+                          <Label htmlFor="edit-post-pinned">Pin to top</Label>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                        <div>
+                          <Label htmlFor="edit-include-poll" className="font-medium">Include poll</Label>
+                          <p className="text-xs text-gray-500">Edit or remove the poll attached to this announcement.</p>
+                        </div>
+                        <Switch
+                          id="edit-include-poll"
+                          checked={editPostData.includePoll}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              const currentLength = editPostData.pollOptions.length;
+                              setEditPostData((prev) => ({
+                                ...prev,
+                                includePoll: true,
+                                pollOptions: prev.pollOptions.length >= 2 ? prev.pollOptions : ["", ""],
+                              }));
+                              setEditingPollOptionIds((prev) => {
+                                const next = [...prev];
+                                const targetLength = Math.min(
+                                  MAX_POLL_OPTIONS,
+                                  Math.max(2, currentLength || 0)
+                                );
+                                while (next.length < targetLength) {
+                                  next.push(null);
+                                }
+                                return next.length ? next : [null, null];
+                              });
+                            } else {
+                              setEditPostData((prev) => ({
+                                ...prev,
+                                includePoll: false,
+                                pollQuestion: "",
+                                pollOptions: ["", ""],
+                                allowMultiplePollSelections: false,
+                              }));
+                              setEditingPollOptionIds([]);
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {editPostData.includePoll && (
+                        <div className="space-y-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="edit-poll-question">Poll question</Label>
+                            <Input
+                              id="edit-poll-question"
+                              placeholder="e.g., Which topic should we review?"
+                              value={editPostData.pollQuestion}
+                              onChange={(e) =>
+                                setEditPostData((prev) => ({
+                                  ...prev,
+                                  pollQuestion: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Options</Label>
+                            {editPostData.pollOptions.map((option, index) => (
+                              <div key={`${index}-${editingPollOptionIds[index] || "new"}`} className="flex items-center gap-2">
+                                <Input
+                                  placeholder={`Option ${index + 1}`}
+                                  value={option}
+                                  onChange={(e) =>
+                                    setEditPostData((prev) => {
+                                      const nextOptions = [...prev.pollOptions];
+                                      nextOptions[index] = e.target.value;
+                                      return { ...prev, pollOptions: nextOptions };
+                                    })
+                                  }
+                                />
+                                {editPostData.pollOptions.length > 2 && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeEditPollOption(index)}
+                                  >
+                                    Remove
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={addEditPollOption}
+                              disabled={editPostData.pollOptions.length >= MAX_POLL_OPTIONS}
+                            >
+                              Add option
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label htmlFor="edit-poll-allow-multiple">Allow multiple selections</Label>
+                              <p className="text-xs text-gray-500">Let students pick more than one answer.</p>
+                            </div>
+                            <Switch
+                              id="edit-poll-allow-multiple"
+                              checked={editPostData.allowMultiplePollSelections}
+                              onCheckedChange={(checked) =>
+                                setEditPostData((prev) => ({
+                                  ...prev,
+                                  allowMultiplePollSelections: checked,
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                      </DialogClose>
+                      <Button onClick={handleUpdatePost}>Save changes</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+
               {/* Stream Posts List */}
               {streamPosts.length === 0 ? (
                 <Card className="border border-gray-300 p-6 text-center text-gray-600">
@@ -935,41 +1679,64 @@ export default function ClassroomPage() {
                             <span className="text-sm text-gray-500">{createdAt}</span>
                           </div>
                           {isInstructor && pid && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
-                                  aria-label="Delete announcement"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete this announcement?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. The announcement and any poll data will be permanently removed for everyone in the class.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeletePost(pid)}
-                                    className="bg-red-600 text-white hover:bg-red-700"
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                aria-label="Edit announcement"
+                                onClick={() => handleOpenEditPost(post)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                    aria-label="Delete announcement"
                                   >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete this announcement?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. The announcement and any poll data will be permanently removed for everyone in the class.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeletePost(pid)}
+                                      className="bg-red-600 text-white hover:bg-red-700"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           )}
                         </div>
 
                         {/* Post Title & Badges */}
                         <div className="flex items-center gap-2 mb-2">
                           <h3 className="text-lg font-semibold">{post.title}</h3>
+                          {isInstructor && post.audience?.type === "group" && (
+                        <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium flex items-center">
+                          <Users className="w-3 h-3 inline-block mr-1" />
+                          {/* Find the group name from the state */}
+                          {groups.find((g) => g._id === post.audience.groupId)?.name || "Group Post"}
+                        </span>
+                      )}
+                          {post.isPinned && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-xs font-medium">
+                              PINNED
+                            </span>
+                          )}
                           {(post.type === "assignment" || post.assignmentRef) && (
                             <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-medium">
                               ASSIGNMENT
@@ -1296,6 +2063,54 @@ export default function ClassroomPage() {
                   )}
                 </CardContent>
               </Card>
+              <Card className="border border-gray-300">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-xl">
+                    Groups ({groups.length})
+                  </CardTitle>
+                  {isInstructor && (
+                    <Button
+                      size="sm"
+                      onClick={() => setIsCreateGroupOpen(true)}
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Create Group
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isGroupsLoading && <p>Loading groups...</p>}
+                  {!isGroupsLoading && groups.length === 0 && (
+                    <p className="text-gray-600">No groups created yet.</p>
+                  )}
+                  {!isGroupsLoading && groups.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {groups.map((group) => (
+                        <Link
+                          key={group._id}
+                          href={`/classroom/${id}/group/${group._id}`}
+                        >
+                          <Card className="hover:shadow-md transition-shadow">
+                            <CardHeader>
+                              <CardTitle className="text-lg text-blue-700 hover:underline">
+                                {group.name}
+                              </CardTitle>
+                              <CardDescription>
+                                {group.members.length} member(s)
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <p className="text-sm font-medium">
+                                Rep: {group.representative.name}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>
@@ -1310,6 +2125,14 @@ export default function ClassroomPage() {
             authorName={username}
           />
         )}
+        {isInstructor && <CreateGroupDialog
+    open={isCreateGroupOpen}
+    onOpenChange={setIsCreateGroupOpen}
+    onSubmit={handleCreateGroup}
+    classroom={classroom}
+    newGroupData={newGroupData}
+    setNewGroupData={setNewGroupData}
+  />}
       </div>
     </div>
   );

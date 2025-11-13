@@ -170,7 +170,7 @@ export default function AssignmentsPage() {
         try {
           const url = `/api/assignments?classId=${encodeURIComponent(
             courseId
-          )}`;
+          )}&role=student&userId=${encodeURIComponent(user.uid)}`;
           console.log(`Fetching assignments from: ${url}`);
           const res = await fetch(url);
           if (res.ok) {
@@ -222,7 +222,11 @@ export default function AssignmentsPage() {
   const loadAssignments = async () => {
     if (!user?.uid) return;
     try {
-      const res = await fetch("/api/assignments");
+      const res = await fetch(
+        `/api/assignments?role=student&userId=${encodeURIComponent(
+          user.uid
+        )}`
+      );
       if (res.ok) {
         const data = await res.json();
         setAssignments(data);
@@ -424,6 +428,19 @@ export default function AssignmentsPage() {
     return filtered;
   };
 
+  // Get assignments due within 24 hours
+  const getUrgentAssignments = () => {
+    const now = new Date();
+    const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    
+    return assignments.filter((assignment) => {
+      const deadline = new Date(assignment.deadline);
+      const submission = getSubmission(assignment.id);
+      // Only show if not submitted and deadline is within next 24 hours
+      return !submission && deadline > now && deadline <= next24Hours;
+    });
+  };
+
   const clearFilters = () => {
     setFilterCourse("all");
     setFilterDeadline("");
@@ -496,7 +513,7 @@ export default function AssignmentsPage() {
     const isOverdueStatus = isOverdue(assignment.deadline);
 
     return (
-      <Card className="h-full">
+      <Card className="h-full" id={`assignment-${assignment.id}`}>
         <CardHeader>
           <div className="flex justify-between items-start">
             <CardTitle className="text-lg">{assignment.title}</CardTitle>
@@ -554,6 +571,31 @@ export default function AssignmentsPage() {
                   </a>
                 </Button>
               )}
+              {(submission.grade !== null && submission.grade !== undefined) ||
+              (submission.feedback && submission.feedback.trim() !== "") ? (
+                <div className="rounded-md border border-green-100 bg-green-50 p-3 text-sm">
+                  {submission.grade !== null &&
+                  submission.grade !== undefined ? (
+                    <p className="font-medium text-green-700">
+                      Grade: {submission.grade}
+                      {submission.maxScore !== null &&
+                      submission.maxScore !== undefined
+                        ? ` / ${submission.maxScore}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {submission.feedback && submission.feedback.trim() !== "" ? (
+                    <p className="mt-1 text-green-600">
+                      Feedback: {submission.feedback}
+                    </p>
+                  ) : null}
+                  {submission.gradedAt ? (
+                    <p className="mt-1 text-xs text-green-500">
+                      Graded on {safeFormatDate(submission.gradedAt)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : showSubmitButton ? (
             <div className="space-y-3">
@@ -637,14 +679,103 @@ export default function AssignmentsPage() {
     );
   };
 
+  const urgentAssignments = getUrgentAssignments();
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Assignments</h1>
-        <p className="text-gray-600">
-          Manage and submit your course assignments
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Assignments</h1>
+          <p className="text-gray-600">
+            Manage and submit your course assignments
+          </p>
+        </div>
+        {/* Only show progress button for students, not instructors */}
+        {userProfile?.role !== "instructor" && (
+          <Button asChild variant="outline">
+            <a href="/student/progress">
+              <BookOpen className="w-4 h-4 mr-2" />
+              View My Progress
+            </a>
+          </Button>
+        )}
       </div>
+
+      {/* Urgent Assignments Alert Box */}
+      {urgentAssignments.length > 0 && (
+        <Card className="mb-6 border-red-500 border-2 urgent-assignment-alert bg-red-50 dark:bg-red-950">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-3">
+              <div className="urgent-badge-blink rounded-full p-2">
+                <AlertCircle className="h-6 w-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl text-red-700 dark:text-red-400">
+                  ⚠️ Urgent: {urgentAssignments.length} Assignment{urgentAssignments.length > 1 ? 's' : ''} Due Within 24 Hours!
+                </CardTitle>
+                <CardDescription className="text-red-600 dark:text-red-300 mt-1">
+                  These assignments require immediate attention
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {urgentAssignments.map((assignment) => {
+                const deadline = new Date(assignment.deadline);
+                const hoursLeft = Math.floor((deadline - new Date()) / (1000 * 60 * 60));
+                const minutesLeft = Math.floor(((deadline - new Date()) % (1000 * 60 * 60)) / (1000 * 60));
+                
+                return (
+                  <div
+                    key={assignment.id}
+                    className="bg-white dark:bg-gray-900 rounded-lg p-4 border-l-4 border-red-500 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                          {assignment.title}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1 text-sm text-gray-600 dark:text-gray-400">
+                          <BookOpen className="h-4 w-4" />
+                          <span>{getCourseName(assignment)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-sm font-medium text-red-600 dark:text-red-400">
+                          <Clock className="h-4 w-4" />
+                          <span>
+                            Due in: {hoursLeft}h {minutesLeft}m
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                        onClick={() => {
+                          // Scroll to the pending tab and highlight this assignment
+                          const pendingTab = document.querySelector('[value="pending"]');
+                          if (pendingTab) pendingTab.click();
+                          setTimeout(() => {
+                            const assignmentCard = document.getElementById(`assignment-${assignment.id}`);
+                            if (assignmentCard) {
+                              assignmentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              assignmentCard.classList.add('ring-4', 'ring-red-500');
+                              setTimeout(() => {
+                                assignmentCard.classList.remove('ring-4', 'ring-red-500');
+                              }, 3000);
+                            }
+                          }, 100);
+                        }}
+                      >
+                        Submit Now
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="pending" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">

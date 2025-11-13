@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Check, Bell, X, Trash2 } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "@/hooks/use-toast";
 
 export default function NotificationBell() {
   const [user, setUser] = useState(null);
@@ -12,6 +13,8 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const ref = useRef(null);
+  const seenNotificationsRef = useRef(new Set());
+  const initialLoadRef = useRef(true);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -21,8 +24,17 @@ export default function NotificationBell() {
   }, []);
 
   useEffect(() => {
+    seenNotificationsRef.current = new Set();
+    initialLoadRef.current = true;
+    if (!user) {
+      setNotifications([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user) return;
-    fetchNotifications();
+  fetchNotifications(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -30,12 +42,12 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
-      fetchNotifications();
+      fetchNotifications(true);
     }, 30000); // 30s
 
-    const onFocus = () => fetchNotifications();
+    const onFocus = () => fetchNotifications(true);
     const onVisibility = () => {
-      if (document.visibilityState === "visible") fetchNotifications();
+      if (document.visibilityState === "visible") fetchNotifications(true);
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
@@ -54,13 +66,32 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
-  async function fetchNotifications() {
+  async function fetchNotifications(showToastForNew = false) {
     setLoading(true);
     try {
       const res = await fetch(`/api/notifications?uid=${user.uid}`);
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications || []);
+        const incoming = data.notifications || [];
+
+        if (!initialLoadRef.current && showToastForNew) {
+          const seen = seenNotificationsRef.current;
+          incoming
+            .filter((n) => !seen.has(n.id) && !n.read)
+            .forEach((n) => {
+              toast({
+                title: n.title || "New notification",
+                description: n.message || "You have a new notification.",
+              });
+            });
+        }
+
+        incoming.forEach((n) => {
+          seenNotificationsRef.current.add(n.id);
+        });
+
+        setNotifications(incoming);
+        initialLoadRef.current = false;
       }
     } catch (err) {
       console.error("Fetch notifications error:", err);
@@ -94,13 +125,31 @@ export default function NotificationBell() {
       const res = await fetch(`/api/notifications`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "markAll", uid: user.uid }),
+        body: JSON.stringify({ action: "markAllAndDelete", uid: user.uid }),
       });
       if (res.ok) {
-        setNotifications((prev) => prev.map((p) => ({ ...p, read: true })));
+        // Remove all notifications from UI after marking as read and deleting
+        setNotifications([]);
+        toast({
+          title: "Success",
+          description: "All notifications have been cleared.",
+        });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        console.error("markAllAsRead failed:", err);
+        toast({
+          title: "Error",
+          description: "Failed to clear notifications.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("markAllAsRead error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to clear notifications.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -131,7 +180,7 @@ export default function NotificationBell() {
           } `}
       >
         <div className="flex justify-between items-start">
-          <div>
+          <div className="flex-1 pr-2">
             <div className="font-medium text-sm">
               {n.title || "Notification"}
             </div>
@@ -142,16 +191,14 @@ export default function NotificationBell() {
                 : ""}
             </div>
           </div>
-          <div className="ml-3 text-right flex flex-col items-end gap-2">
-            <div>
-              <button
-                onClick={() => deleteNotification(id)}
-                className="rounded-full text-sm px-1.5 py-1.5 bg-black text-white"
-                title="Delete notification"
-              >
-                <Check className="w-3 h-3" />
-              </button>
-            </div>
+          <div className="ml-2 flex items-center gap-1">
+            <button
+              onClick={() => deleteNotification(id)}
+              className="rounded-full text-sm p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              title="Dismiss notification"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
           </div>
         </div>
       </div>
