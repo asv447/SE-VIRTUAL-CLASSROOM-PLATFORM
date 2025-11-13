@@ -93,7 +93,7 @@ export default function ClassyncDashboard() {
       url = `/api/courses?role=student&userId=${uid}`;
     }
     // else (not logged in), fetch all courses
-    
+
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch courses");
@@ -114,7 +114,7 @@ export default function ClassyncDashboard() {
   // Fetch assignment progress for all courses
   const fetchCoursesProgress = async (coursesData, uid) => {
     const progressData = {};
-    
+
     try {
       await Promise.all(
         coursesData.map(async (course) => {
@@ -127,7 +127,10 @@ export default function ClassyncDashboard() {
               progressData[course.id] = data;
             }
           } catch (err) {
-            console.error(`Error fetching progress for course ${course.id}:`, err);
+            console.error(
+              `Error fetching progress for course ${course.id}:`,
+              err
+            );
           }
         })
       );
@@ -384,7 +387,9 @@ export default function ClassyncDashboard() {
         throw new Error(data.error || "Failed to unenroll from course");
       }
 
-      toast.success(`Unenrolled from ${courseName} successfully!`, { id: loadingToastId });
+      toast.success(`Unenrolled from ${courseName} successfully!`, {
+        id: loadingToastId,
+      });
 
       // Refresh the course list to remove the unenrolled course
       await fetchCourses(isAdmin ? "instructor" : "student", user.uid);
@@ -401,176 +406,187 @@ export default function ClassyncDashboard() {
       <main className="container mx-auto px-4 py-6">
         <div className="space-y-6">
           {/* Courses & Dashboard */}
-            {/* Buttons row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {isAdmin ? (
-                <>
-                  <Button
-                    variant="outline"
-                    className="h-20 flex-col gap-2 bg-transparent"
-                    asChild
-                  >
-                    <a href="/admin">
-                      <FileText className="w-6 h-6" />
-                      <span className="text-sm">Admin Dashboard</span>
-                    </a>
-                  </Button>
-                </>
-              ) : (
+          {/* Buttons row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {isAdmin ? (
+              <>
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col gap-2 bg-transparent"
+                  asChild
+                >
+                  <a href="/admin">
+                    <FileText className="w-6 h-6" />
+                    <span className="text-sm">Admin Dashboard</span>
+                  </a>
+                </Button>
                 <Button
                   variant="outline"
                   className="h-20 flex-col gap-2 bg-transparent"
                   asChild
                 >
                   <a href="/assignments">
-                    <FileText className="w-6 h-6" />
+                    <BookOpen className="w-6 h-6" />
                     <span className="text-sm">Assignments</span>
                   </a>
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
-              >
-                <BarChart3 className="w-6 h-6" />
-                <span className="text-sm">View Analytics</span>
-              </Button>
+              </>
+            ) : (
               <Button
                 variant="outline"
                 className="h-20 flex-col gap-2 bg-transparent"
                 asChild
               >
-                <a href="/ai-tools/chatbot">
-                  <Sparkles className="w-6 h-6" />
-                  <span className="text-sm">AI Tools</span>
+                <a href="/assignments">
+                  <FileText className="w-6 h-6" />
+                  <span className="text-sm">Assignments</span>
                 </a>
               </Button>
-              {user?.email?.includes("@instructor.com") ||
-              user?.email?.includes("@admin.com") ? (
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 bg-transparent"
-                >
-                  <Users className="w-6 h-6" />
-                  <span className="text-sm">Manage Classroom</span>
-                </Button>
-              ) : null}
-            </div>
+            )}
+            <Button
+              variant="outline"
+              className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+            >
+              <BarChart3 className="w-6 h-6" />
+              <span className="text-sm">View Analytics</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 bg-transparent"
+              asChild
+            >
+              <a href="/ai-tools/chatbot">
+                <Sparkles className="w-6 h-6" />
+                <span className="text-sm">AI Tools</span>
+              </a>
+            </Button>
+            {user?.email?.includes("@instructor.com") ||
+            user?.email?.includes("@admin.com") ? (
+              <Button
+                variant="outline"
+                className="h-20 flex-col gap-2 bg-transparent"
+              >
+                <Users className="w-6 h-6" />
+                <span className="text-sm">Manage Classroom</span>
+              </Button>
+            ) : null}
+          </div>
 
-            {/* Courses List */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-foreground">
-                    My Course
-                  </h1>
-                  <p className="text-muted-foreground mt-1">
-                    Manage your class and track progress
-                  </p>
-                </div>
+          {/* Courses List */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">
+                  My Course
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  Manage your class and track progress
+                </p>
+              </div>
 
-                {/* [NEW] Wrapper for the two dialog buttons */}
-                <div className="flex gap-2">
-                  {/* "Create Course" Dialog for Instructors */}
-                  {isAdmin && (
-                    <Dialog
-                      open={isCreateDialogOpen}
-                      onOpenChange={setIsCreateDialogOpen}
-                    >
-                      <DialogTrigger asChild>
-                        <Button className="cursor-pointer bg-primary hover:bg-primary/90">
-                          <Plus className="w-4 h-4 mr-2" />
+              {/* [NEW] Wrapper for the two dialog buttons */}
+              <div className="flex gap-2">
+                {/* "Create Course" Dialog for Instructors */}
+                {isAdmin && (
+                  <Dialog
+                    open={isCreateDialogOpen}
+                    onOpenChange={setIsCreateDialogOpen}
+                  >
+                    <DialogTrigger asChild>
+                      <Button className="cursor-pointer bg-primary hover:bg-primary/90">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Course
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Create New Course</DialogTitle>
+                        <DialogDescription>
+                          Set up a new classroom for your students
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="title">Course Title</Label>
+                          <Input
+                            id="title"
+                            value={newCourse.title}
+                            onChange={(e) =>
+                              setNewCourse({
+                                ...newCourse,
+                                title: e.target.value,
+                              })
+                            }
+                            placeholder="e.g., Introduction to Python"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="description">Description</Label>
+                          <Textarea
+                            id="description"
+                            value={newCourse.description}
+                            onChange={(e) =>
+                              setNewCourse({
+                                ...newCourse,
+                                description: e.target.value,
+                              })
+                            }
+                            placeholder="Brief description of the course"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="subject">Subject</Label>
+                          <Select
+                            value={newCourse.subject}
+                            onValueChange={(value) =>
+                              setNewCourse({ ...newCourse, subject: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select subject" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="computer-science">
+                                Computer Science
+                              </SelectItem>
+                              <SelectItem value="mathematics">
+                                Mathematics
+                              </SelectItem>
+                              <SelectItem value="physics">Physics</SelectItem>
+                              <SelectItem value="chemistry">
+                                Chemistry
+                              </SelectItem>
+                              <SelectItem value="biology">Biology</SelectItem>
+                              <SelectItem value="literature">
+                                Literature
+                              </SelectItem>
+                              <SelectItem value="history">History</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsCreateDialogOpen(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleCreateCourse}
+                          disabled={!newCourse.title}
+                        >
                           Create Course
                         </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[425px]">
-                        <DialogHeader>
-                          <DialogTitle>Create New Course</DialogTitle>
-                          <DialogDescription>
-                            Set up a new classroom for your students
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <div className="grid gap-2">
-                            <Label htmlFor="title">Course Title</Label>
-                            <Input
-                              id="title"
-                              value={newCourse.title}
-                              onChange={(e) =>
-                                setNewCourse({
-                                  ...newCourse,
-                                  title: e.target.value,
-                                })
-                              }
-                              placeholder="e.g., Introduction to Python"
-                            />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="description">Description</Label>
-                            <Textarea
-                              id="description"
-                              value={newCourse.description}
-                              onChange={(e) =>
-                                setNewCourse({
-                                  ...newCourse,
-                                  description: e.target.value,
-                                })
-                              }
-                              placeholder="Brief description of the course"
-                            />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="subject">Subject</Label>
-                            <Select
-                              value={newCourse.subject}
-                              onValueChange={(value) =>
-                                setNewCourse({ ...newCourse, subject: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select subject" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="computer-science">
-                                  Computer Science
-                                </SelectItem>
-                                <SelectItem value="mathematics">
-                                  Mathematics
-                                </SelectItem>
-                                <SelectItem value="physics">Physics</SelectItem>
-                                <SelectItem value="chemistry">
-                                  Chemistry
-                                </SelectItem>
-                                <SelectItem value="biology">Biology</SelectItem>
-                                <SelectItem value="literature">
-                                  Literature
-                                </SelectItem>
-                                <SelectItem value="history">History</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            variant="outline"
-                            onClick={() => setIsCreateDialogOpen(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={handleCreateCourse}
-                            disabled={!newCourse.title}
-                          >
-                            Create Course
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
 
-                  {/* [NEW] "Join Course" Dialog for Students */}
-                  {!isAdmin && user && ( // Only show if logged in and *not* an admin
+                {/* [NEW] "Join Course" Dialog for Students */}
+                {!isAdmin &&
+                  user && ( // Only show if logged in and *not* an admin
                     <Dialog
                       open={isJoinDialogOpen}
                       onOpenChange={setIsJoinDialogOpen}
@@ -613,9 +629,10 @@ export default function ClassyncDashboard() {
                       </DialogContent>
                     </Dialog>
                   )}
-                </div>
               </div>
+            </div>
 
+<<<<<<< HEAD
               {/* Urgent Assignments Alert - Students Only */}
               {!isAdmin && urgentAssignments.length > 0 && (
                 <Card className="border-red-500 border-2 urgent-assignment-alert bg-red-50 dark:bg-red-950 mb-4">
@@ -711,152 +728,207 @@ export default function ClassyncDashboard() {
                       <CardHeader className="pb-3">
                         <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
                           <BookOpen className="w-8 h-8 text-foreground" />
+=======
+            {loading ? (
+              <Card className="p-12 text-center">
+                <p className="text-muted-foreground">Loading courses...</p>
+              </Card>
+            ) : courses.length === 0 ? (
+              <Card className="p-12 text-center">
+                <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No courses yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  {isAdmin
+                    ? "Create your first course to get started"
+                    : "Click 'Join Course' to enroll"}
+                </p>
+                {isAdmin && (
+                  <Button onClick={() => setIsCreateDialogOpen(true)}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Course
+                  </Button>
+                )}
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                {courses.map((course) => (
+                  <Card
+                    key={course.id}
+                    className="hover:shadow-lg transition-shadow cursor-pointer group h-full flex flex-col"
+                    onClick={() => {
+                      console.log("Navigating with id:", course.id);
+                      if (course.id) {
+                        router.push(`/classroom/${course.id}`);
+                      } else {
+                        toast.error("Error: This course has no ID.");
+                      }
+                    }}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
+                        <BookOpen className="w-8 h-8 text-foreground" />
+                      </div>
+                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                        {course.name}
+                      </CardTitle>
+                      <CardDescription className="text-sm">
+                        {course.description}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 flex-1 flex flex-col">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">
+                            Instructor: {course.instructorName}
+                          </Badge>
+>>>>>>> e7546ae809cfa998e3a8523c5f4acdd4efe9c7a3
                         </div>
-                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                          {course.name}
-                        </CardTitle>
-                        <CardDescription className="text-sm">
-                          {course.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4 flex-1 flex flex-col">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              Instructor: {course.instructorName}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Users className="w-4 h-4" />
-                            <span>{course.students?.length || 0}</span>
-                          </div>
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <Users className="w-4 h-4" />
+                          <span>{course.students?.length || 0}</span>
                         </div>
-                        
-                        {/* Show assignment progress for students only */}
-                        {!isAdmin && courseProgress[course.id] && (
-                          <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground font-medium">
-                                Assignment Progress
-                              </span>
-                              <span className="font-semibold text-primary">
-                                {courseProgress[course.id].submittedAssignments}/{courseProgress[course.id].totalAssignments}
-                              </span>
-                            </div>
-                            {courseProgress[course.id].totalAssignments > 0 ? (
-                              <>
-                                <Progress 
-                                  value={courseProgress[course.id].percentage} 
-                                  className="h-2.5"
-                                />
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">
-                                    {courseProgress[course.id].totalAssignments - courseProgress[course.id].submittedAssignments} remaining
-                                  </span>
-                                  <span className="font-medium text-primary">
-                                    {courseProgress[course.id].percentage}% complete
-                                  </span>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="text-xs text-muted-foreground text-center py-1">
-                                No assignments yet
-                              </div>
-                            )}
-                          </div>
-                        )}
+                      </div>
 
-                        {/* Keep the old progress bar for backward compatibility (if exists in course data) */}
-                        {course.progress > 0 && isAdmin && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Progress
-                              </span>
-                              <span className="font-medium">
-                                {course.progress}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-secondary rounded-full h-2">
-                              <div
-                                className="bg-foreground h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${course.progress}%` }}
-                              />
-                            </div>
+                      {/* Show assignment progress for students only */}
+                      {!isAdmin && courseProgress[course.id] && (
+                        <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground font-medium">
+                              Assignment Progress
+                            </span>
+                            <span className="font-semibold text-primary">
+                              {courseProgress[course.id].submittedAssignments}/
+                              {courseProgress[course.id].totalAssignments}
+                            </span>
                           </div>
-                        )}
-                        
-                        <div className="flex items-center justify-between pt-2">
-                          <div className="flex gap-2">
-                            {course.assignments > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                {course.assignments} assignments
-                              </Badge>
-                            )}
-                            <Badge variant="outline" className="text-xs">
-                              <Brain className="w-3 h-3 mr-1" />
-                              AI Enhanced
-                            </Badge>
+                          {courseProgress[course.id].totalAssignments > 0 ? (
+                            <>
+                              <Progress
+                                value={courseProgress[course.id].percentage}
+                                className="h-2.5"
+                              />
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">
+                                  {courseProgress[course.id].totalAssignments -
+                                    courseProgress[course.id]
+                                      .submittedAssignments}{" "}
+                                  remaining
+                                </span>
+                                <span className="font-medium text-primary">
+                                  {courseProgress[course.id].percentage}%
+                                  complete
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-xs text-muted-foreground text-center py-1">
+                              No assignments yet
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Keep the old progress bar for backward compatibility (if exists in course data) */}
+                      {course.progress > 0 && isAdmin && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Progress
+                            </span>
+                            <span className="font-medium">
+                              {course.progress}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-secondary rounded-full h-2">
+                            <div
+                              className="bg-foreground h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${course.progress}%` }}
+                            />
                           </div>
                         </div>
-                        {course.nextClass && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-                            <Calendar className="w-4 h-4" />
-                            <span>Next: {course.nextClass}</span>
-                          </div>
-                        )}
-                        
-                        {/* Unenroll button for students only */}
-                        {!isAdmin && user && (
-                          <div className="pt-3 border-t mt-auto">
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full border-red-400 text-red-600 hover:bg-red-50"
+                      )}
+
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="flex gap-2">
+                          {course.assignments > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {course.assignments} assignments
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-xs">
+                            <Brain className="w-3 h-3 mr-1" />
+                            AI Enhanced
+                          </Badge>
+                        </div>
+                      </div>
+                      {course.nextClass && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
+                          <Calendar className="w-4 h-4" />
+                          <span>Next: {course.nextClass}</span>
+                        </div>
+                      )}
+
+                      {/* Unenroll button for students only */}
+                      {!isAdmin && user && (
+                        <div className="pt-3 border-t mt-auto">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full border-red-400 text-red-600 hover:bg-red-50"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <LogOut className="w-4 h-4 mr-1" />
+                                Unenroll from Course
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Unenroll from {course.name}?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to unenroll from this
+                                  course? You will lose access to all course
+                                  materials, assignments, and class discussions.
+                                  You can re-enroll later using the course code:{" "}
+                                  <strong>{course.courseCode}</strong>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <LogOut className="w-4 h-4 mr-1" />
-                                  Unenroll from Course
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Unenroll from {course.name}?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to unenroll from this course? 
-                                    You will lose access to all course materials, assignments, and class discussions.
-                                    You can re-enroll later using the course code: <strong>{course.courseCode}</strong>
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
-                                    Cancel
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUnenrollFromCourse(course.id, course.name);
-                                    }}
-                                    className="bg-red-600 text-white hover:bg-red-700"
-                                  >
-                                    Unenroll
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
+                                  Cancel
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUnenrollFromCourse(
+                                      course.id,
+                                      course.name
+                                    );
+                                  }}
+                                  className="bg-red-600 text-white hover:bg-red-700"
+                                >
+                                  Unenroll
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>
   );
 }
-

@@ -6,14 +6,7 @@ import { usePathname } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Button } from "@/components/ui/button";
-import { 
-  BookOpen, 
-  User, 
-  LogOut, 
-  Menu, 
-  X,
-  GraduationCap
-} from "lucide-react";
+import { BookOpen, User, LogOut, Menu, X, GraduationCap } from "lucide-react";
 
 export default function NavigationBar() {
   const [user, setUser] = useState(null);
@@ -75,8 +68,8 @@ export default function NavigationBar() {
           <div className="hidden md:flex items-center gap-6">
             {showNavLinks && (
               <>
-                <Link 
-                  href="/" 
+                <Link
+                  href="/"
                   className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors"
                 >
                   Home
@@ -85,8 +78,8 @@ export default function NavigationBar() {
                   <>
                     {/* Show Assignments link only for students (role-based) */}
                     {isStudent && (
-                      <Link 
-                        href="/assignments" 
+                      <Link
+                        href="/assignments"
                         className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
                       >
                         <User className="h-4 w-4" />
@@ -94,8 +87,8 @@ export default function NavigationBar() {
                       </Link>
                     )}
                     {isAdmin && (
-                      <Link 
-                        href="/admin" 
+                      <Link
+                        href="/admin"
                         className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2"
                       >
                         <BookOpen className="h-4 w-4" />
@@ -108,13 +101,17 @@ export default function NavigationBar() {
             )}
 
             {user ? (
-              <div className={`flex items-center space-x-4 ${showNavLinks ? "border-l border-gray-300 pl-4" : ""}`}>
+              <div
+                className={`flex items-center space-x-4 ${
+                  showNavLinks ? "border-l border-gray-300 pl-4" : ""
+                }`}
+              >
                 <span className="text-sm text-gray-600">
                   {user.displayName || user.email}
                 </span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleLogout}
                   className="flex items-center gap-2"
                 >
@@ -130,9 +127,7 @@ export default function NavigationBar() {
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <Button size="sm">
-                    Register
-                  </Button>
+                  <Button size="sm">Register</Button>
                 </Link>
               </div>
             )}
@@ -160,8 +155,8 @@ export default function NavigationBar() {
             <div className="flex flex-col space-y-4">
               {showNavLinks && (
                 <>
-                  <Link 
-                    href="/" 
+                  <Link
+                    href="/"
                     className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
@@ -170,8 +165,8 @@ export default function NavigationBar() {
                   {user && (
                     <>
                       {isStudent && (
-                        <Link 
-                          href="/assignments" 
+                        <Link
+                          href="/assignments"
                           className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
@@ -180,8 +175,8 @@ export default function NavigationBar() {
                         </Link>
                       )}
                       {isAdmin && (
-                        <Link 
-                          href="/admin" 
+                        <Link
+                          href="/admin"
                           className="text-gray-700 hover:text-blue-600 px-3 py-2 text-base font-medium flex items-center gap-2"
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
@@ -199,9 +194,9 @@ export default function NavigationBar() {
                   <div className="px-3 text-sm text-gray-600">
                     {user.displayName || user.email}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleLogout}
                     className="ml-3 flex items-center gap-2"
                   >
@@ -211,12 +206,18 @@ export default function NavigationBar() {
                 </div>
               ) : (
                 <div className="flex flex-col space-y-3 px-3">
-                  <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                  <Link
+                    href="/login"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
                     <Button variant="outline" size="sm" className="w-full">
                       Login
                     </Button>
                   </Link>
-                  <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}>
+                  <Link
+                    href="/register"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
                     <Button size="sm" className="w-full">
                       Register
                     </Button>
