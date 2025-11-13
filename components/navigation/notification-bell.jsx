@@ -100,6 +100,43 @@ export default function NotificationBell() {
     }
   }
 
+  // SSE subscription for instant notifications
+  useEffect(() => {
+    if (!user) return;
+    const src = new EventSource(`/api/notifications/stream?uid=${encodeURIComponent(user.uid)}`);
+    src.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data?.type === "notification") {
+          const n = data;
+          // Toast immediately
+          toast({ title: n.title || "New notification", description: n.message || "" });
+          // Merge into list (avoid duplicates)
+          setNotifications((prev) => {
+            const exists = prev.some((p) => p.id === n.id);
+            if (exists) return prev;
+            return [
+              {
+                id: n.id,
+                title: n.title,
+                message: n.message,
+                read: !!n.read,
+                createdAt: n.createdAt,
+                ...(n.extra || {}),
+              },
+              ...prev,
+            ];
+          });
+        }
+      } catch (_) {}
+    };
+    src.onerror = () => {
+      // auto-close on error to avoid leaks
+      src.close();
+    };
+    return () => src.close();
+  }, [user]);
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   async function markAsRead(id) {

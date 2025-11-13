@@ -167,6 +167,30 @@ export default function AdminDashboard() {
     }
   }, [user]);
 
+  const loadStudentDirectory = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch("/api/users?role=student");
+      if (!res.ok) return;
+      const data = await res.json();
+      const directory = {};
+      const students = Array.isArray(data?.users) ? data.users : [];
+      students.forEach((student) => {
+        if (student.role && student.role !== "student") return;
+        const key = student.uid || student._id || student.id;
+        if (!key) return;
+        directory[key] = {
+          username:
+            student.username || student.email?.split("@")[0] || null,
+          email: student.email || null,
+        };
+      });
+      setStudentDirectory(directory);
+    } catch (err) {
+      console.error("Error loading student directory:", err);
+    }
+  };
+
   const loadData = async () => {
     setPageLoading(true);
     try {
@@ -175,29 +199,6 @@ export default function AdminDashboard() {
         loadAssignments(),
         loadStudentDirectory(),
       ]);
-      const loadStudentDirectory = async () => {
-        if (!user) return;
-        try {
-          const res = await fetch("/api/users?role=student");
-          if (!res.ok) return;
-          const data = await res.json();
-          const directory = {};
-          const students = Array.isArray(data?.users) ? data.users : [];
-          students.forEach((student) => {
-            if (student.role && student.role !== "student") return;
-            const key = student.uid || student._id || student.id;
-            if (!key) return;
-            directory[key] = {
-              username:
-                student.username || student.email?.split("@")[0] || null,
-              email: student.email || null,
-            };
-          });
-          setStudentDirectory(directory);
-        } catch (err) {
-          console.error("Error loading student directory:", err);
-        }
-      };
     } catch (err) {
       console.error("Error loading data:", err);
     } finally {
@@ -565,6 +566,11 @@ export default function AdminDashboard() {
       return;
     }
 
+    console.log("[submitGrade] Starting grade submission");
+    console.log("[submitGrade] gradingSubmission:", gradingSubmission);
+    console.log("[submitGrade] user.uid:", user.uid);
+    console.log("[submitGrade] gradeForm:", gradeForm);
+
     setGradeSaving(true);
     try {
       const payload = {
@@ -575,6 +581,8 @@ export default function AdminDashboard() {
         feedback: gradeForm.feedback.trim(),
       };
 
+      console.log("[submitGrade] payload:", payload);
+
       const res = await fetch(`/api/submissions`, {
         method: "PATCH",
         headers: {
@@ -584,13 +592,17 @@ export default function AdminDashboard() {
         body: JSON.stringify(payload),
       });
 
+      console.log("[submitGrade] response status:", res.status);
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        console.error("[submitGrade] API error:", err);
         toast.error(err?.error || "Failed to save grade");
         return;
       }
 
       const updated = await res.json();
+      console.log("[submitGrade] updated submission:", updated);
       setSubmissions((current) =>
         current.map((item) =>
           item.id === updated.id ? { ...item, ...updated } : item
@@ -599,7 +611,7 @@ export default function AdminDashboard() {
       toast.success("Submission graded successfully");
       closeGradeDialog();
     } catch (error) {
-      console.error("Error saving grade:", error);
+      console.error("[submitGrade] Error saving grade:", error);
       toast.error("Unable to save grade right now");
     } finally {
       setGradeSaving(false);

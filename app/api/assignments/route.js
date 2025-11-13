@@ -145,6 +145,8 @@ export async function POST(request) {
       deadline,
       fileUrl,
       fileData,
+      // Store per-student grading summaries under the assignment
+      grades: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };

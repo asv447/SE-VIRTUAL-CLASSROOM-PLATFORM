@@ -72,6 +72,31 @@ export default function AssignmentsPage() {
     }
   }, [user]);
 
+  // Subscribe to SSE notifications to refresh submissions instantly
+  useEffect(() => {
+    if (!user?.uid) return;
+    const src = new EventSource(`/api/notifications/stream?uid=${encodeURIComponent(user.uid)}`);
+    src.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data?.type === "notification") {
+          const extra = data.extra || {};
+          if (extra.type === "submission-graded" && extra.assignmentId) {
+            // Refresh that assignment's submissions
+            loadSubmissions(extra.assignmentId);
+            // Inform the user immediately
+            toast({ title: data.title || "Submission update", description: data.message || "" });
+          }
+        }
+      } catch (_) {}
+    };
+    src.onerror = () => {
+      // close and let polling/UI continue
+      src.close();
+    };
+    return () => src.close();
+  }, [user]);
+
   const fetchUserProfile = async (uid) => {
     if (!uid) {
       setUserProfile(null);
