@@ -223,17 +223,35 @@ export default function AdminDashboard() {
   };
 
   const loadAssignments = async () => {
+    if (!user?.uid) {
+      setAssignments([]);
+      return;
+    }
     try {
-      // Only fetch assignments belonging to this instructor
-      const res = await fetch(
-        `/api/assignments?role=instructor&userId=${encodeURIComponent(
-          user?.uid || ""
-        )}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setAssignments(data);
+      const params = new URLSearchParams({
+        role: "instructor",
+        userId: user.uid,
+      });
+      const res = await fetch(`/api/assignments?${params.toString()}`);
+      if (!res.ok) {
+        console.error(
+          "Failed to load assignments:",
+          await res.text().catch(() => res.statusText)
+        );
+        return;
       }
+      const data = await res.json();
+      const assignmentsPayload = Array.isArray(data) ? data : [];
+      setAssignments(assignmentsPayload);
+      setViewingSubmissions((current) => {
+        if (!current) return current;
+        const match = assignmentsPayload.find((item) => item.id === current.id);
+        if (!match) {
+          setSubmissions([]);
+          return null;
+        }
+        return match;
+      });
     } catch (err) {
       console.error("Error loading assignments:", err);
     }
@@ -385,7 +403,9 @@ export default function AdminDashboard() {
       const classId = assignment?.classId || assignment?.courseId;
 
       const res = await fetch(
-        `/api/assignments/${assignment.id}?classId=${classId}&role=instructor&userId=${encodeURIComponent(
+        `/api/assignments/${
+          assignment.id
+        }?classId=${classId}&role=instructor&userId=${encodeURIComponent(
           user?.uid || ""
         )}`,
         {
