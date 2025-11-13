@@ -113,8 +113,9 @@ export async function POST(request) {
     const file = formData.get("file");
     const instructorId = formData.get("instructorId");
     const instructorName = formData.get("instructorName");
+    const maxScore = formData.get("maxScore"); // Get maxScore from form data
     
-    // Strict validation: all fields required except file
+    // Strict validation: all fields required except file and maxScore
     if (!courseId || !title || !description || !deadline || !instructorId || !instructorName) {
       return NextResponse.json({ error: "Missing required fields: courseId, title, description, deadline, instructorId, instructorName" }, { status: 400 });
     }
@@ -143,6 +144,7 @@ export async function POST(request) {
       title,
       description,
       deadline,
+      maxScore: maxScore ? Number(maxScore) : null, // Store maxScore in assignment
       fileUrl,
       fileData,
       createdAt: new Date(),

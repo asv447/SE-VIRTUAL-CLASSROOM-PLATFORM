@@ -89,6 +89,7 @@ export default function AdminDashboard() {
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [assignmentDescription, setAssignmentDescription] = useState("");
   const [assignmentDeadline, setAssignmentDeadline] = useState("");
+  const [assignmentMaxScore, setAssignmentMaxScore] = useState("");
   const [assignmentFile, setAssignmentFile] = useState(null);
   const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
   const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
@@ -223,17 +224,35 @@ export default function AdminDashboard() {
   };
 
   const loadAssignments = async () => {
+    if (!user?.uid) {
+      setAssignments([]);
+      return;
+    }
     try {
-      // Only fetch assignments belonging to this instructor
-      const res = await fetch(
-        `/api/assignments?role=instructor&userId=${encodeURIComponent(
-          user?.uid || ""
-        )}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setAssignments(data);
+      const params = new URLSearchParams({
+        role: "instructor",
+        userId: user.uid,
+      });
+      const res = await fetch(`/api/assignments?${params.toString()}`);
+      if (!res.ok) {
+        console.error(
+          "Failed to load assignments:",
+          await res.text().catch(() => res.statusText)
+        );
+        return;
       }
+      const data = await res.json();
+      const assignmentsPayload = Array.isArray(data) ? data : [];
+      setAssignments(assignmentsPayload);
+      setViewingSubmissions((current) => {
+        if (!current) return current;
+        const match = assignmentsPayload.find((item) => item.id === current.id);
+        if (!match) {
+          setSubmissions([]);
+          return null;
+        }
+        return match;
+      });
     } catch (err) {
       console.error("Error loading assignments:", err);
     }
@@ -347,6 +366,9 @@ export default function AdminDashboard() {
       formData.append("deadline", assignmentDeadline);
       formData.append("instructorId", instructorId);
       formData.append("instructorName", instructorName);
+      if (assignmentMaxScore && assignmentMaxScore.trim() !== "") {
+        formData.append("maxScore", assignmentMaxScore);
+      }
       if (assignmentFile) {
         formData.append("file", assignmentFile);
       }
@@ -361,6 +383,7 @@ export default function AdminDashboard() {
         setAssignmentTitle("");
         setAssignmentDescription("");
         setAssignmentDeadline("");
+        setAssignmentMaxScore("");
         setAssignmentFile(null);
         setIsCreateAssignmentOpen(false);
         await loadAssignments();
@@ -385,7 +408,9 @@ export default function AdminDashboard() {
       const classId = assignment?.classId || assignment?.courseId;
 
       const res = await fetch(
-        `/api/assignments/${assignment.id}?classId=${classId}&role=instructor&userId=${encodeURIComponent(
+        `/api/assignments/${
+          assignment.id
+        }?classId=${classId}&role=instructor&userId=${encodeURIComponent(
           user?.uid || ""
         )}`,
         {
@@ -518,10 +543,14 @@ export default function AdminDashboard() {
   const openGradeDialog = (submission) => {
     const normalizeNumberInput = (value) =>
       value === null || value === undefined ? "" : String(value);
+    
+    // Try to get maxScore from submission, otherwise from viewingSubmissions (assignment)
+    const maxScoreValue = submission?.maxScore ?? viewingSubmissions?.maxScore;
+    
     setGradingSubmission(submission);
     setGradeForm({
       grade: normalizeNumberInput(submission?.grade),
-      maxScore: normalizeNumberInput(submission?.maxScore),
+      maxScore: normalizeNumberInput(maxScoreValue),
       feedback: submission?.feedback || "",
     });
   };
@@ -824,6 +853,19 @@ export default function AdminDashboard() {
                           />
                         </div>
                         <div>
+                          <Label htmlFor="maxScore">Max Score (Optional)</Label>
+                          <Input
+                            id="maxScore"
+                            type="number"
+                            value={assignmentMaxScore}
+                            onChange={(e) =>
+                              setAssignmentMaxScore(e.target.value)
+                            }
+                            placeholder="e.g., 100"
+                            min="0"
+                          />
+                        </div>
+                        <div>
                           <Label htmlFor="file">
                             Assignment File (Optional)
                           </Label>
@@ -933,6 +975,12 @@ export default function AdminDashboard() {
                                   </span>
                                 )}
                               </div>
+                              {assignment.maxScore && (
+                                <div className="flex items-center gap-1">
+                                  <span className="font-medium">Max Score:</span>
+                                  <span>{assignment.maxScore}</span>
+                                </div>
+                              )}
                             </div>
                             {assignment.fileUrl && (
                               <div className="mt-3">
