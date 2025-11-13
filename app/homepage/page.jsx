@@ -406,7 +406,6 @@ export default function ClassyncDashboard() {
       <main className="container mx-auto px-4 py-6">
         <div className="space-y-6">
           {/* Courses & Dashboard */}
-<<<<<<< HEAD
             {/* Buttons row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {isAdmin ? (
@@ -447,51 +446,6 @@ export default function ClassyncDashboard() {
                 </>
               )}
 
-=======
-          {/* Buttons row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {isAdmin ? (
-              <>
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 bg-transparent"
-                  asChild
-                >
-                  <a href="/admin">
-                    <FileText className="w-6 h-6" />
-                    <span className="text-sm">Admin Dashboard</span>
-                  </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
-                >
-                  <BarChart3 className="w-6 h-6" />
-                  <span className="text-sm">View Analytics</span>
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 bg-transparent"
-                  asChild
-                >
-                  <a href="/assignments">
-                    <FileText className="w-6 h-6" />
-                    <span className="text-sm">Assignments</span>
-                  </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
-                >
-                  <BarChart3 className="w-6 h-6" />
-                  <span className="text-sm">View Analytics</span>
-                </Button>
-              </>
-            )}
->>>>>>> 1214936e50a850c188d844eea5500790ce368916
             <Button
               variant="outline"
               className="h-20 flex-col gap-2 bg-transparent"
