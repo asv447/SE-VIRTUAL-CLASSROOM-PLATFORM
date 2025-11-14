@@ -55,6 +55,8 @@ import {
 } from "@/components/ui/radio-group"; // <-- ADD THIS
 import Link from "next/link"; // <-- ADD THIS
 import { Users, UserPlus } from "lucide-react"; // <-- ADD THIS
+import ChatMessageList from "@/components/chat/ChatMessageList";
+import ChatMessageInput from "@/components/chat/ChatMessageInput";
 // [DELETED] All socket.io imports are gone
 
 const MAX_POLL_OPTIONS = 6;
@@ -253,6 +255,7 @@ export default function ClassroomPage() {
 
   // [NEW] Chat state (back to simple version)
   const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(true);
   const [pollSelections, setPollSelections] = useState({});
   const [pollSubmitting, setPollSubmitting] = useState({});
@@ -951,7 +954,7 @@ export default function ClassroomPage() {
       text: text,
       createdAt: new Date().toISOString(),
       author: {
-        name: user.username,
+        name: username,
         id: user.uid,
       },
     };
@@ -966,7 +969,7 @@ export default function ClassroomPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId: id,
-          author: { id: user.uid, name: user.username },
+          author: { id: user.uid, name: username },
           text: text,
         }),
       });
@@ -981,6 +984,39 @@ export default function ClassroomPage() {
       toast.error(err.message);
       // Rollback
       setChatMessages(chatMessages.filter(m => m.id !== optimisticMessage.id));
+    }
+  };
+
+  // Handler for deleting a chat message
+  const handleDeleteChatMessage = async (messageId) => {
+    if (!messageId || !user) return;
+
+    const initialMessages = [...chatMessages];
+    const loadingId = toast.loading("Deleting message...");
+
+    // Optimistic update
+    setChatMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+
+    try {
+      const res = await fetch(
+        `/api/chat?messageId=${encodeURIComponent(messageId)}&userId=${encodeURIComponent(user.uid)}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to delete message");
+      }
+
+      toast.success("Message deleted", { id: loadingId });
+      fetchChatMessages();
+    } catch (error) {
+      console.error("Error deleting chat message:", error);
+      toast.error(error.message || "Failed to delete message", { id: loadingId });
+      // Rollback
+      setChatMessages(initialMessages);
     }
   };
 
@@ -1955,67 +1991,36 @@ export default function ClassroomPage() {
           {/* CHAT */}
           {activeTab === "chat" && (
             <Card className="border border-gray-300">
+              <CardHeader>
+                <CardTitle className="text-xl">Class Chat</CardTitle>
+                <CardDescription>
+                  Discuss with your classmates and instructor
+                </CardDescription>
+              </CardHeader>
               <CardContent className="p-0 flex flex-col" style={{ height: "600px" }}>
-
                 {/* Chat Message List */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
                   {isChatLoading ? (
                     <p className="text-center text-gray-500">Loading chat...</p>
                   ) : chatMessages.length === 0 ? (
                     <p className="text-center text-gray-500">No messages yet. Start the conversation!</p>
                   ) : (
-                    chatMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.author.id === user?.uid ? "justify-end" : "justify-start"
-                          }`}
-                      >
-                        <div
-                          className={`flex items-end max-w-xs md:max-w-md ${msg.author.id === user?.uid ? "flex-row-reverse" : "flex-row"
-                            }`}
-                        >
-                          <div className="w-8 h-8 rounded-full bg-gray-400 text-white flex items-center justify-center text-sm font-semibold mx-2 shrink-0">
-                            {msg.author.name ? msg.author.name[0].toUpperCase() : "?"}
-                          </div>
-                          <div
-                            className={`p-3 rounded-lg ${msg.author.id === user?.uid
-                              ? "bg-black text-white"
-                              : "bg-gray-200 text-black"
-                              }`}
-                          >
-                            <span className="text-xs font-semibold block mb-1">
-                              {msg.author.name || "Unknown"}
-                            </span>
-                            <p className="text-sm">{msg.text}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                    <ChatMessageList
+                      messages={chatMessages}
+                      currentUserId={user?.uid}
+                      messagesEndRef={messagesEndRef}
+                      onDeleteMessage={handleDeleteChatMessage}
+                    />
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* Chat Input Box */}
                 <div className="border-t border-gray-300 p-4 bg-white">
-                  <form
-                    className="flex items-center gap-2"
-                    onSubmit={handleSendChatMessage}
-                  >
-                    <Input
-                      type="text"
-                      placeholder="Type a message..."
-                      className="flex-1 border-gray-300 focus:ring-gray-400"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                    />
-                    <Button
-                      type="submit"
-                      className="bg-black text-white hover:bg-gray-800"
-                      disabled={!chatInput.trim()}
-                    >
-                      Send
-                    </Button>
-                  </form>
+                  <ChatMessageInput
+                    newMessage={chatInput}
+                    setNewMessage={setChatInput}
+                    onSendMessage={handleSendChatMessage}
+                  />
                 </div>
               </CardContent>
             </Card>
