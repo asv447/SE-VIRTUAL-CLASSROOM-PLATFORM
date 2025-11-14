@@ -380,7 +380,7 @@ export default function ClassyncDashboard() {
               className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
               asChild
             >
-              <a href={isAdmin ? "#" : "/student/progress"}>
+              <a href={isAdmin ? "/instructor/analytics" : "/student/progress"}>
                 <BarChart3 className="w-6 h-6" />
                 <span className="text-sm">{isAdmin ? "View Analytics" : "My Progress"}</span>
               </a>
