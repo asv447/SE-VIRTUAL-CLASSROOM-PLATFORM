@@ -185,6 +185,36 @@ export default function AdminDashboard() {
     }
   }, [user]);
 
+  // --- [THIS IS THE FIX] ---
+  // This hook is now at the top level, so it will run.
+  useEffect(() => {
+    const fetchGroupsForCourse = async () => {
+      if (!selectedCourse) {
+        setCourseGroups([]);
+        return;
+      }
+      setLoadingGroups(true);
+      try {
+        const res = await fetch(`/api/groups?courseId=${selectedCourse}`);
+        if (!res.ok) throw new Error("Failed to fetch groups");
+        const data = await res.json();
+        setCourseGroups(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error fetching course groups:", err);
+        setCourseGroups([]);
+        toast.error(err.message);
+      } finally {
+        setLoadingGroups(false);
+      }
+    };
+
+    fetchGroupsForCourse();
+    // Also reset group selections when course changes
+    setSelectedGroupIds(new Set());
+    setAudienceType("class"); // Reset to "Whole Class"
+  }, [selectedCourse]);
+  // --- [END FIX] ---
+
   const loadStudentDirectory = async () => {
     if (!user) return;
     try {
@@ -261,11 +291,7 @@ export default function AdminDashboard() {
       }
       const data = await res.json();
       
-      // --- THIS IS YOUR DEBUG LOG ---
-      // After fixing the ReferenceError, this log will now work
-      // and show the real assignment data.
       console.log("Assignments loaded from API:", data);
-      // -------------------------------
 
       const assignmentsPayload = Array.isArray(data) ? data : [];
       setAssignments(assignmentsPayload);
@@ -378,6 +404,8 @@ export default function AdminDashboard() {
       toast.error("Please select at least one group for the assignment.");
       return;
     }
+
+    // --- [REMOVED] The broken useEffect hook is gone from here ---
 
     setLoading(true);
     try {
@@ -617,11 +645,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    console.log("[submitGrade] Starting grade submission");
-    console.log("[submitGrade] gradingSubmission:", gradingSubmission);
-    console.log("[submitGrade] user.uid:", user.uid);
-    console.log("[submitGrade] gradeForm:", gradeForm);
-
     setGradeSaving(true);
     try {
       const payload = {
@@ -632,8 +655,6 @@ export default function AdminDashboard() {
         feedback: gradeForm.feedback.trim(),
       };
 
-      console.log("[submitGrade] payload:", payload);
-
       const res = await fetch(`/api/submissions`, {
         method: "PATCH",
         headers: {
@@ -643,17 +664,13 @@ export default function AdminDashboard() {
         body: JSON.stringify(payload),
       });
 
-      console.log("[submitGrade] response status:", res.status);
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        console.error("[submitGrade] API error:", err);
         toast.error(err?.error || "Failed to save grade");
         return;
       }
 
       const updated = await res.json();
-      console.log("[submitGrade] updated submission:", updated);
       setSubmissions((current) =>
         current.map((item) =>
           item.id === updated.id ? { ...item, ...updated } : item
@@ -662,7 +679,7 @@ export default function AdminDashboard() {
       toast.success("Submission graded successfully");
       closeGradeDialog();
     } catch (error) {
-      console.error("[submitGrade] Error saving grade:", error);
+      console.error("Error saving grade:", error);
       toast.error("Unable to save grade right now");
     } finally {
       setGradeSaving(false);
@@ -874,6 +891,8 @@ export default function AdminDashboard() {
                             </SelectContent>
                           </Select>
                         </div>
+                        
+                        {/* --- [THIS IS THE FIXED LOGIC] --- */}
                         <div className="grid gap-2 border-t pt-4">
                           <Label>Audience</Label>
                           <RadioGroup
@@ -885,65 +904,71 @@ export default function AdminDashboard() {
                               <RadioGroupItem value="class" id="r-class" />
                               <Label htmlFor="r-class">Whole Class</Label>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="group" id="r-group" />
-                              <Label htmlFor="r-group">Specific Group(s)</Label>
-                            </div>
+
+                            {/* Only show this option if groups exist */}
+                            {!loadingGroups && courseGroups.length > 0 && (
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="group" id="r-group" />
+                                <Label htmlFor="r-group">
+                                  Specific Group(s)
+                                </Label>
+                              </div>
+                            )}
                           </RadioGroup>
                         </div>
 
-                        {audienceType === "group" && (
-                          <div className="grid gap-2">
-                            <Label htmlFor="group-select">
-                              Select Group(s)
-                            </Label>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className="w-full justify-between"
-                                  disabled={
-                                    loadingGroups || courseGroups.length === 0
-                                  }
-                                >
-                                  <span>
-                                    {loadingGroups
-                                      ? "Loading groups..."
-                                      : selectedGroupIds.size === 0
-                                      ? "Select groups..."
-                                      : `${selectedGroupIds.size} group(s) selected`}
-                                  </span>
-                                  <ChevronDown className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-full">
-                                <DropdownMenuLabel>
-                                  Assign to...
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {courseGroups.map((group) => (
-                                  <DropdownMenuCheckboxItem
-                                    key={group._id}
-                                    checked={selectedGroupIds.has(group._id)}
-                                    onCheckedChange={(checked) => {
-                                      setSelectedGroupIds((prev) => {
-                                        const next = new Set(prev);
-                                        if (checked) {
-                                          next.add(group._id);
-                                        } else {
-                                          next.delete(group._id);
-                                        }
-                                        return next;
-                                      });
-                                    }}
+                        {/* This part is now also conditional */}
+                        {audienceType === "group" &&
+                          !loadingGroups &&
+                          courseGroups.length > 0 && (
+                            <div className="grid gap-2">
+                              <Label htmlFor="group-select">
+                                Select Group(s)
+                              </Label>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className="w-full justify-between"
                                   >
-                                    {group.name}
-                                  </DropdownMenuCheckboxItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        )}
+                                    <span>
+                                      {selectedGroupIds.size === 0
+                                        ? "Select groups..."
+                                        : `${selectedGroupIds.size} group(s) selected`}
+                                    </span>
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-full">
+                                  <DropdownMenuLabel>
+                                    Assign to...
+                                  </DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  {courseGroups.map((group) => (
+                                    <DropdownMenuCheckboxItem
+                                      key={group._id}
+                                      checked={selectedGroupIds.has(group._id)}
+                                      onCheckedChange={(checked) => {
+                                        setSelectedGroupIds((prev) => {
+                                          const next = new Set(prev);
+                                          if (checked) {
+                                            next.add(group._id);
+                                          } else {
+                                            next.delete(group._id);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                    >
+                                      {group.name}
+                                    </DropdownMenuCheckboxItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          )}
+                        {/* --- [END FIXED LOGIC] --- */}
+
                         <div>
                           <Label htmlFor="title">Assignment Title *</Label>
                           <Input
