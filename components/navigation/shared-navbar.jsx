@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Sun, Moon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
@@ -70,6 +71,7 @@ export default function SharedNavbar() {
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [showCancelUploadConfirm, setShowCancelUploadConfirm] = useState(false);
   const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
+  const [theme, setTheme] = useState("light");
   const pathname = usePathname();
   const isHomepage = pathname === "/" || pathname === "/homepage";
 
@@ -106,6 +108,40 @@ export default function SharedNavbar() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    const storedTheme = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
+    const prefersDark =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    const initialTheme = storedTheme === "dark" || (!storedTheme && prefersDark) ? "dark" : "light";
+    setTheme(initialTheme);
+
+    if (initialTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [mounted]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      if (typeof window !== "undefined") {
+        localStorage.setItem("theme", next);
+      }
+      if (next === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!mounted) return;
@@ -549,6 +585,18 @@ export default function SharedNavbar() {
           )}
           {/* User Actions */}
           <div className="flex items-center space-x-4">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="cursor-pointer inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-sm hover:bg-muted transition-colors"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </button>
             <NotificationBell />
 
             <div className="relative">

@@ -196,14 +196,17 @@ export default function Sidebar() {
   if (!isMounted) {
     return (
       <div
-        className="fixed left-0 bg-gray-50 z-10"
-        style={{ 
-          width: '256px',
-          top: '64px',
-          height: 'calc(100vh - 64px)'
+        className="fixed left-0 z-10 bg-sidebar"
+        style={{
+          width: "256px",
+          top: "64px",
+          height: "calc(100vh - 64px)",
         }}
       >
-        <aside className="h-full bg-white border-r border-gray-200" style={{ width: '256px' }}>
+        <aside
+          className="h-full bg-sidebar border-r border-sidebar-border"
+          style={{ width: "256px" }}
+        >
           {/* Empty placeholder during SSR */}
         </aside>
       </div>
@@ -213,7 +216,7 @@ export default function Sidebar() {
   return (
     <div
       ref={sidebarRef}
-      className="fixed left-0 bg-gray-50 z-10 transition-all duration-300"
+      className="fixed left-0 z-10 bg-sidebar transition-all duration-300"
       style={{ 
         width: `${sidebarWidth}px`,
         top: '64px', // Position below the navigation bar
@@ -223,7 +226,7 @@ export default function Sidebar() {
       onMouseLeave={handleMouseLeave}
     >
       <aside
-        className="h-full bg-white border-r border-gray-200 flex flex-col transition-all duration-300 overflow-y-auto"
+        className="h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col transition-all duration-300 overflow-y-auto"
         style={{ 
           width: `${sidebarWidth}px`,
           height: '100%'
@@ -238,7 +241,7 @@ export default function Sidebar() {
         >
           <button
             onClick={handleToggle}
-            className="transition-all duration-300 bg-white border border-gray-300 rounded-full p-1 shadow hover:bg-gray-100"
+            className="transition-all duration-300 bg-background text-foreground border border-border rounded-full p-1 shadow hover:bg-muted"
           >
             <Menu size={16} />
           </button>
@@ -273,8 +276,8 @@ export default function Sidebar() {
 
               <li
                 onClick={() => navigate("/calendar")}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
-                  pathname === "/calendar" ? "bg-gray-100" : ""
+                className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-muted transition-colors ${
+                  pathname === "/calendar" ? "bg-muted" : ""
                 }`}
               >
                 <Calendar size={18} className="flex-shrink-0" />
@@ -285,7 +288,7 @@ export default function Sidebar() {
               <li className="mt-4">
                 <button
                   onClick={() => setIsCoursesOpen(!isCoursesOpen)}
-                  className="flex items-center justify-between w-full px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between w-full px-3 py-2 rounded-md hover:bg-muted transition-colors"
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <Layers size={18} className="flex-shrink-0" />
@@ -309,8 +312,8 @@ export default function Sidebar() {
                       <li
                         key={course.id}
                         onClick={() => navigate(`/classroom/${course.id}`)}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors ${
-                          pathname === `/classroom/${course.id}` ? "bg-gray-100" : ""
+                        className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-muted transition-colors ${
+                          pathname === `/classroom/${course.id}` ? "bg-muted" : ""
                         }`}
                       >
                         <div
@@ -334,7 +337,7 @@ export default function Sidebar() {
           }`}
         >
           {/* Visual indicator */}
-          <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-gray-300 rounded-l opacity-0 hover:opacity-100 transition-opacity" />
+          <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-border rounded-l opacity-0 hover:opacity-100 transition-opacity" />
         </div>
       </aside>
 
@@ -344,23 +347,23 @@ export default function Sidebar() {
         }
 
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f1f1f1;
+          background: var(--color-muted);
           border-radius: 10px;
         }
 
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #c1c1c1;
+          background: var(--color-border);
           border-radius: 10px;
         }
 
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #a8a8a8;
+          background: var(--color-foreground);
         }
 
         /* For Firefox */
         .custom-scrollbar {
           scrollbar-width: thin;
-          scrollbar-color: #c1c1c1 #f1f1f1;
+          scrollbar-color: var(--color-border) var(--color-muted);
         }
       `}</style>
     </div>
