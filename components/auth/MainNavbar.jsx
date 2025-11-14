@@ -75,7 +75,11 @@ export default function MainNavbar() {
             <div className="w-8 h-8 flex items-center justify-center">
               <img src="/classync-logo.png" alt="Classync Logo" className="w-8 h-8 object-contain" />
             </div>
-            <Link href="/" className="text-xl font-bold text-foreground">Classync</Link>
+            <Link href="/" className="text-xl font-bold text-foreground">
+              <span>
+                Clas<span className="text-blue-600">sync</span>
+              </span>
+            </Link>
           </div>
 
           {/* Navigation */}
@@ -137,20 +141,20 @@ export default function MainNavbar() {
 
       {/* Login Modal */}
       {isLoginOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
-          <div className="relative w-full max-w-md mx-auto z-[10000] bg-white rounded-lg p-6">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
+          <div className="relative w-full max-w-md mx-auto z-10000 bg-white rounded-lg p-6">
             <Login onBackToHome={() => setIsLoginOpen(false)} />
-            <button className="absolute top-2 right-2 text-gray-600 text-2xl font-bold z-[10001]" onClick={() => setIsLoginOpen(false)}>×</button>
+            <button className="absolute top-2 right-2 text-gray-600 text-2xl font-bold z-10001" onClick={() => setIsLoginOpen(false)}>×</button>
           </div>
         </div>
       )}
 
       {/* Register Modal */}
       {isRegisterOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
-          <div className="relative w-full max-w-md mx-auto z-[10000] bg-white rounded-lg p-6">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
+          <div className="relative w-full max-w-md mx-auto z-10000 bg-white rounded-lg p-6">
             <Register onBackToHome={() => setIsRegisterOpen(false)} />
-            <button className="absolute top-2 right-2 text-gray-600 text-2xl font-bold z-[10001]" onClick={() => setIsRegisterOpen(false)}>×</button>
+            <button className="absolute top-2 right-2 text-gray-600 text-2xl font-bold z-10001" onClick={() => setIsRegisterOpen(false)}>×</button>
           </div>
         </div>
       )}

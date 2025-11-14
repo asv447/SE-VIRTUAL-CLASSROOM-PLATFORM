@@ -538,7 +538,9 @@ export default function SharedNavbar() {
               />
             </div>
             <Link href="/" className="text-xl font-bold text-foreground">
-              Classync
+              <span>
+                Clas<span className="text-blue-600">sync</span>
+              </span>
             </Link>
           </div>
           {/* Navigation */}

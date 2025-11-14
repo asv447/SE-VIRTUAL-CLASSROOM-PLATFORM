@@ -63,6 +63,7 @@ import {
 
 import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import Link from "next/link";
 
 export default function ClassyncDashboard() {
   // User state
@@ -394,10 +395,10 @@ export default function ClassyncDashboard() {
               className="cursor-pointer h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
               asChild
             >
-              <a href={isAdmin ? "/instructor/analytics" : "/student/progress"}>
+              <Link href={isAdmin ? "/instructor/analytics" : "/student/progress"}>
                 <BarChart3 className="w-6 h-6" />
                 <span className="text-sm">{isAdmin ? "View Analytics" : "My Progress"}</span>
-              </a>
+              </Link>
             </Button>
             <Button
               variant="outline"

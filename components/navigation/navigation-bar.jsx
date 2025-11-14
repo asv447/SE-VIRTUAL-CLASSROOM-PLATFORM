@@ -61,7 +61,9 @@ export default function NavigationBar() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
             <GraduationCap className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-bold text-gray-900">Classync</span>
+            <span className="text-xl font-bold text-gray-900">
+              Clas<span className="text-blue-600">sync</span>
+            </span>
           </Link>
 
           {/* Desktop Navigation */}

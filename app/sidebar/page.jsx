@@ -256,8 +256,12 @@ export default function Sidebar() {
           onMouseEnter={(e) => e.stopPropagation()}
           onMouseLeave={(e) => e.stopPropagation()}
         >
-          <Book className="text-blue-600 flex-shrink-0" size={20} />
-          {!isCollapsed && <h1 className="font-semibold text-lg truncate">Classync</h1>}
+          <Book className="text-blue-600 shrink-0" size={20} />
+          {!isCollapsed && (
+            <h1 className="font-semibold text-lg truncate">
+              Clas<span className="text-blue-600">sync</span>
+            </h1>
+          )}
         </div> */}
 
         {/* Body with custom scrollbar */}
@@ -270,7 +274,7 @@ export default function Sidebar() {
                   pathname === "/dashboard" ? "bg-gray-100" : ""
                 }`}
               >
-                <Home size={18} className="flex-shrink-0" />
+                <Home size={18} className="shrink-0" />
                 {!isCollapsed && <span className="truncate">Home</span>}
               </li> */}
 
@@ -280,7 +284,7 @@ export default function Sidebar() {
                   pathname === "/calendar" ? "bg-muted" : ""
                 }`}
               >
-                <Calendar size={18} className="flex-shrink-0" />
+                <Calendar size={18} className="shrink-0" />
                 {!isCollapsed && <span className="truncate">Calendar</span>}
               </li>
 
@@ -291,7 +295,7 @@ export default function Sidebar() {
                   className="flex items-center justify-between w-full px-3 py-2 rounded-md hover:bg-muted transition-colors"
                 >
                   <span className="flex items-center gap-3 min-w-0">
-                    <Layers size={18} className="flex-shrink-0" />
+                    <Layers size={18} className="shrink-0" />
                     {!isCollapsed && (
                       <span className="truncate">{role === "instructor" ? "My Courses" : "Enrolled"}</span>
                     )}
@@ -299,7 +303,7 @@ export default function Sidebar() {
                   {!isCollapsed && (
                     <ChevronDown
                       size={18}
-                      className={`transform transition-transform flex-shrink-0 ${
+                      className={`transform transition-transform shrink-0 ${
                         isCoursesOpen ? "rotate-180" : ""
                       }`}
                     />
@@ -317,7 +321,7 @@ export default function Sidebar() {
                         }`}
                       >
                         <div
-                          className={`w-3 h-3 rounded-full flex-shrink-0 ${course.color}`}
+                          className={`w-3 h-3 rounded-full shrink-0 ${course.color}`}
                         ></div>
                         <span className="truncate">{course.name}</span>
                       </li>
