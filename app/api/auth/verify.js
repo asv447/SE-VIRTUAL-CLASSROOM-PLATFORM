@@ -1,5 +1,4 @@
-// Verification callback route - triggered when user clicks the email link
-// This route applies the verification action code and marks user as verified
+
 import { auth } from "@/lib/firebase";
 import {
   applyActionCode,
@@ -15,8 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Initialize Firebase Admin if not already done
-    // This requires FIREBASE_SERVICE_ACCOUNT env var with service account JSON path or content
+   
     if (!admin.apps.length) {
       const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
         ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
@@ -39,8 +37,7 @@ export default async function handler(req, res) {
       emailVerified: true,
     });
 
-    // Optional: Update app database to reflect verification
-    // await UserModel.findOneAndUpdate({ uid }, { emailVerified: true });
+  
 
     console.log("[Verification] User verified successfully:", uid);
 
