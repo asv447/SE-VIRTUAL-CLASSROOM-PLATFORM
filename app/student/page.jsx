@@ -529,9 +529,11 @@ export default function AssignmentsPage() {
         <CardHeader>
           <div className="flex justify-between items-start">
             <CardTitle className="text-lg">{assignment.title}</CardTitle>
-            <Badge variant={isOverdueStatus ? "destructive" : "secondary"}>
-              {isOverdueStatus ? "Overdue" : "Active"}
-            </Badge>
+            {!submission && (
+              <Badge variant={isOverdueStatus ? "destructive" : "secondary"}>
+                {isOverdueStatus ? "Overdue" : "Active"}
+              </Badge>
+            )}
           </div>
           <CardDescription>{assignment.description}</CardDescription>
         </CardHeader>
