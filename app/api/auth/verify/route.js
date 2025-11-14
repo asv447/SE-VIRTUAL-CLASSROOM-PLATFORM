@@ -2,6 +2,8 @@ import { getDatabase } from "@/lib/mongodb";
 
 // Verification callback route - triggered when user clicks the email link
 // Returns an HTML page; updates verification flag in database
+export const dynamic = 'force-dynamic';
+
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
