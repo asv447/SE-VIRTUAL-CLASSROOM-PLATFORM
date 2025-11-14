@@ -407,16 +407,6 @@ export default function ClassyncDashboard() {
                     <span className="text-sm">Admin Dashboard</span>
                   </a>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
-                  asChild
-                >
-                  <a href="/assignments">
-                    <BookOpen className="w-6 h-6" />
-                    <span className="text-sm">Assignments</span>
-                  </a>
-                </Button>
               </>
             ) : (
               <Button
