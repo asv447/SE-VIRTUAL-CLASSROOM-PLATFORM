@@ -388,9 +388,12 @@ export default function ClassyncDashboard() {
             <Button
               variant="outline"
               className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+              asChild
             >
-              <BarChart3 className="w-6 h-6" />
-              <span className="text-sm">View Analytics</span>
+              <a href={isAdmin ? "#" : "/student/progress"}>
+                <BarChart3 className="w-6 h-6" />
+                <span className="text-sm">{isAdmin ? "View Analytics" : "My Progress"}</span>
+              </a>
             </Button>
             <Button
               variant="outline"
