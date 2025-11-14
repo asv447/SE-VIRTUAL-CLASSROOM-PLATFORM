@@ -1,16 +1,23 @@
-// API routes for assignment operations
 import { NextResponse } from "next/server";
-import { getAssignmentsCollection, getCoursesCollection } from "@/lib/mongodb";
+// [MODIFIED] Import getGroupsCollection
+import {
+  getAssignmentsCollection,
+  getCoursesCollection,
+  getGroupsCollection,
+} from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function DELETE(request, { params }) {
   try {
     const { id } = params;
     const { searchParams } = new URL(request.url);
-    const classId = searchParams.get('classId');
-    
+    const classId = searchParams.get("classId");
+
     if (!id || !classId) {
-      return NextResponse.json({ error: "Missing id or classId" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing id or classId" },
+        { status: 400 }
+      );
     }
 
     // Authorization: require instructor ownership. Accept role/userId query or x-uid header.
@@ -23,9 +30,14 @@ export async function DELETE(request, { params }) {
 
     const assignmentsCollection = await getAssignmentsCollection();
     // Verify ownership
-    const existing = await assignmentsCollection.findOne({ _id: new ObjectId(id) });
+    const existing = await assignmentsCollection.findOne({
+      _id: new ObjectId(id),
+    });
     if (!existing) {
-      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Assignment not found" },
+        { status: 404 }
+      );
     }
     if (role === "instructor" || userId) {
       const uid = userId;
@@ -35,17 +47,25 @@ export async function DELETE(request, { params }) {
     }
 
     // Delete assignment from MongoDB
-    const result = await assignmentsCollection.deleteOne({ _id: new ObjectId(id) });
-    
+    const result = await assignmentsCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
     // Delete related submissions
     // const submissionsCollection = await getSubmissionsCollection();
     // await submissionsCollection.deleteMany({ assignmentId: id });
 
     if (result.deletedCount === 0) {
-      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Assignment not found" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ message: "Assignment deleted successfully" }, { status: 200 });
+    return NextResponse.json(
+      { message: "Assignment deleted successfully" },
+      { status: 200 }
+    );
   } catch (err) {
     console.error("[API /api/assignments/[id]] Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -62,42 +82,83 @@ export async function GET(request, { params }) {
     const userId = searchParams.get("userId");
 
     const assignmentsCollection = await getAssignmentsCollection();
-    const assignment = await assignmentsCollection.findOne({ _id: new ObjectId(id) });
-    if (!assignment) return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+    const assignment = await assignmentsCollection.findOne({
+      _id: new ObjectId(id),
+    });
+    if (!assignment)
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
 
-    // Enforce access rules when role/userId are provided
+    // [MODIFIED] Enforce access rules
     try {
       if (role === "instructor" && userId) {
         // Instructor may only access assignments they created
         if ((assignment.instructorId || "") !== userId) {
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+          return NextResponse.json(
+            { error: "Forbidden: Not your assignment" },
+            { status: 403 }
+          );
         }
       }
       if (role === "student" && userId) {
-        // Student may only access if enrolled in the course
+        // Student may only access if enrolled in the course AND in the right group
         const cid = assignment.classId || assignment.courseId;
-        if (cid) {
-          try {
-            const courses = await getCoursesCollection();
-            const cidObj = (() => { try { return new ObjectId(cid); } catch { return null; } })();
-            let courseDoc = null;
-            if (cidObj) courseDoc = await courses.findOne({ _id: cidObj });
-            else courseDoc = await courses.findOne({ _id: cid });
-            const enrolled = (courseDoc?.students || []).some(s => s?.userId === userId);
-            if (!enrolled) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-          } catch (e) {
-            console.error("Failed to verify student enrollment:", e);
-            return NextResponse.json({ error: "Failed to verify enrollment" }, { status: 500 });
+        if (!cid) {
+          return NextResponse.json(
+            { error: "Forbidden: No course" },
+            { status: 403 }
+          );
+        }
+
+        // 1. Check if student is enrolled at all
+        const courses = await getCoursesCollection();
+        const courseDoc = await courses.findOne({ _id: new ObjectId(cid) });
+        const enrolled = (courseDoc?.students || []).some(
+          (s) => s?.userId === userId
+        );
+
+        if (!enrolled) {
+          return NextResponse.json(
+            { error: "Forbidden: Not enrolled" },
+            { status: 403 }
+          );
+        }
+
+        // 2. [NEW] Check audience
+        const audience = assignment.audience;
+        if (!audience || audience.type === "class") {
+          // It's a class assignment, and they are enrolled. Access granted.
+        } else if (audience.type === "group") {
+          // It's a group assignment. Check if student is in one of the groups.
+          const assignedGroupIds = audience.groupIds || [];
+          const groupsCol = await getGroupsCollection();
+          const myGroups = await groupsCol
+            .find({
+              courseId: new ObjectId(cid),
+              "members.userId": userId,
+            })
+            .toArray();
+          const myGroupIds = myGroups.map((g) => g._id.toString());
+
+          const isAssignedToGroup = assignedGroupIds.some((id) =>
+            myGroupIds.includes(id)
+          );
+
+          if (!isAssignedToGroup) {
+            return NextResponse.json(
+              { error: "Forbidden: Not assigned to your group" },
+              { status: 403 }
+            );
           }
-        } else {
-          // No course associated, deny access for students
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
       }
     } catch (e) {
       console.error("Access check failed:", e);
-      // Fall through to returning the assignment only if we can't determine (defensive)
+      return NextResponse.json(
+        { error: "Failed to verify access" },
+        { status: 500 }
+      );
     }
+    // [END MODIFIED]
 
     // Enrich with course title
     let courseTitle = null;
@@ -128,7 +189,10 @@ export async function PATCH(request, { params }) {
     const { id } = params;
     console.log("PATCH called for id:", id);
     if (!id) {
-      return NextResponse.json({ error: "Missing assignment id" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing assignment id" },
+        { status: 400 }
+      );
     }
 
     // Authorization: only instructor who created the assignment may PATCH
@@ -140,15 +204,21 @@ export async function PATCH(request, { params }) {
     }
 
     const body = await request.json();
-    const { deadline } = body;
-    if (!deadline) {
-      return NextResponse.json({ error: "Missing deadline field" }, { status: 400 });
+    const { deadline, maxScore } = body;
+    if (!deadline && maxScore === undefined) {
+      return NextResponse.json(
+        { error: "Missing deadline or maxScore field" },
+        { status: 400 }
+      );
     }
 
     const assignmentsCollection = await getAssignmentsCollection();
 
-    const existing = await assignmentsCollection.findOne({ _id: new ObjectId(id) });
-    if (!existing) return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+    const existing = await assignmentsCollection.findOne({
+      _id: new ObjectId(id),
+    });
+    if (!existing)
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     const uid = userId;
     if (!uid || (existing.instructorId || "") !== uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -159,12 +229,25 @@ export async function PATCH(request, { params }) {
     };
 
     // attempt to parse deadline into a Date
-    const parsed = new Date(deadline);
-    if (!isNaN(parsed.getTime())) {
-      update.deadline = parsed;
-    } else {
-      // if parsing failed, store as string
-      update.deadline = deadline;
+    if (deadline) {
+      const parsed = new Date(deadline);
+      if (!isNaN(parsed.getTime())) {
+        update.deadline = parsed;
+      } else {
+        // if parsing failed, store as string
+        update.deadline = deadline;
+      }
+    }
+
+    // Update maxScore if provided
+    if (maxScore !== undefined) {
+      const parsedMaxScore =
+        maxScore === null || maxScore === "" ? null : Number(maxScore);
+      if (parsedMaxScore !== null && !isNaN(parsedMaxScore)) {
+        update.maxScore = parsedMaxScore;
+      } else if (parsedMaxScore === null) {
+        update.maxScore = null;
+      }
     }
 
     const result = await assignmentsCollection.findOneAndUpdate(
@@ -174,10 +257,20 @@ export async function PATCH(request, { params }) {
     );
 
     if (!result.value) {
-      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Assignment not found" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ id, deadline: result.value.deadline }, { status: 200 });
+    return NextResponse.json(
+      {
+        id,
+        deadline: result.value.deadline,
+        maxScore: result.value.maxScore,
+      },
+      { status: 200 }
+    );
   } catch (err) {
     console.error("[API /api/assignments/[id]] PATCH Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
