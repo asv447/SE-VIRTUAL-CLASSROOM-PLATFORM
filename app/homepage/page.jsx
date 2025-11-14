@@ -65,6 +65,12 @@ import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import Link from "next/link";
 
+// [NEW] Helper to format dates
+const formatDate = (dateString) => {
+  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  return new Date(dateString).toLocaleDateString(undefined, options);
+};
+
 export default function ClassyncDashboard() {
   // User state
   const [user, setUser] = useState(null);
@@ -74,6 +80,7 @@ export default function ClassyncDashboard() {
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState([]);
   const [courseProgress, setCourseProgress] = useState({}); // Store progress for each course
+  const [urgentAssignments, setUrgentAssignments] = useState([]); // [NEW] For urgent assignments
 
   // [NEW] State for student joining a course
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
@@ -106,6 +113,35 @@ export default function ClassyncDashboard() {
     } catch (error) {
       console.error("Error fetching courses:", error);
       toast.error("Could not load courses.");
+    }
+  };
+
+  // [NEW] Fetch urgent assignments
+  const fetchUrgentAssignments = async (uid, role) => {
+    if (!uid || role === 'instructor') {
+      setUrgentAssignments([]);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/assignments?role=${role}&userId=${uid}`);
+      if (!res.ok) throw new Error("Failed to fetch assignments");
+      
+      const assignments = await res.json();
+      
+      const now = new Date();
+      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      const urgent = assignments.filter(assignment => {
+        const deadline = new Date(assignment.deadline);
+        return deadline > now && deadline <= sevenDaysFromNow;
+      });
+
+      setUrgentAssignments(urgent);
+
+    } catch (error) {
+      console.error("Error fetching urgent assignments:", error);
+      // Do not show a toast for this, as it's a background fetch
     }
   };
 
@@ -170,12 +206,14 @@ export default function ClassyncDashboard() {
 
             // [CHANGE] Call fetchCourses *after* we know the user's role
             await fetchCourses(userRole, currentUser.uid);
+            await fetchUrgentAssignments(currentUser.uid, userRole); // [NEW] Fetch assignments
           } else {
             // User not found
             setUsername(currentUser.email.split("@")[0]);
             setIsAdmin(false);
             // [CHANGE] Fetch all courses for non-instructors
             await fetchCourses("student", currentUser.uid); // Pass uid even if student
+            await fetchUrgentAssignments(currentUser.uid, "student"); // [NEW] Fetch assignments
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
@@ -183,6 +221,7 @@ export default function ClassyncDashboard() {
           setIsAdmin(false);
           // [CHANGE] Fetch all courses on error
           await fetchCourses("student", currentUser.uid); // Pass uid even if student
+          await fetchUrgentAssignments(currentUser.uid, "student"); // [NEW] Fetch assignments
         } finally {
           setLoading(false); // Stop loading
         }
@@ -193,6 +232,7 @@ export default function ClassyncDashboard() {
         setIsAdmin(false);
         // [CHANGE] Fetch all courses for a logged-out user
         await fetchCourses(null, null); // No role, no uid
+        setUrgentAssignments([]); // [NEW] Clear assignments
         setLoading(false); // Stop loading
       }
     });
@@ -346,8 +386,8 @@ export default function ClassyncDashboard() {
   return (
     <div className="min-h-screen bg-background relative">
       {/* Aggressive Gradient & Pattern */}
-      <div className="absolute inset-0 -z-10 h-full w-full bg-background bg-[radial-gradient(theme(colors.primary/0.2)_1px,transparent_1px)] [background-size:16px_16px]"></div>
-      <div className="absolute inset-0 -z-20 bg-gradient-to-br from-background via-secondary to-background animate-gradient-xy"></div>
+      <div className="absolute inset-0 -z-10 h-full w-full bg-background bg-[radial-gradient(var(--color-primary)_1px,transparent_1px)]/20 bg-size-[16px_16px]"></div>
+      <div className="absolute inset-0 -z-20 bg-linear-to-br from-background via-secondary to-background animate-gradient-xy"></div>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
@@ -421,6 +461,32 @@ export default function ClassyncDashboard() {
               </Button>
             ) : null}
           </div>
+
+          {/* [NEW] Urgent Assignments Section */}
+          {user && !isAdmin && urgentAssignments.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold text-foreground">Urgent Assignments</h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {urgentAssignments.map((assignment) => (
+                  <Card key={assignment.id} className="bg-card/60 backdrop-blur-sm border-destructive/50 hover:border-destructive transition-all">
+                    <CardHeader>
+                      <CardTitle className="truncate">{assignment.title}</CardTitle>
+                      <CardDescription>{assignment.courseTitle}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4" />
+                          <span>Due: {formatDate(assignment.deadline)}</span>
+                        </div>
+                        <Badge variant="destructive">Urgent</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Courses List */}
           <div className="space-y-6">
