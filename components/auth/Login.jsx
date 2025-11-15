@@ -83,7 +83,7 @@ export default function Login({ onBackToHome }) {
             signInErr
           );
           setError(
-            "Verification successful but login failed. Please try signing in again."
+            "Email verified successfully. Please sign in again to continue."
           );
           setAwaitingVerification(false);
           setUnverifiedUser(null);
@@ -93,17 +93,17 @@ export default function Login({ onBackToHome }) {
       }
 
       setError(
-        "Email still not verified. Please click the link in your inbox."
+        "Email not yet verified. Please check your inbox and click the verification link."
       );
     } catch (err) {
       console.error("[Login] Verification check error:", err);
-      setError("Failed to check verification status. Try again.");
+      setError("Unable to verify email status. Please try again.");
     }
   };
 
   const handleResendVerification = async () => {
     if (!unverifiedUser?.email || !unverifiedUser?.uid) {
-      setError("User information not available.");
+      setError("Unable to resend verification email. Please try signing in again.");
       return;
     }
 
@@ -128,10 +128,10 @@ export default function Login({ onBackToHome }) {
       });
     } catch (err) {
       console.error("[Login] Resend error:", err);
-      setError("Failed to resend verification email. Try again later.");
+      setError("Unable to resend verification email. Please try again in a moment.");
       toast({
-        title: "Could not resend email",
-        description: err.message || "Please try again shortly.",
+        title: "Resend Failed",
+        description: err.message || "Please wait a moment and try again.",
         variant: "destructive",
       });
     } finally {
@@ -187,45 +187,45 @@ export default function Login({ onBackToHome }) {
     } catch (err) {
       // Handle Firebase auth errors with user-friendly messages
       if (err.code === "auth/user-not-found") {
-        setError("❌ This email is not registered. Please sign up first.");
+        setError("This email is not registered. Please create an account first.");
       } else if (err.code === "auth/wrong-password") {
-        setError("❌ Incorrect password. Please try again.");
+        setError("Incorrect password. Please try again or reset your password.");
       } else if (err.code === "auth/invalid-email") {
-        setError("❌ Invalid email address. Please check and try again.");
+        setError("Please enter a valid email address.");
       } else if (err.code === "auth/user-disabled") {
-        setError("❌ This account has been disabled. Please contact support.");
+        setError("This account has been disabled. Contact support for assistance.");
       } else if (err.code === "auth/invalid-credential") {
         setError(
-          "❌ Email or password is incorrect. Please check and try again, or sign up if you don't have an account."
+          "Invalid email or password. Please check your credentials or create an account if you're new."
         );
       } else if (err.code === "auth/too-many-requests") {
-        setError("❌ Too many failed login attempts. Please try again later.");
+        setError("Too many failed attempts. Please wait a few minutes before trying again.");
       } else if (err.code === "auth/account-exists-with-different-credential") {
         setError(
-          "❌ An account already exists with this email. Please sign in or use a different email."
+          "An account with this email already exists. Please sign in using your original method."
         );
       } else if (err.code === "auth/credential-already-in-use") {
         setError(
-          "❌ This credential is already in use. Please use a different method."
+          "This credential is already associated with another account."
         );
       } else if (err.code === "auth/email-already-in-use") {
         setError(
-          "❌ This email is already registered. Please sign in instead."
+          "This email is already registered. Please sign in instead."
         );
       } else if (err.code === "auth/weak-password") {
-        setError("❌ Password is too weak. Please use a stronger password.");
+        setError("Please choose a stronger password.");
       } else if (err.code === "auth/operation-not-allowed") {
         setError(
-          "❌ Email/password sign-in is currently disabled. Please contact support."
+          "Email/password authentication is currently unavailable. Please contact support."
         );
       } else if (err.code === "auth/network-request-failed") {
         setError(
-          "❌ Network error. Please check your internet connection and try again."
+          "Connection failed. Please check your internet connection and try again."
         );
       } else {
         // Generic message for unknown errors
         setError(
-          "❌ Login failed. Please sign up first if you don't have an account."
+          "Unable to sign in. Please verify your credentials or create an account if you're new."
         );
       }
     }
@@ -242,24 +242,32 @@ export default function Login({ onBackToHome }) {
   // If user needs to verify email during login
   if (awaitingVerification) {
     return (
-      <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-        <div className="bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
-          <h2 className="text-center text-2xl font-bold mb-4">
+      <div className="fixed inset-0 z-100 min-h-screen flex items-center justify-center bg-white/30 backdrop-blur-md">
+        <div className="relative bg-card border border-border p-10 rounded-2xl shadow-lg w-full max-w-md">
+          <button
+            type="button"
+            onClick={() => onBackToHome?.()}
+            className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Close verification dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <h2 className="text-center text-2xl font-bold mb-4 text-foreground">
             📧 Email Verification Required
           </h2>
           {error && (
-            <div className="text-red-600 text-sm text-center mb-4 p-3 bg-red-50 rounded">
+            <div className="text-destructive text-sm text-center mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded">
               {error}
             </div>
           )}
 
-          <p className="mt-4 text-center text-sm text-gray-700">
+          <p className="mt-4 text-center text-sm text-muted-foreground">
             Your account hasn't been verified yet.
             <br />
-            <strong className="block mt-2">{unverifiedUser?.email}</strong>
+            <strong className="block mt-2 text-foreground">{unverifiedUser?.email}</strong>
           </p>
 
-          <p className="mt-4 text-center text-xs text-gray-600">
+          <p className="mt-4 text-center text-xs text-muted-foreground">
             Please check your inbox for the verification link. Click it to
             activate your account.
           </p>
@@ -268,7 +276,7 @@ export default function Login({ onBackToHome }) {
             <button
               type="button"
               onClick={checkVerification}
-              className="w-full py-3 px-4 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
+              className="w-full py-3 px-4 rounded-xl bg-accent text-accent-foreground font-semibold hover:bg-accent/90 transition-colors"
             >
               ✓ I have verified — Check Now
             </button>
@@ -279,8 +287,8 @@ export default function Login({ onBackToHome }) {
               disabled={resendDisabled}
               className={`w-full py-2 px-4 rounded-xl font-medium transition-colors ${
                 resendDisabled
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
               }`}
             >
               {resendDisabled
@@ -296,13 +304,13 @@ export default function Login({ onBackToHome }) {
                 setUnverifiedPassword("");
                 setError("");
               }}
-              className="w-full py-2 px-4 rounded-xl bg-gray-200 text-gray-700 font-medium hover:bg-gray-300 transition-colors"
+              className="w-full py-2 px-4 rounded-xl bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors"
             >
               Try Different Account
             </button>
           </div>
 
-          <p className="mt-6 text-center text-xs text-gray-500 border-t pt-4">
+          <p className="mt-6 text-center text-xs text-muted-foreground border-t border-border pt-4">
             ℹ️ You cannot log in without verifying your email first.
           </p>
         </div>
@@ -311,29 +319,29 @@ export default function Login({ onBackToHome }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-      <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+    <div className="fixed inset-0 z-100 min-h-screen flex items-center justify-center bg-white/30 backdrop-blur-md">
+      <div className="relative bg-card border border-border p-10 rounded-2xl shadow-lg w-full max-w-md">
         <button
           type="button"
           onClick={() => onBackToHome?.()}
-          className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Close sign in dialog"
         >
           <X className="h-4 w-4" />
         </button>
-        <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
+        <h2 className="text-center text-3xl font-extrabold text-foreground">
           Sign in to Virtual Classroom
         </h2>
 
         <form className="mt-6 space-y-6" onSubmit={handleEmailLogin}>
           {error && (
-            <div className="text-red-600 text-sm text-center">{error}</div>
+            <div className="text-destructive text-sm text-center p-3 bg-destructive/10 border border-destructive/20 rounded">{error}</div>
           )}
 
           <div>
             <label
               htmlFor="login-email"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-foreground"
             >
               Email
             </label>
@@ -343,14 +351,14 @@ export default function Login({ onBackToHome }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               id="login-email"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground"
             />
           </div>
 
           <div>
             <label
               htmlFor="login-password"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-foreground"
             >
               Password
             </label>
@@ -360,13 +368,13 @@ export default function Login({ onBackToHome }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               id="login-password"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
+            className="w-full py-2 px-4 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:bg-primary/90 transition-colors cursor-pointer"
           >
             Sign in
           </button>
@@ -377,7 +385,7 @@ export default function Login({ onBackToHome }) {
             <button
               type="button"
               onClick={() => setShowForgot(true)}
-              className="text-blue-600 hover:text-blue-500 text-sm font-medium cursor-pointer"
+              className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
             >
               Forgot password?
             </button>
@@ -388,7 +396,7 @@ export default function Login({ onBackToHome }) {
             <button
               type="button"
               onClick={() => setShowRegister(true)}
-              className="text-blue-600 hover:text-blue-500 text-sm font-medium cursor-pointer"
+              className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
             >
               Don&apos;t have an account? Sign up
             </button>
@@ -397,7 +405,7 @@ export default function Login({ onBackToHome }) {
               <button
                 type="button"
                 onClick={onBackToHome}
-                className="text-gray-600 hover:text-gray-500 text-sm block cursor-pointer"
+                className="text-muted-foreground hover:text-foreground text-sm block cursor-pointer"
               >
                 Back to Home
               </button>
@@ -405,25 +413,6 @@ export default function Login({ onBackToHome }) {
           </div>
         </form>
       </div>
-
-      {/* eslint-disable-next-line react/no-unknown-property */}
-      <style jsx>{`
-        .animate-gradient {
-          background-size: 200% 200%;
-          animation: gradientShift 8s ease infinite;
-        }
-        @keyframes gradientShift {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-      `}</style>
     </div>
   );
 }

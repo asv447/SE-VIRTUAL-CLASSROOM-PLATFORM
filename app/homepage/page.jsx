@@ -400,12 +400,12 @@ export default function ClassyncDashboard() {
         <div className="space-y-6">
           {/* Courses & Dashboard */}
           {/* Buttons row */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="flex flex-wrap justify-between gap-2">
             {isAdmin ? (
               <>
                 <Button
                   variant="outline"
-                  className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+                  className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
                   asChild
                 >
                   <a href="/admin">
@@ -417,7 +417,7 @@ export default function ClassyncDashboard() {
             ) : (
               <Button
                 variant="outline"
-                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
                 asChild
               >
                 <a href="/assignments">
@@ -428,7 +428,7 @@ export default function ClassyncDashboard() {
             )}
             <Button
               variant="outline"
-              className="cursor-pointer h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+              className="cursor-pointer h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
               asChild
             >
               <Link href={isAdmin ? "/instructor/analytics" : "/student/progress"}>
@@ -438,7 +438,7 @@ export default function ClassyncDashboard() {
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+              className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
               asChild
             >
               <a href="/ai-tools/chatbot">
@@ -758,9 +758,9 @@ export default function ClassyncDashboard() {
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
-                                variant="destructive"
+                                variant="outline"
                                 size="lg"
-                                className="w-full"
+                                className="w-full bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400 hover:text-red-800 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:border-red-700"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <LogOut className="w-5 h-5 mr-2" />

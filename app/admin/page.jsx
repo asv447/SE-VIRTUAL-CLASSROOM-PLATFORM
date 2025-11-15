@@ -6,6 +6,7 @@ import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 import {
   BookOpen,
   Plus,
@@ -15,6 +16,7 @@ import {
   Calendar,
   FileText,
   Upload,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -686,6 +688,69 @@ export default function AdminDashboard() {
     }
   };
 
+  const exportSubmissions = (fileType = "xlsx") => {
+    if (!viewingSubmissions || submissions.length === 0) {
+      toast.error("No submissions to export");
+      return;
+    }
+
+    try {
+      // Prepare the data
+      const exportData = submissions.map((submission) => {
+        const { displayName, displayEmail } = resolveSubmissionMeta(submission);
+        
+        return {
+          "Student Name": displayName,
+          "Email": displayEmail || "N/A",
+          "Submitted At": submission.submittedAt 
+            ? format(new Date(submission.submittedAt), "PPP p")
+            : "N/A",
+          "Grade": submission.grade !== null && submission.grade !== undefined
+            ? submission.grade
+            : "Not Graded",
+          "Max Score": submission.maxScore !== null && submission.maxScore !== undefined
+            ? submission.maxScore
+            : viewingSubmissions.maxScore || "N/A",
+          "Feedback": submission.feedback || "No feedback",
+        };
+      });
+
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      
+      // Set column widths
+      const columnWidths = [
+        { wch: 20 }, // Student Name
+        { wch: 25 }, // Email
+        { wch: 25 }, // Submitted At
+        { wch: 10 }, // Grade
+        { wch: 10 }, // Max Score
+        { wch: 30 }, // Feedback
+      ];
+      worksheet['!cols'] = columnWidths;
+
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Submissions");
+
+      // Generate filename
+      const timestamp = format(new Date(), "yyyy-MM-dd_HH-mm");
+      const filename = `${viewingSubmissions.title.replace(/[^a-z0-9]/gi, '_')}_submissions_${timestamp}.${fileType}`;
+
+      // Export based on file type
+      if (fileType === "csv") {
+        XLSX.writeFile(workbook, filename, { bookType: "csv" });
+      } else {
+        XLSX.writeFile(workbook, filename, { bookType: "xlsx" });
+      }
+
+      toast.success(`Exported ${submissions.length} submission(s) to ${fileType.toUpperCase()}`);
+    } catch (error) {
+      console.error("Error exporting submissions:", error);
+      toast.error("Failed to export submissions");
+    }
+  };
+
   if (!user) {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
@@ -1242,12 +1307,40 @@ export default function AdminDashboard() {
           <TabsContent value="submissions" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Student Submissions</CardTitle>
-                <CardDescription>
-                  {viewingSubmissions
-                    ? `Submissions for "${viewingSubmissions.title}"`
-                    : "Select an assignment to view submissions"}
-                </CardDescription>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <CardTitle>Student Submissions</CardTitle>
+                    <CardDescription>
+                      {viewingSubmissions
+                        ? `Submissions for "${viewingSubmissions.title}"`
+                        : "Select an assignment to view submissions"}
+                    </CardDescription>
+                  </div>
+                  {viewingSubmissions && submissions.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <FileSpreadsheet className="h-4 w-4 mr-2" />
+                          Export
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Export as</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem
+                          onClick={() => exportSubmissions("xlsx")}
+                        >
+                          Excel (.xlsx)
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem
+                          onClick={() => exportSubmissions("csv")}
+                        >
+                          CSV (.csv)
+                        </DropdownMenuCheckboxItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
                 {/* Assignment selector for viewing submissions */}
                 <div className="mt-4">
                   <Label className="mb-2 block">Choose assignment</Label>
@@ -1303,9 +1396,6 @@ export default function AdminDashboard() {
                           <div className="flex justify-between items-start">
                             <div>
                               <h3 className="font-semibold">{displayName}</h3>
-                              <p className="text-sm text-gray-600">
-                                ID: {submission.studentId}
-                              </p>
                               {displayEmail && (
                                 <p className="text-sm text-gray-500">
                                   Email: {displayEmail}
