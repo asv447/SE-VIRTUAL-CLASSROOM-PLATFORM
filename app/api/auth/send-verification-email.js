@@ -1,10 +1,7 @@
-// API route to send verification email via SMTP (Nodemailer)
-// Called from Register.jsx instead of Firebase's sendEmailVerification()
 import nodemailer from "nodemailer";
 import { auth } from "@/lib/firebase";
 
-// Verify environment variables are set
-const {
+ const {
   SMTP_HOST,
   SMTP_PORT = 587,
   SMTP_USER,
@@ -18,19 +15,17 @@ if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
   );
 }
 
-// Create transporter (SMTP connection)
-const transporter = nodemailer.createTransport({
+ const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: parseInt(SMTP_PORT),
-  secure: parseInt(SMTP_PORT) === 465, // use TLS for 587, SSL for 465
+  secure: parseInt(SMTP_PORT) === 465,  
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
 });
 
-// Verify transporter connection on startup (optional)
-transporter
+ transporter
   .verify()
   .then(() => console.log("[Nodemailer] SMTP connected successfully"))
   .catch((err) => console.error("[Nodemailer] SMTP error:", err));
@@ -56,16 +51,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Generate Firebase action code (verification link)
-    // We'll use Firebase Admin SDK on the server if available,
-    // or pass the link generation to client and just send email here.
-    // For now, we use Firebase's generateEmailVerificationLink via Admin SDK or Client API.
-
-    // Approach: Use Firebase REST API or Admin SDK to generate the verification link
-    // For simplicity with Next.js API route, we generate a custom link.
-    // In production, you'd use Firebase Admin SDK on a server function.
-
-    const verificationLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/verify?uid=${uid}`;
+   
+    const verificationLink = `${process.env.NEXT_PUBLIC_APP_URL }/api/auth/verify?uid=${uid}`;
 
     // Email HTML template with professional dark styling
     const htmlContent = `
@@ -254,8 +241,7 @@ export default async function handler(req, res) {
       </html>
     `;
 
-    // Plain text fallback
-    const textContent = `
+     const textContent = `
 ╔═══════════════════════════════════════════════════════════╗
 ║         VIRTUAL CLASSROOM - EMAIL VERIFICATION             ║
 ╚═══════════════════════════════════════════════════════════╝

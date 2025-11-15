@@ -110,31 +110,37 @@ export default function ClassyncDashboard() {
       if (role === "student" && uid) {
         fetchCoursesProgress(data, uid);
       }
+      return data; // Return the data for use in fetchUrgentAssignments
     } catch (error) {
       console.error("Error fetching courses:", error);
       toast.error("Could not load courses.");
+      return [];
     }
   };
 
   // [NEW] Fetch urgent assignments
-  const fetchUrgentAssignments = async (uid, role) => {
-    if (!uid || role === 'instructor') {
+  const fetchUrgentAssignments = async (uid, role, courses) => {
+    if (!uid || role === 'instructor' || !courses || courses.length === 0) {
       setUrgentAssignments([]);
       return;
     }
 
     try {
-      const res = await fetch(`/api/assignments?role=${role}&userId=${uid}`);
-      if (!res.ok) throw new Error("Failed to fetch assignments");
-      
-      const assignments = await res.json();
+      const allAssignments = [];
+      for (const course of courses) {
+        const res = await fetch(`/api/assignments?role=${role}&userId=${uid}&classId=${course.id}`);
+        if (res.ok) {
+          const assignments = await res.json();
+          allAssignments.push(...assignments);
+        }
+      }
       
       const now = new Date();
-      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-      const urgent = assignments.filter(assignment => {
+      const urgent = allAssignments.filter(assignment => {
         const deadline = new Date(assignment.deadline);
-        return deadline > now && deadline <= sevenDaysFromNow;
+        return deadline > now && deadline <= twentyFourHoursFromNow;
       });
 
       setUrgentAssignments(urgent);
@@ -205,23 +211,23 @@ export default function ClassyncDashboard() {
             setIsAdmin(userRole === "instructor");
 
             // [CHANGE] Call fetchCourses *after* we know the user's role
-            await fetchCourses(userRole, currentUser.uid);
-            await fetchUrgentAssignments(currentUser.uid, userRole); // [NEW] Fetch assignments
+            const coursesData = await fetchCourses(userRole, currentUser.uid);
+            await fetchUrgentAssignments(currentUser.uid, userRole, coursesData); // [NEW] Fetch assignments
           } else {
             // User not found
             setUsername(currentUser.email.split("@")[0]);
             setIsAdmin(false);
             // [CHANGE] Fetch all courses for non-instructors
-            await fetchCourses("student", currentUser.uid); // Pass uid even if student
-            await fetchUrgentAssignments(currentUser.uid, "student"); // [NEW] Fetch assignments
+            const coursesData = await fetchCourses("student", currentUser.uid); // Pass uid even if student
+            await fetchUrgentAssignments(currentUser.uid, "student", coursesData); // [NEW] Fetch assignments
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
           setUsername(currentUser.email.split("@")[0]);
           setIsAdmin(false);
           // [CHANGE] Fetch all courses on error
-          await fetchCourses("student", currentUser.uid); // Pass uid even if student
-          await fetchUrgentAssignments(currentUser.uid, "student"); // [NEW] Fetch assignments
+          const coursesData = await fetchCourses("student", currentUser.uid); // Pass uid even if student
+          await fetchUrgentAssignments(currentUser.uid, "student", coursesData); // [NEW] Fetch assignments
         } finally {
           setLoading(false); // Stop loading
         }
