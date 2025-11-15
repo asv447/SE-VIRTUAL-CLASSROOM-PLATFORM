@@ -1379,7 +1379,9 @@ export default function ClassroomPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="post-title">Title</Label>
+                        <Label htmlFor="post-title">
+                          Title <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="post-title"
                           placeholder="e.g., Welcome to Class!"
@@ -1390,7 +1392,9 @@ export default function ClassroomPage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="post-content">Content</Label>
+                        <Label htmlFor="post-content">
+                          Content <span className="text-red-500">*</span>
+                        </Label>
                         <Textarea
                           id="post-content"
                           placeholder="What's on your mind?"
@@ -1732,7 +1736,9 @@ export default function ClassroomPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="edit-post-title">Title</Label>
+                        <Label htmlFor="edit-post-title">
+                          Title <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="edit-post-title"
                           placeholder="e.g., Updated schedule"
@@ -1743,7 +1749,9 @@ export default function ClassroomPage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="edit-post-content">Content</Label>
+                        <Label htmlFor="edit-post-content">
+                          Content <span className="text-red-500">*</span>
+                        </Label>
                         <Textarea
                           id="edit-post-content"
                           placeholder="Share your updates..."
