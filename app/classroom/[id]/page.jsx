@@ -222,7 +222,7 @@ const CreateGroupDialog = ({
                       >
                         {student.name}{" "}
                         {isRep && (
-                          <span className="text-xs text-yellow-600">(Rep)</span>
+                          <span className="text-xs text-amber-600 dark:text-amber-400">(Rep)</span>
                         )}
                       </Label>
                     </div>
@@ -1269,7 +1269,7 @@ export default function ClassroomPage() {
   }
 
   if (!classroom) {
-    return <p className="text-center text-muted mt-10">Loading classroom...</p>;
+    return <p className="text-center text-foreground mt-10">Loading classroom...</p>;
   }
 
   return (
@@ -1294,7 +1294,7 @@ export default function ClassroomPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-border text-foreground hover:bg-muted/60"
+                  className="border-none text-foreground hover:bg-muted/60 hover:text-foreground"
                   onClick={handleCopy}
                 >
                   <Copy className="w-4 h-4 mr-1" /> {copied ? "Copied!" : "Copy"}
@@ -1312,7 +1312,7 @@ export default function ClassroomPage() {
               variant={activeTab === tab ? "default" : "outline"}
               className={`capitalize ${activeTab === tab
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "text-foreground border-border hover:bg-muted/60"
+                : "text-foreground border-none hover:bg-muted/60 hover:text-foreground"
                 }`}
               onClick={() => setActiveTab(tab)}
             >
@@ -1344,7 +1344,7 @@ export default function ClassroomPage() {
                     />
                     <Button
                       variant="outline"
-                      className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                      className="cursor-pointer border-none text-foreground hover:bg-accent hover:text-white"
                       onClick={() => wbInputRef.current && wbInputRef.current.click()}
                     >
                       Choose PDF
@@ -1353,7 +1353,7 @@ export default function ClassroomPage() {
                       Open in Whiteboard
                     </Button>
                     {wbSelectedFile && (
-                      <span className="text-sm text-muted truncate">{wbSelectedFile.name}</span>
+                      <span className="text-sm text-muted-foreground truncate">{wbSelectedFile.name}</span>
                     )}
                   </div>
                 </CardContent>
@@ -1364,7 +1364,7 @@ export default function ClassroomPage() {
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full h-16 border-border text-muted hover:bg-muted/60"
+                      className="w-full h-16 border-none text-foreground hover:bg-muted/60 hover:text-foreground"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Create a new post...
@@ -1440,14 +1440,14 @@ export default function ClassroomPage() {
                           className="hidden"
                           onChange={handleMaterialFileChange}
                         />
-                        <div className="rounded-md border border-dashed border-gray-300 p-3">
+                        <div className="rounded-md border border-dashed border-border p-3">
                           <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                               <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => materialInputRef.current?.click()}
-                                className="w-full sm:w-auto"
+                                className="w-full sm:w-auto border-none bg-primary/5 text-foreground font-semibold hover:bg-primary/15"
                               >
                                 Choose Files
                               </Button>
@@ -1464,7 +1464,7 @@ export default function ClassroomPage() {
                               )}
                             </div>
                             {newPostData.materialFiles.length === 0 ? (
-                              <p className="text-sm text-gray-500">
+                              <p className="text-sm text-muted-foreground">
                                 Optional. You can attach multiple files; they will be stored securely in the course Drive.
                               </p>
                             ) : (
@@ -1472,13 +1472,13 @@ export default function ClassroomPage() {
                                 {newPostData.materialFiles.map((file, idx) => (
                                   <li
                                     key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
-                                    className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                                    className="flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                                   >
                                     <div className="flex-1">
-                                      <p className="font-medium text-gray-800 truncate">
+                                      <p className="font-medium text-card-foreground truncate">
                                         {file.name}
                                       </p>
-                                      <p className="text-xs text-gray-500">
+                                      <p className="text-xs text-muted-foreground">
                                         {formatFileSize(file.size)}
                                       </p>
                                     </div>
@@ -1582,12 +1582,12 @@ export default function ClassroomPage() {
                           <Label htmlFor="post-pinned">Pin to top</Label>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                      <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
                         <div>
                           <Label htmlFor="include-poll" className="font-medium">
                             Include poll
                           </Label>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             Collect responses alongside your announcement.
                           </p>
                         </div>
@@ -1610,7 +1610,7 @@ export default function ClassroomPage() {
                         />
                       </div>
                       {newPostData.includePoll && (
-                        <div className="space-y-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
                           <div className="grid gap-2">
                             <Label htmlFor="poll-question">Poll question</Label>
                             <Input
@@ -1658,6 +1658,7 @@ export default function ClassroomPage() {
                               size="sm"
                               onClick={addPollOption}
                               disabled={newPostData.pollOptions.length >= MAX_POLL_OPTIONS}
+                              className="border-none bg-primary/5 text-foreground font-semibold"
                             >
                               Add option
                             </Button>
@@ -1665,7 +1666,7 @@ export default function ClassroomPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-muted">Give students the option to select more than one response.</p>
+                              <p className="text-xs text-muted-foreground">Give students the option to select more than one response.</p>
                             </div>
                             <Switch
                               id="poll-allow-multiple"
@@ -1683,19 +1684,19 @@ export default function ClassroomPage() {
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline" className="border-none bg-card text-foreground font-semibold hover:bg-muted">Cancel</Button>
                       </DialogClose>
-                      <Button onClick={handleCreatePost}>Post</Button>
+                      <Button onClick={handleCreatePost} className="bg-primary text-primary-foreground font-semibold shadow-lg">Post</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
               )}
 
-              <div className="rounded-md border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="rounded-md border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex w-full items-center gap-2 sm:max-w-sm">
                     <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                       <Input
                         value={announcementSearch}
                         onChange={(e) => setAnnouncementSearch(e.target.value)}
@@ -1715,7 +1716,7 @@ export default function ClassroomPage() {
                     )}
                   </div>
                   {isSearchingAnnouncements && (
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {visibleStreamPosts.length} match
                       {visibleStreamPosts.length === 1 ? "" : "es"}
                     </span>
@@ -1816,10 +1817,10 @@ export default function ClassroomPage() {
                           <Label htmlFor="edit-post-pinned">Pin to top</Label>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                      <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
                         <div>
                           <Label htmlFor="edit-include-poll" className="font-medium">Include poll</Label>
-                          <p className="text-xs text-muted">Edit or remove the poll attached to this announcement.</p>
+                          <p className="text-xs text-muted-foreground">Edit or remove the poll attached to this announcement.</p>
                         </div>
                         <Switch
                           id="edit-include-poll"
@@ -1858,7 +1859,7 @@ export default function ClassroomPage() {
                       </div>
 
                       {editPostData.includePoll && (
-                        <div className="space-y-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
                           <div className="grid gap-2">
                             <Label htmlFor="edit-poll-question">Poll question</Label>
                             <Input
@@ -1915,7 +1916,7 @@ export default function ClassroomPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="edit-poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-muted">Let students pick more than one answer.</p>
+                              <p className="text-xs text-muted-foreground">Let students pick more than one answer.</p>
                             </div>
                             <Switch
                               id="edit-poll-allow-multiple"
@@ -1943,11 +1944,11 @@ export default function ClassroomPage() {
 
               {/* Stream Posts List */}
               {!hasStreamPosts ? (
-                <Card className="border border-gray-300 p-6 text-center text-gray-600">
+                <Card className="border border-border p-6 text-center text-muted-foreground">
                   No posts yet.
                 </Card>
               ) : visibleStreamPosts.length === 0 ? (
-                <Card className="border border-gray-300 bg-white p-6 text-center text-gray-600">
+                <Card className="border border-border bg-card p-6 text-center text-muted-foreground">
                   No announcements match your search.
                 </Card>
               ) : (
@@ -1966,14 +1967,14 @@ export default function ClassroomPage() {
                             <span className="block font-semibold text-foreground">
                               {post.author?.name || "Unknown"}
                             </span>
-                            <span className="text-sm text-muted">{createdAt}</span>
+                            <span className="text-sm text-muted-foreground">{createdAt}</span>
                           </div>
                           {isInstructor && pid && (
                             <div className="flex items-center gap-1">
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 text-muted hover:text-accent hover:bg-accent/10"
+                                className="h-8 w-8 text-foreground hover:text-primary hover:bg-primary/10"
                                 aria-label="Edit announcement"
                                 onClick={() => handleOpenEditPost(post)}
                               >
@@ -1984,7 +1985,7 @@ export default function ClassroomPage() {
                                   <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="h-8 w-8 text-muted hover:text-destructive hover:bg-destructive/10"
+                                    className="h-8 w-8 text-foreground hover:text-destructive hover:bg-destructive/10"
                                     aria-label="Delete announcement"
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -2001,7 +2002,7 @@ export default function ClassroomPage() {
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleDeletePost(pid)}
-                                      className="bg-red-600 text-white hover:bg-red-700"
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                     >
                                       Delete
                                     </AlertDialogAction>
@@ -2023,22 +2024,22 @@ export default function ClassroomPage() {
                         </span>
                       )}
                           {post.isPinned && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-900 dark:text-amber-100 text-xs font-medium">
                               PINNED
                             </span>
                           )}
                           {(post.type === "assignment" || post.assignmentRef) && (
-                            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-900 dark:text-purple-100 text-xs font-medium">
                               ASSIGNMENT
                             </span>
                           )}
                           {post.isImportant && (
-                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-900 dark:text-blue-100 text-xs font-medium">
                               IMPORTANT
                             </span>
                           )}
                           {post.isUrgent && (
-                            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-900 dark:text-red-100 text-xs font-medium">
                               URGENT
                             </span>
                           )}
@@ -2053,7 +2054,7 @@ export default function ClassroomPage() {
                               href={post.link.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                             >
                               <LinkIcon className="w-3 h-3" />
                               {post.link.text || 'Annotated Material'}
@@ -2063,15 +2064,15 @@ export default function ClassroomPage() {
 
                         {/* Notes (from whiteboard) shown separately */}
                         {post.notesText && post.notesText.trim() !== '' && (
-                          <div className="mb-3 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-left">
-                            <div className="text-xs font-semibold text-yellow-800 mb-1">Notes</div>
-                            <pre className="whitespace-pre-wrap wrap-break-word text-sm text-yellow-900">{post.notesText}</pre>
+                          <div className="mb-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-left">
+                            <div className="text-xs font-semibold text-amber-900 dark:text-amber-100 mb-1">Notes</div>
+                            <pre className="whitespace-pre-wrap wrap-break-word text-sm text-amber-900 dark:text-amber-50">{post.notesText}</pre>
                           </div>
                         )}
 
                         {Array.isArray(post.materials) && post.materials.length > 0 && (
-                          <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-left">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                          <div className="mb-3 rounded-md border border-border bg-muted/30 p-3 text-left">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Materials
                             </div>
                             <div className="mt-2 space-y-3">
@@ -2081,11 +2082,11 @@ export default function ClassroomPage() {
                                   className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                                 >
                                   <div>
-                                    <p className="font-medium text-gray-900">
+                                    <p className="font-medium text-foreground">
                                       {material?.fileName || "Attachment"}
                                     </p>
                                     {material?.fileSize ? (
-                                      <p className="text-xs text-gray-500">
+                                      <p className="text-xs text-muted-foreground">
                                         {formatFileSize(material.fileSize)}
                                       </p>
                                     ) : null}
@@ -2129,10 +2130,10 @@ export default function ClassroomPage() {
                         )}
 
                         {post.poll && post.poll.options && post.poll.options.length > 0 && (
-                          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                          <div className="mb-4 rounded-md border border-border bg-muted/30 p-4">
                             <div className="mb-3">
                               <p className="font-semibold text-foreground">{post.poll.question}</p>
-                              <p className="text-xs text-muted">
+                              <p className="text-xs text-muted-foreground">
                                 {post.poll.allowMultiple
                                   ? "Select all options that apply."
                                   : "Select one option."}
@@ -2143,7 +2144,7 @@ export default function ClassroomPage() {
                               const pidString = pid;
                               if (!pidString) {
                                 return (
-                                  <div className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-sm text-muted">
+                                  <div className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-sm text-muted-foreground">
                                     Poll responses will be available once this post finishes syncing.
                                   </div>
                                 );
@@ -2181,8 +2182,8 @@ export default function ClassroomPage() {
                                     return (
                                       <div
                                         key={option.id}
-                                        className={`rounded-md border bg-white px-3 py-2 transition ${
-                                          isSelected ? "border-black shadow-sm" : "border-gray-200"
+                                        className={`rounded-md border bg-card px-3 py-2 transition ${
+                                          isSelected ? "border-primary shadow-sm" : "border-border"
                                         }`}
                                       >
                                         <label className="flex items-center gap-3 text-sm text-foreground">
@@ -2197,7 +2198,7 @@ export default function ClassroomPage() {
                                         </label>
                                         <div className="mt-2">
                                           <Progress value={percentage} />
-                                          <div className="mt-1 flex justify-between text-xs text-muted">
+                                          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                                             <span>{optionVotes} vote{optionVotes === 1 ? "" : "s"}</span>
                                             <span>{percentage}%</span>
                                           </div>
@@ -2206,7 +2207,7 @@ export default function ClassroomPage() {
                                     );
                                   })}
 
-                                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                                     <span>{selectionSummary}</span>
                                     {user && (
                                       <Button
@@ -2239,15 +2240,15 @@ export default function ClassroomPage() {
           {/* ASSIGNMENTS */}
           {activeTab === "assignments" && (
             <div className="space-y-4">
-              <Card className="border border-gray-300 shadow-sm">
+              <Card className="border border-border shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-xl">Assignments</CardTitle>
                   <CardDescription>Course assignments and deadlines</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {isAssignmentsLoading && <p>Loading assignments...</p>}
+                  {isAssignmentsLoading && <p className="text-foreground">Loading assignments...</p>}
                   {!isAssignmentsLoading && assignments.length === 0 && (
-                    <p className="text-muted">No assignments available.</p>
+                    <p className="text-muted-foreground">No assignments available.</p>
                   )}
                   {!isAssignmentsLoading && assignments.length > 0 && (
                     <div className="space-y-4">
@@ -2256,7 +2257,7 @@ export default function ClassroomPage() {
                         .map((a) => (
                         <div key={a.id} className="border rounded-md p-4 hover:shadow-sm transition">
                           <button
-                            className="font-semibold text-lg text-left text-blue-700 hover:underline"
+                            className="font-semibold text-lg text-left text-primary hover:underline"
                             onClick={() => window.location.href = `/assignments`}
                             title="Open assignments page"
                           >
@@ -2265,11 +2266,11 @@ export default function ClassroomPage() {
                           {a.description && (
                             <p className="text-sm text-muted-foreground mt-1">{a.description}</p>
                           )}
-                          <p className="text-xs text-muted mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
+                          <p className="text-xs text-muted-foreground mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
                           {isInstructor && (
                             <div className="mt-2">
                               {!editingDeadline[a.id] ? (
-                                <Button variant="outline" size="sm" onClick={() => startEditDeadline(a.id, a.deadline)}>Edit Deadline</Button>
+                                <Button variant="outline" size="sm" className="border-none" onClick={() => startEditDeadline(a.id, a.deadline)}>Edit Deadline</Button>
                               ) : (
                                 <div className="flex items-center gap-2 mt-2">
                                   <Input
@@ -2278,14 +2279,14 @@ export default function ClassroomPage() {
                                     onChange={(e) => setDeadlineInputs((p) => ({ ...p, [a.id]: e.target.value }))}
                                   />
                                   <Button size="sm" onClick={() => saveDeadline(a.id)}>Save</Button>
-                                  <Button size="sm" variant="outline" onClick={() => cancelEditDeadline(a.id)}>Cancel</Button>
+                                  <Button size="sm" variant="outline" className="border-none" onClick={() => cancelEditDeadline(a.id)}>Cancel</Button>
                                 </div>
                               )}
                             </div>
                           )}
                           {a.fileUrl && (
                             <div className="mt-3">
-                              <Button variant="outline" size="sm" asChild>
+                              <Button variant="outline" size="sm" className="border-none" asChild>
                                 <a href={a.fileUrl} target="_blank" rel="noopener noreferrer">Download File</a>
                               </Button>
                             </div>
@@ -2314,9 +2315,9 @@ export default function ClassroomPage() {
                 {/* Chat Message List */}
                 <div className="flex-1 overflow-y-auto p-4 bg-muted/10">
                   {isChatLoading ? (
-                    <p className="text-center text-muted">Loading chat...</p>
+                    <p className="text-center text-foreground">Loading chat...</p>
                   ) : chatMessages.length === 0 ? (
-                    <p className="text-center text-muted">No messages yet. Start the conversation!</p>
+                    <p className="text-center text-muted-foreground">No messages yet. Start the conversation!</p>
                   ) : (
                     <ChatMessageList
                       messages={chatMessages}
@@ -2366,7 +2367,7 @@ export default function ClassroomPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {!classroom.students || classroom.students.length === 0 ? (
-                    <p className="text-muted">No students enrolled yet.</p>
+                    <p className="text-muted-foreground">No students enrolled yet.</p>
                   ) : (
                     classroom.students.map((student) => (
                       <div key={student.userId} className="flex items-center gap-3">
@@ -2397,7 +2398,7 @@ export default function ClassroomPage() {
                   )}
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {isGroupsLoading && <p>Loading groups...</p>}
+                  {isGroupsLoading && <p className="text-foreground">Loading groups...</p>}
                   {!isGroupsLoading && groups.length === 0 && (
                     <p className="text-muted-foreground">No groups created yet.</p>
                   )}
@@ -2410,7 +2411,7 @@ export default function ClassroomPage() {
                         >
                           <Card className="hover:shadow-md transition-shadow">
                             <CardHeader>
-                              <CardTitle className="text-lg text-blue-700 hover:underline">
+                              <CardTitle className="text-lg text-primary hover:underline">
                                 {group.name}
                               </CardTitle>
                               <CardDescription>

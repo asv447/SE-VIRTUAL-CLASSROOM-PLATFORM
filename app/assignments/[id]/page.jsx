@@ -122,7 +122,7 @@ export default function AssignmentDetailPage() {
             {assignment.description || "No description provided."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm text-gray-700">
+        <CardContent className="space-y-4 text-sm text-foreground">
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4" />
             <span>

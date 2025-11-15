@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Home, Book, ChevronDown, Layers, Menu } from "lucide-react";
+import { Home, Book, ChevronDown, Layers, Menu, BookOpen, GraduationCap } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { usePathname, useRouter } from "next/navigation";
@@ -226,7 +226,7 @@ export default function Sidebar() {
       onMouseLeave={handleMouseLeave}
     >
       <aside
-        className="h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col transition-all duration-300 overflow-y-auto"
+        className="h-full bg-sidebar text-sidebar-foreground flex flex-col transition-all duration-300 overflow-y-auto shadow-2xl border-r border-border"
         style={{ 
           width: `${sidebarWidth}px`,
           height: '100%'
@@ -285,9 +285,13 @@ export default function Sidebar() {
                   className="flex items-center justify-between w-full px-3 py-2 rounded-md hover:bg-muted transition-colors"
                 >
                   <span className="flex items-center gap-3 min-w-0">
-                    <Layers size={18} className="shrink-0" />
+                    {role === "instructor" ? (
+                      <GraduationCap size={18} className="shrink-0" />
+                    ) : (
+                      <BookOpen size={18} className="shrink-0" />
+                    )}
                     {!isCollapsed && (
-                      <span className="truncate">{role === "instructor" ? "My Courses" : "Enrolled"}</span>
+                      <span className="truncate font-semibold text-foreground">{role === "instructor" ? "My Courses" : "Enrolled"}</span>
                     )}
                   </span>
                   {!isCollapsed && (
@@ -311,8 +315,10 @@ export default function Sidebar() {
                         }`}
                       >
                         <div
-                          className={`w-3 h-3 rounded-full shrink-0 ${course.color}`}
-                        ></div>
+                          className="w-6 h-6 rounded-full flex items-center justify-center bg-primary text-primary-foreground text-xs font-semibold shrink-0"
+                        >
+                          {course.name.charAt(0).toUpperCase()}
+                        </div>
                         <span className="truncate">{course.name}</span>
                       </li>
                     ))}

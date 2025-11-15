@@ -4,25 +4,25 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.98 0.01 230); /* Very light, cool gray-blue */
-  --foreground: oklch(0.2 0.04 230); /* Dark slate blue */
-  --card: oklch(1 0 0); /* White cards for contrast */
-  --card-foreground: oklch(0.2 0.04 230);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.04 230);
-  --primary: oklch(0.5 0.15 230); /* Main slate blue */
-  --primary-foreground: oklch(0.99 0.01 230);
-  --secondary: oklch(0.94 0.02 230); /* Lighter slate blue/gray */
-  --secondary-foreground: oklch(0.3 0.04 230);
-  --muted: oklch(0.94 0.02 230);
-  --muted-foreground: oklch(0.5 0.03 230);
+  --background: oklch(0.94 0.04 230); /* More visible blue-tinted background for presentations */
+  --foreground: oklch(0.15 0.05 230); /* Darker text for better contrast */
+  --card: oklch(0.98 0.01 230); /* Lighter cards for better separation */
+  --card-foreground: oklch(0.15 0.05 230); /* Dark text on cards */
+  --popover: oklch(0.98 0.01 230);
+  --popover-foreground: oklch(0.15 0.05 230);
+  --primary: oklch(0.45 0.18 230); /* Stronger primary blue for better visibility */
+  --primary-foreground: oklch(0.99 0 0); /* Pure white on primary */
+  --secondary: oklch(0.88 0.04 230); /* Lighter secondary for better contrast */
+  --secondary-foreground: oklch(0.15 0.05 230); /* Dark text on secondary */
+  --muted: oklch(0.88 0.04 230);
+  --muted-foreground: oklch(0.4 0.04 230); /* Darker muted text for readability */
   --accent: #006FA7; /* Bright blue accent */
-  --accent-foreground: #FFFFFF;
-  --destructive: oklch(0.55 0.2 25); /* Strong red */
-  --destructive-foreground: oklch(0.98 0.01 25);
-  --border: oklch(0.9 0.02 230);
-  --input: oklch(0.92 0.02 230);
-  --ring: oklch(0.5 0.15 230 / 0.6);
+  --accent-foreground: #FFFFFF; /* White text on accent */
+  --destructive: oklch(0.55 0.22 25); /* Strong red */
+  --destructive-foreground: oklch(0.99 0 0); /* Pure white on destructive */
+  --border: oklch(0.82 0.035 230); /* More visible borders */
+  --input: oklch(0.96 0.015 230); /* Lighter input backgrounds */
+  --ring: oklch(0.45 0.18 230 / 0.5); /* Visible focus rings */
   --radius: 0.75rem;
   --chart-1: oklch(0.5 0.15 230); /* Primary blue */
   --chart-2: #006FA7; /* Accent blue */

@@ -478,7 +478,7 @@ export default function SharedNavbar() {
         </div>
 
         {isProfileOpen && (
-          <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 z-50 ring-1 ring-black/5">
+          <div className="absolute right-0 mt-2 w-44 bg-card border border-border rounded-md shadow-2xl py-1 z-50">
             <div className="flex flex-col justify-center items-left w-full text-left px-4 py-2 text-sm text-muted-foreground border-b border-border gap-0.5">
               <p>{username}</p>
               <p className="text-xs">{user?.email}</p>
@@ -489,7 +489,7 @@ export default function SharedNavbar() {
                 setIsProfileOpen(false);
                 openUsernameDialog();
               }}
-              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
+              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Change Username
             </button>
@@ -499,7 +499,7 @@ export default function SharedNavbar() {
                 setIsProfileOpen(false);
                 openPasswordDialog();
               }}
-              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
+              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Change Password
             </button>
@@ -512,7 +512,7 @@ export default function SharedNavbar() {
                 // preload preview with current stored photo
                 setPreviewUrl(userPhoto || user?.photoURL || "");
               }}
-              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
+              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Upload Profile Picture
             </button>
@@ -522,7 +522,7 @@ export default function SharedNavbar() {
                 setIsProfileOpen(false);
                 signOut(auth);
               }}
-              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-gray-100 dark:hover:bg-slate-700"
+              className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Logout
             </button>
@@ -651,7 +651,7 @@ export default function SharedNavbar() {
 
             <div className="relative">
               {!mounted ? (
-                <div className="h-9 w-20 animate-pulse bg-gray-200 rounded"></div>
+                <div className="h-9 w-20 animate-pulse bg-muted rounded"></div>
               ) : user ? (
                 <ProfileMenu username={username} />
               ) : (
@@ -951,8 +951,8 @@ export default function SharedNavbar() {
       </Dialog>
       {/* Upload Profile Picture Modal */}
       {isUploadOpen && mounted && (
-        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
-          <div className="relative w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg p-6">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-md mx-auto bg-card border border-border rounded-2xl shadow-2xl p-6">
             <button
               onClick={() => {
                 if (uploading) {
@@ -961,17 +961,17 @@ export default function SharedNavbar() {
                 }
                 handleCloseUploadModal();
               }}
-              className="absolute top-3 right-4 text-gray-700 text-2xl font-bold hover:text-gray-900 transition cursor-pointer"
+              className="absolute top-3 right-4 text-foreground/70 text-2xl font-bold hover:text-foreground transition cursor-pointer"
             >
               ×
             </button>
 
-            <h3 className="text-lg font-semibold mb-4">
+            <h3 className="text-lg font-semibold mb-4 text-foreground">
               Upload Profile Picture
             </h3>
 
             <div className="flex flex-col items-center gap-4">
-              <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100">
+              <div className="w-32 h-32 rounded-full overflow-hidden bg-muted">
                 {previewUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -980,13 +980,13 @@ export default function SharedNavbar() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                     No image
                   </div>
                 )}
               </div>
 
-              <label className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md cursor-pointer text-sm text-gray-700">
+              <label className="inline-flex items-center px-4 py-2 bg-card border border-border hover:bg-muted/50 rounded-md cursor-pointer text-sm text-foreground transition-colors">
                 <input
                   type="file"
                   accept="image/*"
@@ -995,7 +995,7 @@ export default function SharedNavbar() {
                 />
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 mr-2 text-gray-500"
+                  className="h-4 w-4 mr-2 text-muted-foreground"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1010,7 +1010,7 @@ export default function SharedNavbar() {
                 <span>Choose file</span>
               </label>
               {selectedFile && (
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   {selectedFile.name}
                 </p>
               )}
@@ -1024,7 +1024,7 @@ export default function SharedNavbar() {
                     }
                     handleCloseUploadModal();
                   }}
-                  className="cursor-pointer px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                  className="cursor-pointer px-3 py-2 text-sm text-foreground border border-border hover:bg-muted/50 rounded-md transition-colors"
                 >
                   Cancel
                 </button>
@@ -1033,7 +1033,7 @@ export default function SharedNavbar() {
                   <button
                     onClick={() => setShowRemovePhotoConfirm(true)}
                     disabled={uploading}
-                    className="cursor-pointer px-3 py-2 text-sm text-red-600 border border-red-200 hover:bg-red-50 rounded-md"
+                    className="cursor-pointer px-3 py-2 text-sm text-destructive border border-destructive/30 hover:bg-destructive/10 rounded-md transition-colors"
                   >
                     Remove
                   </button>
@@ -1042,7 +1042,7 @@ export default function SharedNavbar() {
                 <button
                   onClick={handleUploadProfile}
                   disabled={uploading}
-                  className="cursor-pointer px-3 py-2 text-sm bg-blue-600 text-white rounded-md disabled:opacity-60"
+                  className="cursor-pointer px-3 py-2 text-sm bg-primary text-primary-foreground rounded-md disabled:opacity-60 hover:bg-primary/90"
                 >
                   {uploading ? "Uploading..." : "Save"}
                 </button>

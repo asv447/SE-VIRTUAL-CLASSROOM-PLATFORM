@@ -622,7 +622,9 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
               Eraser
             </Button>
             <div className="border-l mx-2"></div>
-            <label className="text-sm text-gray-600">Color</label>
+            <label className={`text-sm font-medium ${
+              isFullScreen ? "text-white" : "text-foreground"
+            }`}>Color</label>
             <input
               type="color"
               value={brushColor}
@@ -639,7 +641,9 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
                   canvas.freeDrawingBrush.color = newColor;
               }}
             />
-            <label className="ml-2 text-sm text-gray-600">Size</label>
+            <label className={`ml-2 text-sm font-medium ${
+              isFullScreen ? "text-white" : "text-foreground"
+            }`}>Size</label>
             <input
               type="range"
               min="1"

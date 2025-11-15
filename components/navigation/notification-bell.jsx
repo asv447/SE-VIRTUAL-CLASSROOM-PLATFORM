@@ -195,31 +195,38 @@ export default function NotificationBell() {
     return (
       <div
         key={id}
-        className={`p-3 border-b last:border-b-0 ${n.read ? "bg-white/50" : "bg-white"
-          } `}
+        className={`p-3 border-b border-border last:border-b-0 rounded-md ${n.read ? "bg-muted/30" : "bg-card"
+          } hover:bg-muted/50 transition-colors`}
       >
         <div className="flex justify-between items-start">
-          <div>
-            <div className="font-medium text-sm">
+          <div className="flex-1">
+            <div className="font-semibold text-sm text-foreground">
               {n.title || "Notification"}
             </div>
-            <div className="text-xs text-muted-foreground">{n.message}</div>
+            <div className="text-xs text-muted-foreground mt-1">{n.message}</div>
             <div className="text-xs text-muted-foreground mt-1">
               {n.createdAt
                 ? formatDistanceToNow(new Date(n.createdAt)) + " ago"
                 : ""}
             </div>
           </div>
-          <div className="ml-3 text-right flex flex-col items-end gap-2">
-            <div>
+          <div className="ml-3 flex items-center gap-1">
+            {!n.read && (
               <button
-                onClick={() => deleteNotification(id)}
-                className="rounded-full text-sm px-1.5 py-1.5 bg-black text-white"
-                title="Delete notification"
+                onClick={() => markAsRead(id)}
+                className="rounded-full p-1.5 bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                title="Mark as read"
               >
                 <Check className="w-3 h-3" />
               </button>
-            </div>
+            )}
+            <button
+              onClick={() => deleteNotification(id)}
+              className="rounded-full p-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+              title="Delete notification"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>
@@ -242,26 +249,26 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-md shadow-lg z-50 ring-1 ring-black/5">
-          <div className="flex items-center justify-between px-3 py-2 border-b">
-            <div className="font-medium">Notifications</div>
-            <div className="flex items-center gap-2">
+        <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-lg shadow-2xl z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+            <div className="font-semibold text-foreground">Notifications</div>
+            <div className="flex items-center gap-3">
               <button
                 onClick={markAllAsRead}
-                className="text-xs text-muted-foreground hover:underline cursor-pointer"
+                className="text-xs text-primary hover:text-primary/80 font-medium cursor-pointer"
               >
                 Mark all as read
               </button>
-              <button onClick={() => setOpen(false)} className="p-1">
-                <X className="w-4 h-4 cursor-pointer" />
+              <button onClick={() => setOpen(false)} className="p-1 hover:bg-muted rounded-md transition-colors">
+                <X className="w-4 h-4 cursor-pointer text-muted-foreground" />
               </button>
             </div>
           </div>
 
           <div className="max-h-72 overflow-auto">
-            {loading && <div className="p-3 text-sm">Loading...</div>}
+            {loading && <div className="p-4 text-sm text-foreground">Loading...</div>}
             {!loading && notifications.length === 0 && (
-              <div className="p-3 text-sm">No notifications</div>
+              <div className="p-4 text-sm text-muted-foreground text-center">No notifications</div>
             )}
             {!loading && notifications.map((n) => renderNotification(n))}
           </div>

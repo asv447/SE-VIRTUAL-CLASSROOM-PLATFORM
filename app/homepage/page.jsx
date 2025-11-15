@@ -59,6 +59,7 @@ import {
   BarChart3,
   Sparkles,
   LogOut,
+  Shield,
 } from "lucide-react";
 
 import { auth } from "../../lib/firebase";
@@ -423,11 +424,11 @@ export default function ClassyncDashboard() {
               <>
                 <Button
                   variant="outline"
-                  className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+                  className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
                   asChild
                 >
                   <a href="/admin">
-                    <FileText className="w-6 h-6" />
+                    <Shield className="w-6 h-6" />
                     <span className="text-sm">Admin Dashboard</span>
                   </a>
                 </Button>
@@ -435,7 +436,7 @@ export default function ClassyncDashboard() {
             ) : (
               <Button
                 variant="outline"
-                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
                 asChild
               >
                 <a href="/assignments">
@@ -446,7 +447,7 @@ export default function ClassyncDashboard() {
             )}
             <Button
               variant="outline"
-              className="cursor-pointer h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+              className="cursor-pointer h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
               asChild
             >
               <Link href={isAdmin ? "/instructor/analytics" : "/student/progress"}>
@@ -456,7 +457,7 @@ export default function ClassyncDashboard() {
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+              className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
               asChild
             >
               <a href="/ai-tools/chatbot">
@@ -468,7 +469,7 @@ export default function ClassyncDashboard() {
             user?.email?.includes("@admin.com") ? (
               <Button
                 variant="outline"
-                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
+                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
               >
                 <Users className="w-6 h-6" />
                 <span className="text-sm">Manage Classroom</span>
@@ -753,7 +754,7 @@ export default function ClassyncDashboard() {
                               <Button
                                 variant="outline"
                                 size="lg"
-                                className="w-full bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400 hover:text-red-800 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:border-red-700"
+                                className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 hover:text-destructive border-destructive/30"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <LogOut className="w-5 h-5 mr-2" />

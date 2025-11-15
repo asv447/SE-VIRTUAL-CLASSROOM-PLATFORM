@@ -44,49 +44,49 @@ export default function GroupDetailsPage() {
   }, [groupId]);
 
   if (loading) {
-    return <p className="text-center text-gray-500 mt-10">Loading group...</p>;
+    return <p className="text-center text-muted-foreground mt-10">Loading group...</p>;
   }
   if (error) {
-    return <p className="text-center text-red-500 mt-10">{error}</p>;
+    return <p className="text-center text-destructive mt-10">{error}</p>;
   }
   if (!group) {
-    return <p className="text-center text-gray-500 mt-10">Group not found.</p>;
+    return <p className="text-center text-muted-foreground mt-10">Group not found.</p>;
   }
 
   return (
-    <div className="min-h-screen bg-white text-black px-6 py-10 flex justify-center">
+    <div className="min-h-screen bg-background text-foreground px-6 py-10 flex justify-center">
       <div className="w-full max-w-3xl space-y-8">
-        <h1 className="text-3xl font-semibold">{group.name}</h1>
+        <h1 className="text-3xl font-semibold text-foreground">{group.name}</h1>
 
-        <Card>
+        <Card className="border border-border bg-card shadow-sm">
           <CardHeader>
-            <CardTitle>Group Representative</CardTitle>
+            <CardTitle className="text-foreground">Group Representative</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
-              <Star className="w-6 h-6 text-yellow-500" />
-              <span className="font-medium text-lg">
+              <Star className="w-6 h-6 text-amber-500" />
+              <span className="font-medium text-lg text-foreground">
                 {group.representative.name}
               </span>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border border-border bg-card shadow-sm">
           <CardHeader>
-            <CardTitle>Members ({group.members.length})</CardTitle>
+            <CardTitle className="text-foreground">Members ({group.members.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {group.members.map((member) => (
               <div key={member.userId} className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gray-500 text-white flex items-center justify-center text-lg font-semibold">
+                <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-lg font-semibold">
                   {member.name ? member.name[0].toUpperCase() : "S"}
                 </div>
-                <span className="font-medium text-gray-800">
+                <span className="font-medium text-foreground">
                   {member.name}
                 </span>
                 {member.userId === group.representative.userId && (
-                  <span className="text-xs font-semibold text-yellow-600">
+                  <span className="text-xs font-semibold text-amber-600">
                     (Representative)
                   </span>
                 )}

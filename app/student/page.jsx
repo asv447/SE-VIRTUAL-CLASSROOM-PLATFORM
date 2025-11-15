@@ -544,7 +544,7 @@ export default function AssignmentsPage() {
               {getCourseName(assignment)}
             </div>
             <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
+              <Calendar className="h-4 w-4 text-primary" />
               Due: {safeFormatDate(assignment.deadline)}
             </div>
           </div>
