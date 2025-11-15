@@ -63,6 +63,13 @@ import {
 
 import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import Link from "next/link";
+
+// [NEW] Helper to format dates
+const formatDate = (dateString) => {
+  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  return new Date(dateString).toLocaleDateString(undefined, options);
+};
 
 export default function ClassyncDashboard() {
   // User state
@@ -73,6 +80,7 @@ export default function ClassyncDashboard() {
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState([]);
   const [courseProgress, setCourseProgress] = useState({}); // Store progress for each course
+  const [urgentAssignments, setUrgentAssignments] = useState([]); // [NEW] For urgent assignments
 
   // [NEW] State for student joining a course
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
@@ -102,9 +110,44 @@ export default function ClassyncDashboard() {
       if (role === "student" && uid) {
         fetchCoursesProgress(data, uid);
       }
+      return data; // Return the data for use in fetchUrgentAssignments
     } catch (error) {
       console.error("Error fetching courses:", error);
       toast.error("Could not load courses.");
+      return [];
+    }
+  };
+
+  // [NEW] Fetch urgent assignments
+  const fetchUrgentAssignments = async (uid, role, courses) => {
+    if (!uid || role === 'instructor' || !courses || courses.length === 0) {
+      setUrgentAssignments([]);
+      return;
+    }
+
+    try {
+      const allAssignments = [];
+      for (const course of courses) {
+        const res = await fetch(`/api/assignments?role=${role}&userId=${uid}&classId=${course.id}`);
+        if (res.ok) {
+          const assignments = await res.json();
+          allAssignments.push(...assignments);
+        }
+      }
+      
+      const now = new Date();
+      const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const urgent = allAssignments.filter(assignment => {
+        const deadline = new Date(assignment.deadline);
+        return deadline > now && deadline <= twentyFourHoursFromNow;
+      });
+
+      setUrgentAssignments(urgent);
+
+    } catch (error) {
+      console.error("Error fetching urgent assignments:", error);
+      // Do not show a toast for this, as it's a background fetch
     }
   };
 
@@ -168,20 +211,23 @@ export default function ClassyncDashboard() {
             setIsAdmin(userRole === "instructor");
 
             // [CHANGE] Call fetchCourses *after* we know the user's role
-            await fetchCourses(userRole, currentUser.uid);
+            const coursesData = await fetchCourses(userRole, currentUser.uid);
+            await fetchUrgentAssignments(currentUser.uid, userRole, coursesData); // [NEW] Fetch assignments
           } else {
             // User not found
             setUsername(currentUser.email.split("@")[0]);
             setIsAdmin(false);
             // [CHANGE] Fetch all courses for non-instructors
-            await fetchCourses("student", currentUser.uid); // Pass uid even if student
+            const coursesData = await fetchCourses("student", currentUser.uid); // Pass uid even if student
+            await fetchUrgentAssignments(currentUser.uid, "student", coursesData); // [NEW] Fetch assignments
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
           setUsername(currentUser.email.split("@")[0]);
           setIsAdmin(false);
           // [CHANGE] Fetch all courses on error
-          await fetchCourses("student", currentUser.uid); // Pass uid even if student
+          const coursesData = await fetchCourses("student", currentUser.uid); // Pass uid even if student
+          await fetchUrgentAssignments(currentUser.uid, "student", coursesData); // [NEW] Fetch assignments
         } finally {
           setLoading(false); // Stop loading
         }
@@ -192,6 +238,7 @@ export default function ClassyncDashboard() {
         setIsAdmin(false);
         // [CHANGE] Fetch all courses for a logged-out user
         await fetchCourses(null, null); // No role, no uid
+        setUrgentAssignments([]); // [NEW] Clear assignments
         setLoading(false); // Stop loading
       }
     });
@@ -344,17 +391,39 @@ export default function ClassyncDashboard() {
 
   return (
     <div className="min-h-screen bg-background relative">
+      {/* Aggressive Gradient & Pattern */}
+      <div className="absolute inset-0 -z-10 h-full w-full bg-background bg-[radial-gradient(var(--color-primary)_1px,transparent_1px)]/20 bg-size-[16px_16px]"></div>
+      <div className="absolute inset-0 -z-20 bg-linear-to-br from-background via-secondary to-background animate-gradient-xy"></div>
+
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
+          {/* Urgent Assignments Reminder Banner */}
+          {user && !isAdmin && urgentAssignments.length > 0 && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Bell className="w-5 h-5 text-destructive" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-destructive">Assignment Deadline Reminder</h3>
+                  <p className="text-sm text-muted-foreground">
+                    You have {urgentAssignments.length} assignment{urgentAssignments.length > 1 ? 's' : ''} due within 24 hours.
+                  </p>
+                </div>
+                <Button variant="destructive" size="sm" asChild>
+                  <a href="/assignments">View Assignments</a>
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Courses & Dashboard */}
           {/* Buttons row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex flex-wrap justify-between gap-2">
             {isAdmin ? (
               <>
                 <Button
                   variant="outline"
-                  className="h-20 flex-col gap-2 bg-transparent"
+                  className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
                   asChild
                 >
                   <a href="/admin">
@@ -362,21 +431,11 @@ export default function ClassyncDashboard() {
                     <span className="text-sm">Admin Dashboard</span>
                   </a>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 bg-transparent"
-                  asChild
-                >
-                  <a href="/assignments">
-                    <BookOpen className="w-6 h-6" />
-                    <span className="text-sm">Assignments</span>
-                  </a>
-                </Button>
               </>
             ) : (
               <Button
                 variant="outline"
-                className="h-20 flex-col gap-2 bg-transparent"
+                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
                 asChild
               >
                 <a href="/assignments">
@@ -387,17 +446,17 @@ export default function ClassyncDashboard() {
             )}
             <Button
               variant="outline"
-              className="cursor-pointer h-20 flex-col gap-2 bg-transparent"
+              className="cursor-pointer h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
               asChild
             >
-              <a href={isAdmin ? "#" : "/student/progress"}>
+              <Link href={isAdmin ? "/instructor/analytics" : "/student/progress"}>
                 <BarChart3 className="w-6 h-6" />
                 <span className="text-sm">{isAdmin ? "View Analytics" : "My Progress"}</span>
-              </a>
+              </Link>
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex-col gap-2 bg-transparent"
+              className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
               asChild
             >
               <a href="/ai-tools/chatbot">
@@ -409,7 +468,7 @@ export default function ClassyncDashboard() {
             user?.email?.includes("@admin.com") ? (
               <Button
                 variant="outline"
-                className="h-20 flex-col gap-2 bg-transparent"
+                className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 transition-all duration-300"
               >
                 <Users className="w-6 h-6" />
                 <span className="text-sm">Manage Classroom</span>
@@ -417,6 +476,7 @@ export default function ClassyncDashboard() {
             ) : null}
           </div>
 
+          {/* Courses & Dashboard */}
           {/* Courses List */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -602,7 +662,7 @@ export default function ClassyncDashboard() {
                 {courses.map((course) => (
                   <Card
                     key={course.id}
-                    className="hover:shadow-lg transition-shadow cursor-pointer group h-full flex flex-col"
+                    className="border-2 border-border bg-card shadow-lg hover:shadow-primary/20 hover:-translate-y-2 transition-all duration-300 cursor-pointer group h-full flex flex-col"
                     onClick={() => {
                       console.log("Navigating with id:", course.id);
                       if (course.id) {
@@ -612,38 +672,35 @@ export default function ClassyncDashboard() {
                       }
                     }}
                   >
-                    <CardHeader className="pb-3">
-                      <div className="w-full h-24 bg-muted rounded-lg mb-4 flex items-center justify-center border border-border">
-                        <BookOpen className="w-8 h-8 text-foreground" />
-                      </div>
-                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">
                         {course.name}
                       </CardTitle>
-                      <CardDescription className="text-sm">
+                      <CardDescription className="text-base min-h-10">
                         {course.description}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4 flex-1 flex flex-col">
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center justify-between text-base">
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">
-                            Instructor: {course.instructorName}
+                          <Badge variant="default" className="text-sm">
+                            Prof. {course.instructorName}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Users className="w-4 h-4" />
-                          <span>{course.students?.length || 0}</span>
+                        <div className="flex items-center gap-2 text-muted-foreground font-semibold">
+                          <Users className="w-5 h-5" />
+                          <span>{course.students?.length || 0} Students</span>
                         </div>
                       </div>
 
                       {/* Show assignment progress for students only */}
                       {!isAdmin && courseProgress[course.id] && (
-                        <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground font-medium">
-                              Assignment Progress
+                        <div className="space-y-2 p-4 bg-secondary rounded-lg border border-border">
+                          <div className="flex items-center justify-between text-base">
+                            <span className="text-foreground font-bold">
+                              Your Progress
                             </span>
-                            <span className="font-semibold text-primary">
+                            <span className="font-bold text-primary text-lg">
                               {courseProgress[course.id].submittedAssignments}/
                               {courseProgress[course.id].totalAssignments}
                             </span>
@@ -652,102 +709,74 @@ export default function ClassyncDashboard() {
                             <>
                               <Progress
                                 value={courseProgress[course.id].percentage}
-                                className="h-2.5"
+                                className="h-3"
                               />
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">
+                              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                <span>
                                   {courseProgress[course.id].totalAssignments -
                                     courseProgress[course.id]
                                       .submittedAssignments}{" "}
-                                  remaining
+                                  left
                                 </span>
-                                <span className="font-medium text-primary">
+                                <span className="font-bold text-foreground">
                                   {courseProgress[course.id].percentage}%
-                                  complete
                                 </span>
                               </div>
                             </>
                           ) : (
-                            <div className="text-xs text-muted-foreground text-center py-1">
-                              No assignments yet
+                            <div className="text-sm text-muted-foreground text-center py-2">
+                              No assignments posted yet.
                             </div>
                           )}
                         </div>
                       )}
-
-                      {/* Keep the old progress bar for backward compatibility (if exists in course data) */}
-                      {course.progress > 0 && isAdmin && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">
-                              Progress
-                            </span>
-                            <span className="font-medium">
-                              {course.progress}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-secondary rounded-full h-2">
-                            <div
-                              className="bg-foreground h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${course.progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between pt-2">
+                      <div className="grow" />
+                      <div className="flex items-center justify-between pt-4 border-t border-border">
                         <div className="flex gap-2">
-                          {course.assignments > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {course.assignments} assignments
-                            </Badge>
-                          )}
-                          <Badge variant="outline" className="text-xs">
-                            <Brain className="w-3 h-3 mr-1" />
-                            AI Enhanced
+                          <Badge variant="outline" className="text-sm capitalize">
+                            {course.subject.replace("-", " ")}
                           </Badge>
                         </div>
+                         {course.courseCode && (
+                          <Badge variant="secondary" className="text-sm font-mono tracking-widest border-2 border-dashed border-border">
+                            {course.courseCode}
+                          </Badge>
+                        )}
                       </div>
-                      {course.nextClass && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-                          <Calendar className="w-4 h-4" />
-                          <span>Next: {course.nextClass}</span>
-                        </div>
-                      )}
+                      
 
                       {/* Unenroll button for students only */}
                       {!isAdmin && user && (
-                        <div className="pt-3 border-t mt-auto">
+                        <div className="pt-4 mt-auto">
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="outline"
-                                size="sm"
-                                className="w-full border-red-400 text-red-600 hover:bg-red-50"
+                                size="lg"
+                                className="w-full bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400 hover:text-red-800 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:border-red-700"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <LogOut className="w-4 h-4 mr-1" />
-                                Unenroll from Course
+                                <LogOut className="w-5 h-5 mr-2" />
+                                Unenroll
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent
                               onClick={(e) => e.stopPropagation()}
                             >
                               <AlertDialogHeader>
-                                <AlertDialogTitle>
+                                <AlertDialogTitle className="text-2xl">
                                   Unenroll from {course.name}?
                                 </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to unenroll from this
-                                  course? You will lose access to all course
-                                  materials, assignments, and class discussions.
+                                <AlertDialogDescription className="text-base">
+                                  Are you sure? You will lose access to all course materials and your progress will be lost.
                                   You can re-enroll later using the course code:{" "}
-                                  <strong>{course.courseCode}</strong>
+                                  <strong className="text-foreground">{course.courseCode}</strong>
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
-                              <AlertDialogFooter>
+                              <AlertDialogFooter className="mt-4">
                                 <AlertDialogCancel
                                   onClick={(e) => e.stopPropagation()}
+                                  className="h-12 text-lg"
                                 >
                                   Cancel
                                 </AlertDialogCancel>
@@ -759,9 +788,9 @@ export default function ClassyncDashboard() {
                                       course.name
                                     );
                                   }}
-                                  className="bg-red-600 text-white hover:bg-red-700"
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-12 text-lg"
                                 >
-                                  Unenroll
+                                  Confirm Unenrollment
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>

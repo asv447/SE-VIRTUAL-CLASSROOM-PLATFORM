@@ -75,6 +75,14 @@ export default function SharedNavbar() {
   const pathname = usePathname();
   const isHomepage = pathname === "/" || pathname === "/homepage";
 
+  // Helper to check if a path is active
+  const isActive = (path) => {
+    if (path === "/") {
+      return pathname === "/" || pathname === "/homepage";
+    }
+    return pathname?.startsWith(path);
+  };
+
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!resetEmail) {
@@ -526,7 +534,7 @@ export default function SharedNavbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 shadow-md">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-2">
@@ -538,7 +546,9 @@ export default function SharedNavbar() {
               />
             </div>
             <Link href="/" className="text-xl font-bold text-foreground">
-              Classync
+              <span>
+                Clas<span className="text-blue-600">sync</span>
+              </span>
             </Link>
           </div>
           {/* Navigation */}
@@ -546,7 +556,11 @@ export default function SharedNavbar() {
             <nav className="hidden md:flex items-center space-x-8">
               <Link
                 href="/"
-                className="text-foreground hover:text-primary transition-colors font-medium"
+                className={`transition-colors font-medium ${
+                  isActive("/")
+                    ? "text-foreground font-bold border-b-2 border-foreground"
+                    : "text-muted-foreground hover:text-primary"
+                }`}
               >
                 Home
               </Link>
@@ -556,28 +570,64 @@ export default function SharedNavbar() {
                 <>
                   {/* Show Assignments only for students (role-based) */}
                   {userRole === "student" && (
-                    <Link
-                      href="/assignments"
-                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                    >
-                      Assignments
-                    </Link>
+                    <>
+                      <Link
+                        href="/student"
+                        className={`transition-colors font-medium ${
+                          isActive("/student") && !pathname?.startsWith("/student/progress")
+                            ? "text-foreground font-bold border-b-2 border-foreground"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        Assignments
+                      </Link>
+                      <Link
+                        href="/student/progress"
+                        className={`transition-colors font-medium ${
+                          isActive("/student/progress")
+                            ? "text-foreground font-bold border-b-2 border-foreground"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        My Progress
+                      </Link>
+                    </>
                   )}
                   {(isAdmin ||
                     user?.email?.includes("@instructor.com") ||
                     user?.email?.includes("@admin.com")) && (
-                    <Link
-                      href="/admin"
-                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                    >
-                      Admin
-                    </Link>
+                    <>
+                      <Link
+                        href="/admin"
+                        className={`transition-colors font-medium ${
+                          isActive("/admin")
+                            ? "text-foreground font-bold border-b-2 border-foreground"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        Admin
+                      </Link>
+                      <Link
+                        href="/instructor/analytics"
+                        className={`transition-colors font-medium ${
+                          isActive("/instructor/analytics")
+                            ? "text-foreground font-bold border-b-2 border-foreground"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        View Analytics
+                      </Link>
+                    </>
                   )}
                 </>
               )}
               <Link
                 href="/ai-tools"
-                className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                className={`transition-colors font-medium ${
+                  isActive("/ai-tools")
+                    ? "text-foreground font-bold border-b-2 border-foreground"
+                    : "text-muted-foreground hover:text-primary"
+                }`}
               >
                 AI Tools
               </Link>
@@ -606,7 +656,7 @@ export default function SharedNavbar() {
                 <ProfileMenu username={username} />
               ) : (
                 <Button
-                  className="cursor-pointer"
+                  className="cursor-pointer hover:bg-primary/90 hover:text-white"
                   variant="outline"
                   onClick={() => setIsRegisterOpen(true)}
                 >
@@ -625,7 +675,11 @@ export default function SharedNavbar() {
             <nav className="flex flex-wrap items-center gap-4 text-sm">
               <Link
                 href="/"
-                className="text-foreground hover:text-primary transition-colors font-medium"
+                className={`transition-colors font-medium ${
+                  isActive("/")
+                    ? "text-foreground font-bold"
+                    : "text-muted-foreground hover:text-primary"
+                }`}
               >
                 Home
               </Link>
@@ -634,28 +688,64 @@ export default function SharedNavbar() {
               {user && (
                 <>
                   {userRole === "student" && (
-                    <Link
-                      href="/assignments"
-                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                    >
-                      Assignments
-                    </Link>
+                    <>
+                      <Link
+                        href="/student"
+                        className={`transition-colors font-medium ${
+                          isActive("/student") && !pathname?.startsWith("/student/progress")
+                            ? "text-foreground font-bold"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        Assignments
+                      </Link>
+                      <Link
+                        href="/student/progress"
+                        className={`transition-colors font-medium ${
+                          isActive("/student/progress")
+                            ? "text-foreground font-bold"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        My Progress
+                      </Link>
+                    </>
                   )}
                   {(isAdmin ||
                     user?.email?.includes("@instructor.com") ||
                     user?.email?.includes("@admin.com")) && (
-                    <Link
-                      href="/admin"
-                      className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                    >
-                      Admin
-                    </Link>
+                    <>
+                      <Link
+                        href="/admin"
+                        className={`transition-colors font-medium ${
+                          isActive("/admin")
+                            ? "text-foreground font-bold"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        Admin
+                      </Link>
+                      <Link
+                        href="/instructor/analytics"
+                        className={`transition-colors font-medium ${
+                          isActive("/instructor/analytics")
+                            ? "text-foreground font-bold"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                      >
+                        View Analytics
+                      </Link>
+                    </>
                   )}
                 </>
               )}
               <Link
                 href="/ai-tools"
-                className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                className={`transition-colors font-medium ${
+                  isActive("/ai-tools")
+                    ? "text-foreground font-bold"
+                    : "text-muted-foreground hover:text-primary"
+                }`}
               >
                 AI Tools
               </Link>
