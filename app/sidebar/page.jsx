@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Home, Calendar, Book, ChevronDown, Layers, Menu } from "lucide-react";
+import { Home, Book, ChevronDown, Layers, Menu } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { usePathname, useRouter } from "next/navigation";
@@ -277,16 +277,6 @@ export default function Sidebar() {
                 <Home size={18} className="shrink-0" />
                 {!isCollapsed && <span className="truncate">Home</span>}
               </li> */}
-
-              <li
-                onClick={() => navigate("/calendar")}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-muted transition-colors ${
-                  pathname === "/calendar" ? "bg-muted" : ""
-                }`}
-              >
-                <Calendar size={18} className="shrink-0" />
-                {!isCollapsed && <span className="truncate">Calendar</span>}
-              </li>
 
               {/* Enrolled Section */}
               <li className="mt-4">

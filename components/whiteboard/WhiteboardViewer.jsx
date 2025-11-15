@@ -196,7 +196,7 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
     if (typeof window === "undefined") return;
 
     // Wait for container and bg/canvas refs to be attached (avoid early return which caused black screen)
-    const maxAttempts = 20;
+    const maxAttempts = 50;
     let attempt = 0;
     while (
       (!containerRef.current || !bgCanvasRef.current || !canvasRef.current) &&
@@ -343,24 +343,32 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
   // Ensure pdfjs worker is set on client only
   useEffect(() => {
     if (typeof window !== "undefined") {
-      import("pdfjs-dist/legacy/build/pdf").then((pdfjs) => {
+      // Set worker source for CDN-loaded PDF.js
+      if (window.pdfjsLib) {
         try {
-          pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL;
         } catch (e) {
-          // ignore
+          console.warn("Failed to set PDF.js worker", e);
         }
-      });
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (containerRef.current && !canvas) {
+    // Try to initialize canvas when DOM ref becomes available
+    if (typeof window !== "undefined" && containerRef.current && !canvas) {
       initializeCanvas();
     }
 
+    // On unmount dispose canvas and persist current page state
     return () => {
+      try {
+        saveCurrentPageState();
+      } catch (_) {}
       if (canvas) {
-        canvas.dispose();
+        try {
+          canvas.dispose();
+        } catch (_) {}
       }
     };
   }, [containerRef]);
@@ -368,9 +376,8 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
   // Render PDF when url or page changes
   useEffect(() => {
     if (pdfUrl) {
-      // when opening a new PDF start from page 1
-      setCurrentPage((p) => (p ? p : 1));
-      renderPdfPage(pdfUrl, currentPage);
+      setCurrentPage(1);
+      renderPdfPage(pdfUrl, 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfUrl]);
@@ -547,6 +554,31 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
       });
   };
 
+  const handleDownloadNotes = () => {
+    if (!notesPlainText.trim()) {
+      toast({
+        title: "No notes to download",
+        description: "Please add some notes first.",
+        variant: "default",
+      });
+      return;
+    }
+    const blob = new Blob([notesPlainText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'whiteboard-notes.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({
+      title: "Downloaded!",
+      description: "Notes downloaded as whiteboard-notes.txt",
+      variant: "default",
+    });
+  };
+
   // Persist current page state before changing page
   const gotoPrev = () => {
     if (currentPage <= 1) return;
@@ -589,21 +621,22 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
             >
               Eraser
             </Button>
-            <Button
-              variant={currentTool === "text-notes" ? "default" : "outline"}
-              onClick={() => handleToolChange("text-notes")}
-            >
-              Text (Notes)
-            </Button>
             <div className="border-l mx-2"></div>
             <label className="text-sm text-gray-600">Color</label>
             <input
               type="color"
               value={brushColor}
               onChange={(e) => {
-                setBrushColor(e.target.value);
+                let newColor = e.target.value;
+                // Prevent invisible white color for pen tool
+                if (newColor.toLowerCase() === '#ffffff') {
+                  newColor = '#000000';
+                  setBrushColor('#000000');
+                } else {
+                  setBrushColor(newColor);
+                }
                 if (canvas?.freeDrawingBrush)
-                  canvas.freeDrawingBrush.color = e.target.value;
+                  canvas.freeDrawingBrush.color = newColor;
               }}
             />
             <label className="ml-2 text-sm text-gray-600">Size</label>
@@ -714,6 +747,12 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
                       Copy
                     </button>
                     <button
+                      onClick={handleDownloadNotes}
+                      className="text-xs px-3 py-1 bg-green-600 text-white hover:bg-green-700 rounded transition-colors"
+                    >
+                      Download
+                    </button>
+                    <button
                       onClick={() => setNotesPlainText("")}
                       className="text-xs px-2 py-1 text-gray-600 hover:bg-gray-200 rounded transition-colors"
                     >
@@ -733,7 +772,7 @@ const WhiteboardViewer = ({ pdfUrl, onClose }) => {
               <Button disabled={currentPage >= numPages} onClick={gotoNext}>
                 Next
               </Button>
-              <span className="self-center">
+              <span className="self-center text-blue-400">
                 Page {currentPage} of {numPages}
               </span>
             </div>
