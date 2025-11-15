@@ -83,7 +83,7 @@ export default function Login({ onBackToHome }) {
             signInErr
           );
           setError(
-            "Verification successful but login failed. Please try signing in again."
+            "Email verified successfully. Please sign in again to continue."
           );
           setAwaitingVerification(false);
           setUnverifiedUser(null);
@@ -93,17 +93,17 @@ export default function Login({ onBackToHome }) {
       }
 
       setError(
-        "Email still not verified. Please click the link in your inbox."
+        "Email not yet verified. Please check your inbox and click the verification link."
       );
     } catch (err) {
       console.error("[Login] Verification check error:", err);
-      setError("Failed to check verification status. Try again.");
+      setError("Unable to verify email status. Please try again.");
     }
   };
 
   const handleResendVerification = async () => {
     if (!unverifiedUser?.email || !unverifiedUser?.uid) {
-      setError("User information not available.");
+      setError("Unable to resend verification email. Please try signing in again.");
       return;
     }
 
@@ -128,10 +128,10 @@ export default function Login({ onBackToHome }) {
       });
     } catch (err) {
       console.error("[Login] Resend error:", err);
-      setError("Failed to resend verification email. Try again later.");
+      setError("Unable to resend verification email. Please try again in a moment.");
       toast({
-        title: "Could not resend email",
-        description: err.message || "Please try again shortly.",
+        title: "Resend Failed",
+        description: err.message || "Please wait a moment and try again.",
         variant: "destructive",
       });
     } finally {
@@ -187,45 +187,45 @@ export default function Login({ onBackToHome }) {
     } catch (err) {
       // Handle Firebase auth errors with user-friendly messages
       if (err.code === "auth/user-not-found") {
-        setError("❌ This email is not registered. Please sign up first.");
+        setError("This email is not registered. Please create an account first.");
       } else if (err.code === "auth/wrong-password") {
-        setError("❌ Incorrect password. Please try again.");
+        setError("Incorrect password. Please try again or reset your password.");
       } else if (err.code === "auth/invalid-email") {
-        setError("❌ Invalid email address. Please check and try again.");
+        setError("Please enter a valid email address.");
       } else if (err.code === "auth/user-disabled") {
-        setError("❌ This account has been disabled. Please contact support.");
+        setError("This account has been disabled. Contact support for assistance.");
       } else if (err.code === "auth/invalid-credential") {
         setError(
-          "❌ Email or password is incorrect. Please check and try again, or sign up if you don't have an account."
+          "Invalid email or password. Please check your credentials or create an account if you're new."
         );
       } else if (err.code === "auth/too-many-requests") {
-        setError("❌ Too many failed login attempts. Please try again later.");
+        setError("Too many failed attempts. Please wait a few minutes before trying again.");
       } else if (err.code === "auth/account-exists-with-different-credential") {
         setError(
-          "❌ An account already exists with this email. Please sign in or use a different email."
+          "An account with this email already exists. Please sign in using your original method."
         );
       } else if (err.code === "auth/credential-already-in-use") {
         setError(
-          "❌ This credential is already in use. Please use a different method."
+          "This credential is already associated with another account."
         );
       } else if (err.code === "auth/email-already-in-use") {
         setError(
-          "❌ This email is already registered. Please sign in instead."
+          "This email is already registered. Please sign in instead."
         );
       } else if (err.code === "auth/weak-password") {
-        setError("❌ Password is too weak. Please use a stronger password.");
+        setError("Please choose a stronger password.");
       } else if (err.code === "auth/operation-not-allowed") {
         setError(
-          "❌ Email/password sign-in is currently disabled. Please contact support."
+          "Email/password authentication is currently unavailable. Please contact support."
         );
       } else if (err.code === "auth/network-request-failed") {
         setError(
-          "❌ Network error. Please check your internet connection and try again."
+          "Connection failed. Please check your internet connection and try again."
         );
       } else {
         // Generic message for unknown errors
         setError(
-          "❌ Login failed. Please sign up first if you don't have an account."
+          "Unable to sign in. Please verify your credentials or create an account if you're new."
         );
       }
     }

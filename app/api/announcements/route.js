@@ -5,7 +5,9 @@ import {
   getCoursesCollection,
   getNotificationsCollection,
 } from "@/lib/mongodb";
-import { prepareFileForStorage } from "@/lib/file-upload";
+import {
+  uploadToGoogleDrive,
+} from "@/lib/google-drive";
 
 // Creates an announcement (stream post) with an optional file attachment (material)
 export async function POST(request) {
@@ -40,16 +42,26 @@ export async function POST(request) {
 
     const streamsCollection = await getStreamsCollection();
 
-    let attachment = null;
-    let fileUrl = "";
+    let materials = [];
     if (file && file.size > 0) {
       try {
-        const stored = await prepareFileForStorage(file);
-        attachment = stored; // { name, size, type, data, uploadedAt }
-        // Optionally expose a data URL directly as a link for quick viewing
-        fileUrl = stored?.data || "";
+        const uploaded = await uploadToGoogleDrive(
+          file,
+          file.name || "class-material",
+          file.type || "application/octet-stream"
+        );
+        materials = [
+          {
+            ...uploaded,
+            uploadedAt: new Date(),
+          },
+        ];
       } catch (e) {
-        console.error("Failed to process announcement file:", e);
+        console.error("Failed to upload announcement file to Drive:", e);
+        return NextResponse.json(
+          { error: "Failed to upload file to Google Drive" },
+          { status: 500 }
+        );
       }
     }
 
@@ -60,8 +72,11 @@ export async function POST(request) {
       title,
       content,
       type: "announcement",
-      link: fileUrl ? { url: fileUrl, text: attachment?.name || "Material" } : null,
-      attachment: attachment || null,
+      link:
+        materials.length > 0
+          ? { url: materials[0].viewLink, text: materials[0].fileName || "Material" }
+          : null,
+      materials,
       notesText: notesText || "",
       comments: [],
       createdAt: new Date(),
@@ -93,7 +108,7 @@ export async function POST(request) {
               type: "announcement",
               courseId: classId,
               postId: result.insertedId.toString(),
-              hasAttachment: !!attachment,
+              hasAttachment: materials.length > 0,
             },
           }));
         if (notifDocs.length > 0) {

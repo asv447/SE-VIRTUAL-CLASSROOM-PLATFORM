@@ -82,7 +82,7 @@ export async function POST(req) {
     // 2) If not present, prefer VERCEL_URL (when running on Vercel)
     // 3) Otherwise try to derive from request headers (x-forwarded-proto / x-forwarded-host or host)
     // 4) Fallback to localhost (developer machine)
-    const envAppUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+    const envAppUrl = process.env.NEXT_PUBLIC_APP_URL ;
     let appUrl = envAppUrl;
 
     if (!appUrl) {

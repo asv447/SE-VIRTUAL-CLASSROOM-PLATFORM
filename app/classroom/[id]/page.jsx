@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, LogOut } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -57,9 +57,28 @@ import Link from "next/link"; // <-- ADD THIS
 import { Users, UserPlus } from "lucide-react"; // <-- ADD THIS
 import ChatMessageList from "@/components/chat/ChatMessageList";
 import ChatMessageInput from "@/components/chat/ChatMessageInput";
+import { formatFileSize } from "@/lib/client-utils";
 // [DELETED] All socket.io imports are gone
 
 const MAX_POLL_OPTIONS = 6;
+const MATERIAL_ACCEPT =
+  ".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+const MATERIAL_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+]);
+const MATERIAL_EXTENSIONS = [".pdf", ".doc", ".docx", ".txt"];
+
+const isAllowedMaterialFile = (file) => {
+  if (!file) return false;
+  if (file.type && MATERIAL_MIME_TYPES.has(file.type)) {
+    return true;
+  }
+  const lowerName = (file.name || "").toLowerCase();
+  return MATERIAL_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+};
 
 const sortStreamPosts = (posts) => {
   if (!Array.isArray(posts)) {
@@ -91,40 +110,47 @@ const createInitialPostState = () => ({
   includePoll: false,
   pollQuestion: "",
   pollOptions: ["", ""],
-  audienceType: "class", // 'class' or 'group'
-  audienceGroupId: null, // The _id of the selected group
+  audienceType: "class",
+  audienceGroupId: null,
   allowMultiplePollSelections: false,
   isPinned: false,
+  materialFiles: [],
 });
 
-const CreateGroupDialog = ({open,
+const CreateGroupDialog = ({
+  open,
   onOpenChange,
   onSubmit,
   classroom,
   newGroupData,
-  setNewGroupData,}) => {
+  setNewGroupData,
+}) => {
   const students = classroom?.students || [];
 
   const handleMemberToggle = (checked, userId) => {
     setNewGroupData((prev) => {
       const newMemberIds = new Set(prev.memberIds);
+      let nextRepresentativeId = prev.representativeId;
       if (checked) {
         newMemberIds.add(userId);
       } else {
         newMemberIds.delete(userId);
-        // If unchecking the rep, clear the rep
-        if (prev.representativeId === userId) {
-          prev.representativeId = "";
+        if (nextRepresentativeId === userId) {
+          nextRepresentativeId = "";
         }
       }
-      return { ...prev, memberIds: newMemberIds };
+      return {
+        ...prev,
+        representativeId: nextRepresentativeId,
+        memberIds: newMemberIds,
+      };
     });
   };
 
   const handleRepChange = (userId) => {
     setNewGroupData((prev) => {
       const newMemberIds = new Set(prev.memberIds);
-      newMemberIds.add(userId); // Automatically add rep to members
+      newMemberIds.add(userId);
       return {
         ...prev,
         representativeId: userId,
@@ -134,10 +160,7 @@ const CreateGroupDialog = ({open,
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Create New Group</DialogTitle>
@@ -179,8 +202,7 @@ const CreateGroupDialog = ({open,
             <Card className="max-h-[250px] overflow-y-auto p-4">
               <div className="space-y-3">
                 {students.map((student) => {
-                  const isRep =
-                    student.userId === newGroupData.representativeId;
+                  const isRep = student.userId === newGroupData.representativeId;
                   return (
                     <div
                       key={student.userId}
@@ -188,10 +210,8 @@ const CreateGroupDialog = ({open,
                     >
                       <Checkbox
                         id={`member-${student.userId}`}
-                        checked={
-                          newGroupData.memberIds.has(student.userId) || isRep
-                        }
-                        disabled={isRep} // Rep is always checked
+                        checked={newGroupData.memberIds.has(student.userId) || isRep}
+                        disabled={isRep}
                         onCheckedChange={(checked) =>
                           handleMemberToggle(checked, student.userId)
                         }
@@ -202,9 +222,7 @@ const CreateGroupDialog = ({open,
                       >
                         {student.name}{" "}
                         {isRep && (
-                          <span className="text-xs text-yellow-600">
-                            (Rep)
-                          </span>
+                          <span className="text-xs text-yellow-600">(Rep)</span>
                         )}
                       </Label>
                     </div>
@@ -223,19 +241,19 @@ const CreateGroupDialog = ({open,
       </DialogContent>
     </Dialog>
   );
-}
+};
+
 export default function ClassroomPage() {
-  const { id } = useParams(); // This is the Course ID
+  const { id } = useParams();
   const [classroom, setClassroom] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("stream");
 
-  // User state
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("Student");
   const [isInstructor, setIsInstructor] = useState(false);
-  //group state
+
   const [groups, setGroups] = useState([]);
   const [isGroupsLoading, setIsGroupsLoading] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
@@ -244,37 +262,73 @@ export default function ClassroomPage() {
     representativeId: "",
     memberIds: new Set(),
   });
-  // Stream state
+
   const [streamPosts, setStreamPosts] = useState([]);
+  const [announcementSearch, setAnnouncementSearch] = useState("");
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [newPostData, setNewPostData] = useState(createInitialPostState);
+  const [newPostData, setNewPostData] = useState(() => createInitialPostState());
   const [isEditPostOpen, setIsEditPostOpen] = useState(false);
   const [editingPostId, setEditingPostId] = useState(null);
-  const [editPostData, setEditPostData] = useState(createInitialPostState);
+  const [editPostData, setEditPostData] = useState(() => createInitialPostState());
   const [editingPollOptionIds, setEditingPollOptionIds] = useState([]);
 
-  // [NEW] Chat state (back to simple version)
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(true);
   const [pollSelections, setPollSelections] = useState({});
   const [pollSubmitting, setPollSubmitting] = useState({});
-  const messagesEndRef = useRef(null); // For auto-scrolling chat
+  const messagesEndRef = useRef(null);
 
   const [assignments, setAssignments] = useState([]);
   const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
-  // Inline deadline edit state (per-assignment)
-  const [editingDeadline, setEditingDeadline] = useState({}); // { [assignmentId]: true|false }
-  const [deadlineInputs, setDeadlineInputs] = useState({});   // { [assignmentId]: 'YYYY-MM-DDTHH:mm' }
-  const DynamicWhiteboard = dynamic(() => import("@/components/whiteboard/WhiteboardViewer"), {
-    ssr: false,
-  });
-  const wbInputRef = useRef(null);
+  const [editingDeadline, setEditingDeadline] = useState({});
+  const [deadlineInputs, setDeadlineInputs] = useState({});
 
-  // Whiteboard state (per-course)
-  const [wbSelectedFile, setWbSelectedFile] = useState(null); // local PDF File
-  const [wbCurrentFile, setWbCurrentFile] = useState(null);   // { fileUrl, fileName, _id }
+  const DynamicWhiteboard = dynamic(
+    () => import("@/components/whiteboard/WhiteboardViewer"),
+    { ssr: false }
+  );
+  const wbInputRef = useRef(null);
+  const materialInputRef = useRef(null);
+
+  const [wbSelectedFile, setWbSelectedFile] = useState(null);
+  const [wbCurrentFile, setWbCurrentFile] = useState(null);
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+
+  const isSearchingAnnouncements = announcementSearch.trim().length > 0;
+  const visibleStreamPosts = useMemo(() => {
+    const term = announcementSearch.trim().toLowerCase();
+    if (!term) {
+      return streamPosts;
+    }
+
+    return streamPosts.filter((post) => {
+      const postType = post?.type || (post?.assignmentRef ? "assignment" : "announcement");
+      if (postType !== "announcement") {
+        return false;
+      }
+
+      const values = [
+        post?.title,
+        post?.content,
+        post?.author?.name,
+        post?.notesText,
+        post?.link?.text,
+        post?.link?.url,
+      ];
+
+      if (Array.isArray(post?.materials)) {
+        post.materials.forEach((material) => {
+          values.push(material?.fileName);
+        });
+      }
+
+      return values.some(
+        (value) => typeof value === "string" && value.toLowerCase().includes(term)
+      );
+    });
+  }, [announcementSearch, streamPosts]);
+  const hasStreamPosts = streamPosts.length > 0;
 
   // --- Data Fetching ---
 
@@ -558,6 +612,70 @@ export default function ClassroomPage() {
     }
   };
 
+  const handleMaterialFileChange = (event) => {
+    const selectedFiles = Array.from(event?.target?.files || []);
+    if (!selectedFiles.length) return;
+
+    const validFiles = [];
+    let rejectedCount = 0;
+
+    selectedFiles.forEach((file) => {
+      if (isAllowedMaterialFile(file)) {
+        validFiles.push(file);
+      } else {
+        rejectedCount += 1;
+      }
+    });
+
+    if (rejectedCount > 0) {
+      toast.error("Only PDF, DOC, DOCX, or TXT files are supported.");
+    }
+
+    if (validFiles.length === 0) {
+      if (event?.target) event.target.value = "";
+      return;
+    }
+
+    setNewPostData((prev) => {
+      const existingKeys = new Set(
+        prev.materialFiles.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+      );
+      const deduped = validFiles.filter((file) => {
+        const key = `${file.name}-${file.size}-${file.lastModified}`;
+        if (existingKeys.has(key)) {
+          return false;
+        }
+        existingKeys.add(key);
+        return true;
+      });
+      if (!deduped.length) {
+        toast.info("Those files are already attached.");
+        return prev;
+      }
+      return {
+        ...prev,
+        materialFiles: [...prev.materialFiles, ...deduped],
+      };
+    });
+
+    if (event?.target) event.target.value = "";
+  };
+
+  const removeMaterialFile = (index) => {
+    setNewPostData((prev) => {
+      const nextFiles = [...prev.materialFiles];
+      nextFiles.splice(index, 1);
+      return { ...prev, materialFiles: nextFiles };
+    });
+  };
+
+  const clearAllMaterialFiles = () => {
+    setNewPostData((prev) => ({ ...prev, materialFiles: [] }));
+    if (materialInputRef.current) {
+      materialInputRef.current.value = "";
+    }
+  };
+
   const handleCopy = () => {
     if (classroom?.courseCode) {
       navigator.clipboard.writeText(classroom.courseCode);
@@ -673,6 +791,35 @@ export default function ClassroomPage() {
     const linkUrl = (newPostData.linkUrl || "").trim();
     const linkText = (newPostData.linkText || "").trim();
     const loadingToastId = toast.loading("Creating post...");
+    const audiencePayload = {
+      type: newPostData.audienceType,
+      groupId:
+        newPostData.audienceType === "group"
+          ? newPostData.audienceGroupId
+          : null,
+    };
+    const payload = {
+      classId: id,
+      authorId: user.uid,
+      authorName: username,
+      title: newPostData.title,
+      content: newPostData.content,
+      isImportant: newPostData.isImportant,
+      isUrgent: newPostData.isUrgent,
+      link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
+      isPinned: newPostData.isPinned,
+      poll: pollPayload,
+      audience: audiencePayload,
+      notesText: "",
+      type: "announcement",
+    };
+    const formData = new FormData();
+    formData.append("payload", JSON.stringify(payload));
+    if (Array.isArray(newPostData.materialFiles)) {
+      newPostData.materialFiles.forEach((file) => {
+        formData.append("materials", file);
+      });
+    }
     const optimisticPost = {
       id: `temp-${Date.now()}`,
       classId: id,
@@ -685,6 +832,14 @@ export default function ClassroomPage() {
       author: { name: username, id: user.uid },
       comments: [],
       isPinned: newPostData.isPinned,
+      audience: audiencePayload,
+      materials: Array.isArray(newPostData.materialFiles)
+        ? newPostData.materialFiles.map((file) => ({
+            fileName: file.name,
+            fileSize: file.size,
+          }))
+        : [],
+      notesText: "",
       poll: pollPayload
         ? {
             question: pollPayload.question,
@@ -697,13 +852,6 @@ export default function ClassroomPage() {
           }
         : null,
     };
-    const audiencePayload = {
-      type: newPostData.audienceType,
-      groupId:
-        newPostData.audienceType === "group"
-          ? newPostData.audienceGroupId
-          : null,
-    };
 
     if (audiencePayload.type === "group" && !audiencePayload.groupId) {
       toast.error("Please select a group to post to.");
@@ -712,18 +860,13 @@ export default function ClassroomPage() {
     setStreamPosts((prev) => sortStreamPosts([optimisticPost, ...prev]));
     setIsCreatePostOpen(false);
     setNewPostData(createInitialPostState());
+    if (materialInputRef.current) {
+      materialInputRef.current.value = "";
+    }
     try {
       const response = await fetch("/api/stream", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          classId: id, authorId: user.uid, title: newPostData.title,
-          content: newPostData.content, isImportant: newPostData.isImportant,
-          isUrgent: newPostData.isUrgent,
-          link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
-          isPinned: newPostData.isPinned,
-          poll: pollPayload,
-          audience: audiencePayload,
-        }),
+        method: "POST",
+        body: formData,
       });
       if (!response.ok) throw new Error("Failed to save post");
       toast.success("Post created!", { id: loadingToastId });
@@ -1236,7 +1379,9 @@ export default function ClassroomPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="post-title">Title</Label>
+                        <Label htmlFor="post-title">
+                          Title <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="post-title"
                           placeholder="e.g., Welcome to Class!"
@@ -1247,7 +1392,9 @@ export default function ClassroomPage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="post-content">Content</Label>
+                        <Label htmlFor="post-content">
+                          Content <span className="text-red-500">*</span>
+                        </Label>
                         <Textarea
                           id="post-content"
                           placeholder="What's on your mind?"
@@ -1258,7 +1405,7 @@ export default function ClassroomPage() {
                           }
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="grid gap-2">
                           <Label htmlFor="post-link-url">Link URL (Optional)</Label>
                           <Input
@@ -1282,61 +1429,127 @@ export default function ClassroomPage() {
                           />
                         </div>
                       </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="post-material">Attach materials (PDF, DOC, DOCX, TXT)</Label>
+                        <input
+                          id="post-material"
+                          ref={materialInputRef}
+                          type="file"
+                          accept={MATERIAL_ACCEPT}
+                          multiple
+                          className="hidden"
+                          onChange={handleMaterialFileChange}
+                        />
+                        <div className="rounded-md border border-dashed border-gray-300 p-3">
+                          <div className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => materialInputRef.current?.click()}
+                                className="w-full sm:w-auto"
+                              >
+                                Choose Files
+                              </Button>
+                              {newPostData.materialFiles.length > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="self-start p-0 text-red-600"
+                                  onClick={clearAllMaterialFiles}
+                                >
+                                  Remove all
+                                </Button>
+                              )}
+                            </div>
+                            {newPostData.materialFiles.length === 0 ? (
+                              <p className="text-sm text-gray-500">
+                                Optional. You can attach multiple files; they will be stored securely in the course Drive.
+                              </p>
+                            ) : (
+                              <ul className="space-y-2 text-sm">
+                                {newPostData.materialFiles.map((file, idx) => (
+                                  <li
+                                    key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
+                                    className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                                  >
+                                    <div className="flex-1">
+                                      <p className="font-medium text-gray-800 truncate">
+                                        {file.name}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        {formatFileSize(file.size)}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="p-0 text-red-600"
+                                      onClick={() => removeMaterialFile(idx)}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                       <div className="grid gap-2 border-t pt-4">
-                    <Label>Audience</Label>
-                    <RadioGroup
-                      value={newPostData.audienceType}
-                      onValueChange={(value) =>
-                        setNewPostData({
-                          ...newPostData,
-                          audienceType: value,
-                          audienceGroupId: null, // Reset group on change
-                        })
-                      }
-                      className="flex gap-4"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="class" id="r-class" />
-                        <Label htmlFor="r-class">Whole Class</Label>
+                        <Label>Audience</Label>
+                        <RadioGroup
+                          value={newPostData.audienceType}
+                          onValueChange={(value) =>
+                            setNewPostData({
+                              ...newPostData,
+                              audienceType: value,
+                              audienceGroupId: null,
+                            })
+                          }
+                          className="flex flex-wrap gap-4"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="class" id="r-class" />
+                            <Label htmlFor="r-class">Whole Class</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="group" id="r-group" />
+                            <Label htmlFor="r-group">Specific Group</Label>
+                          </div>
+                        </RadioGroup>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="group" id="r-group" />
-                        <Label htmlFor="r-group">Specific Group</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-
-                  {newPostData.audienceType === "group" && (
-                    <div className="grid gap-2">
-                      <Label htmlFor="group-select">Select Group</Label>
-                      <Select
-                        value={newPostData.audienceGroupId}
-                        onValueChange={(value) =>
-                          setNewPostData({
-                            ...newPostData,
-                            audienceGroupId: value,
-                          })
-                        }
-                      >
-                        <SelectTrigger id="group-select">
-                          <SelectValue placeholder="Select a group..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {groups.length === 0 ? (
-                            <SelectItem disabled>
-                              No groups found.
-                            </SelectItem>
-                          ) : (
-                            groups.map((group) => (
-                              <SelectItem key={group._id} value={group._id}>
-                                {group.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+                      {newPostData.audienceType === "group" && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="group-select">Select Group</Label>
+                          <Select
+                            value={newPostData.audienceGroupId}
+                            onValueChange={(value) =>
+                              setNewPostData({
+                                ...newPostData,
+                                audienceGroupId: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger id="group-select">
+                              <SelectValue placeholder="Select a group..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {groups.length === 0 ? (
+                                <SelectItem disabled>No groups found.</SelectItem>
+                              ) : (
+                                groups.map((group) => (
+                                  <SelectItem key={group._id} value={group._id}>
+                                    {group.name}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div className="flex flex-wrap items-center gap-4 pt-2">
                         <div className="flex items-center space-x-2">
                           <Checkbox
@@ -1371,8 +1584,12 @@ export default function ClassroomPage() {
                       </div>
                       <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
                         <div>
-                          <Label htmlFor="include-poll" className="font-medium">Include poll</Label>
-                          <p className="text-xs text-muted">Collect responses alongside your announcement.</p>
+                          <Label htmlFor="include-poll" className="font-medium">
+                            Include poll
+                          </Label>
+                          <p className="text-xs text-gray-500">
+                            Collect responses alongside your announcement.
+                          </p>
                         </div>
                         <Switch
                           id="include-poll"
@@ -1392,7 +1609,6 @@ export default function ClassroomPage() {
                           }
                         />
                       </div>
-
                       {newPostData.includePoll && (
                         <div className="space-y-4 rounded-md border border-gray-200 bg-gray-50 p-4">
                           <div className="grid gap-2">
@@ -1409,7 +1625,6 @@ export default function ClassroomPage() {
                               }
                             />
                           </div>
-
                           <div className="space-y-2">
                             <Label>Options</Label>
                             {newPostData.pollOptions.map((option, index) => (
@@ -1447,7 +1662,6 @@ export default function ClassroomPage() {
                               Add option
                             </Button>
                           </div>
-
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="poll-allow-multiple">Allow multiple selections</Label>
@@ -1477,6 +1691,38 @@ export default function ClassroomPage() {
                 </Dialog>
               )}
 
+              <div className="rounded-md border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex w-full items-center gap-2 sm:max-w-sm">
+                    <div className="relative flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        value={announcementSearch}
+                        onChange={(e) => setAnnouncementSearch(e.target.value)}
+                        placeholder="Search announcements..."
+                        className="pl-9"
+                      />
+                    </div>
+                    {announcementSearch && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAnnouncementSearch("")}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  {isSearchingAnnouncements && (
+                    <span className="text-xs text-gray-500">
+                      {visibleStreamPosts.length} match
+                      {visibleStreamPosts.length === 1 ? "" : "es"}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {isInstructor && (
                 <Dialog open={isEditPostOpen} onOpenChange={handleEditDialogChange}>
                   <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
@@ -1488,7 +1734,9 @@ export default function ClassroomPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="edit-post-title">Title</Label>
+                        <Label htmlFor="edit-post-title">
+                          Title <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="edit-post-title"
                           placeholder="e.g., Updated schedule"
@@ -1499,7 +1747,9 @@ export default function ClassroomPage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="edit-post-content">Content</Label>
+                        <Label htmlFor="edit-post-content">
+                          Content <span className="text-red-500">*</span>
+                        </Label>
                         <Textarea
                           id="edit-post-content"
                           placeholder="Share your updates..."
@@ -1692,13 +1942,17 @@ export default function ClassroomPage() {
               )}
 
               {/* Stream Posts List */}
-              {streamPosts.length === 0 ? (
-                <Card className="border border-border p-6 text-center text-muted bg-card">
+              {!hasStreamPosts ? (
+                <Card className="border border-gray-300 p-6 text-center text-gray-600">
                   No posts yet.
+                </Card>
+              ) : visibleStreamPosts.length === 0 ? (
+                <Card className="border border-gray-300 bg-white p-6 text-center text-gray-600">
+                  No announcements match your search.
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {streamPosts.map((post, index) => {
+                  {visibleStreamPosts.map((post, index) => {
                     const rawId = post._id ?? post.id;
                     const pid = typeof rawId === "string" ? rawId : rawId?.toString?.();
                     const createdAt = post.createdAt ? new Date(post.createdAt).toLocaleString() : "";
@@ -1812,6 +2066,65 @@ export default function ClassroomPage() {
                           <div className="mb-3 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-left">
                             <div className="text-xs font-semibold text-yellow-800 mb-1">Notes</div>
                             <pre className="whitespace-pre-wrap wrap-break-word text-sm text-yellow-900">{post.notesText}</pre>
+                          </div>
+                        )}
+
+                        {Array.isArray(post.materials) && post.materials.length > 0 && (
+                          <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-left">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                              Materials
+                            </div>
+                            <div className="mt-2 space-y-3">
+                              {post.materials.map((material, idx) => (
+                                <div
+                                  key={`${pid || idx}-material-${material?.fileId || idx}`}
+                                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                  <div>
+                                    <p className="font-medium text-gray-900">
+                                      {material?.fileName || "Attachment"}
+                                    </p>
+                                    {material?.fileSize ? (
+                                      <p className="text-xs text-gray-500">
+                                        {formatFileSize(material.fileSize)}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {material?.viewLink && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        asChild
+                                      >
+                                        <a
+                                          href={material.viewLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Open
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {material?.downloadLink && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        asChild
+                                      >
+                                        <a
+                                          href={material.downloadLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Download
+                                        </a>
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -2130,14 +2443,16 @@ export default function ClassroomPage() {
             authorName={username}
           />
         )}
-        {isInstructor && <CreateGroupDialog
-    open={isCreateGroupOpen}
-    onOpenChange={setIsCreateGroupOpen}
-    onSubmit={handleCreateGroup}
-    classroom={classroom}
-    newGroupData={newGroupData}
-    setNewGroupData={setNewGroupData}
-  />}
+        {isInstructor && (
+          <CreateGroupDialog
+            open={isCreateGroupOpen}
+            onOpenChange={setIsCreateGroupOpen}
+            onSubmit={handleCreateGroup}
+            classroom={classroom}
+            newGroupData={newGroupData}
+            setNewGroupData={setNewGroupData}
+          />
+        )}
       </div>
     </div>
   );
