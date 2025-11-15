@@ -1364,7 +1364,7 @@ export default function ClassroomPage() {
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full h-16 border-border text-muted hover:bg-muted/60"
+                      className="w-full h-16 border-border text-foreground hover:bg-muted/60"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Create a new post...
@@ -1966,7 +1966,7 @@ export default function ClassroomPage() {
                             <span className="block font-semibold text-foreground">
                               {post.author?.name || "Unknown"}
                             </span>
-                            <span className="text-sm text-muted">{createdAt}</span>
+                            <span className="text-sm text-foreground/70">{createdAt}</span>
                           </div>
                           {isInstructor && pid && (
                             <div className="flex items-center gap-1">
