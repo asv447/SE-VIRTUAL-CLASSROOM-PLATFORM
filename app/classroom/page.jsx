@@ -187,18 +187,16 @@ export default function ClassroomDetails() {
     return <p className="text-center text-gray-500">Loading...</p>;
 
   return (
-    <div className="min-h-screen bg-white text-black p-8">
+    <div className="min-h-screen p-8 bg-background text-foreground">
       {/* Header Section */}
-      <div className="border-b border-gray-300 pb-6 mb-6">
+      <div className="border-b border-border pb-6 mb-6">
         <h1 className="text-3xl font-bold mb-2">{classroom.name}</h1>
-        <p className="text-gray-600">Instructor: {classroom.instructor}</p>
+        <p className="text-muted mb-0">Instructor: {classroom.instructor}</p>
         <div className="flex items-center gap-2 mt-2">
-          <span className="font-mono text-sm text-gray-700">
-            Class ID: {classroom.classId}
-          </span>
+          <span className="font-mono text-sm text-muted-foreground">Class ID: {classroom.classId}</span>
           <button
             onClick={() => navigator.clipboard.writeText(classroom.classId)}
-            className="border border-black text-sm px-2 py-1 rounded hover:bg-black hover:text-white transition"
+            className="border border-border text-sm px-2 py-1 rounded hover:bg-muted/60 hover:text-foreground transition"
           >
             Copy
           </button>
@@ -206,14 +204,14 @@ export default function ClassroomDetails() {
       </div>
 
       {/* Tabs */}
-      <div className="flex justify-center gap-6 mb-6 border-b border-gray-300 pb-2">
+      <div className="flex justify-center gap-6 mb-6 border-b border-border pb-2">
         {["stream", "assignments", "chat", "people"].map((tab) => (
           <button
             key={tab}
             className={`uppercase font-semibold tracking-wide ${
               activeTab === tab
-                ? "border-b-2 border-black"
-                : "text-gray-500 hover:text-black"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground hover:text-foreground"
             }`}
             onClick={() => setActiveTab(tab)}
           >

@@ -1126,32 +1126,32 @@ export default function ClassroomPage() {
   }
 
   if (!classroom) {
-    return <p className="text-center text-gray-500 mt-10">Loading classroom...</p>;
+    return <p className="text-center text-muted mt-10">Loading classroom...</p>;
   }
 
   return (
-    <div className="min-h-screen bg-white text-black px-6 py-10 flex justify-center">
+    <div className="min-h-screen px-6 py-10 flex justify-center bg-background text-foreground">
       <div className="w-full max-w-5xl space-y-8">
         {/* Header - description box (left-aligned) */}
-        <Card className="border border-gray-300 shadow-sm">
+        <Card className="border border-border shadow-sm bg-card">
           <CardHeader className="text-left space-y-3">
             <CardTitle className="text-3xl font-semibold">{classroom.title}</CardTitle>
-            <p className="text-gray-700 max-w-2xl">{classroom.description}</p>
-            <div className="text-sm text-gray-700 space-y-1">
+            <p className="text-muted-foreground max-w-2xl">{classroom.description}</p>
+            <div className="text-sm text-muted-foreground space-y-1">
               <p>
                 <span className="font-semibold">Instructor:</span> {classroom.instructorName}
               </p>
               <div className="flex items-center gap-3">
                 <p>
                   <span className="font-semibold">Class Code:</span>{" "}
-                  <span className="bg-gray-100 border px-3 py-1 rounded-md text-black">
+                  <span className="bg-muted/30 border px-3 py-1 rounded-md text-foreground">
                     {classroom.courseCode}
                   </span>
                 </p>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-gray-400 text-gray-800 hover:bg-gray-200"
+                  className="border-border text-foreground hover:bg-muted/60"
                   onClick={handleCopy}
                 >
                   <Copy className="w-4 h-4 mr-1" /> {copied ? "Copied!" : "Copy"}
@@ -1162,14 +1162,14 @@ export default function ClassroomPage() {
         </Card>
 
         {/* Tab Buttons */}
-        <div className="flex justify-center gap-4 border-b border-gray-300 pb-2">
+        <div className="flex justify-center gap-4 border-b border-border pb-2">
           {["stream", "assignments", "chat", "people"].map((tab) => (
             <Button
               key={tab}
               variant={activeTab === tab ? "default" : "outline"}
               className={`capitalize ${activeTab === tab
-                ? "bg-black text-white hover:bg-gray-800"
-                : "text-gray-800 border-gray-400 hover:bg-gray-200"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "text-foreground border-border hover:bg-muted/60"
                 }`}
               onClick={() => setActiveTab(tab)}
             >
@@ -1184,7 +1184,7 @@ export default function ClassroomPage() {
           {activeTab === "stream" && (
             <div className="space-y-4">
               {/* Whiteboard quick editor for this course */}
-              <Card className="border border-gray-300 shadow-sm">
+              <Card className="border border-border shadow-sm bg-card">
                 <CardHeader>
                   <CardTitle className="text-xl">Whiteboard</CardTitle>
                   <CardDescription>Edit a PDF and post as an announcement</CardDescription>
@@ -1201,7 +1201,7 @@ export default function ClassroomPage() {
                     />
                     <Button
                       variant="outline"
-                      className="cursor-pointer"
+                      className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
                       onClick={() => wbInputRef.current && wbInputRef.current.click()}
                     >
                       Choose PDF
@@ -1210,7 +1210,7 @@ export default function ClassroomPage() {
                       Open in Whiteboard
                     </Button>
                     {wbSelectedFile && (
-                      <span className="text-sm text-gray-600 truncate">{wbSelectedFile.name}</span>
+                      <span className="text-sm text-muted truncate">{wbSelectedFile.name}</span>
                     )}
                   </div>
                 </CardContent>
@@ -1221,7 +1221,7 @@ export default function ClassroomPage() {
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full h-16 border-gray-300 text-gray-600 hover:bg-gray-100"
+                      className="w-full h-16 border-border text-muted hover:bg-muted/60"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Create a new post...
@@ -1372,7 +1372,7 @@ export default function ClassroomPage() {
                       <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
                         <div>
                           <Label htmlFor="include-poll" className="font-medium">Include poll</Label>
-                          <p className="text-xs text-gray-500">Collect responses alongside your announcement.</p>
+                          <p className="text-xs text-muted">Collect responses alongside your announcement.</p>
                         </div>
                         <Switch
                           id="include-poll"
@@ -1451,7 +1451,7 @@ export default function ClassroomPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-gray-500">Give students the option to select more than one response.</p>
+                              <p className="text-xs text-muted">Give students the option to select more than one response.</p>
                             </div>
                             <Switch
                               id="poll-allow-multiple"
@@ -1569,7 +1569,7 @@ export default function ClassroomPage() {
                       <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
                         <div>
                           <Label htmlFor="edit-include-poll" className="font-medium">Include poll</Label>
-                          <p className="text-xs text-gray-500">Edit or remove the poll attached to this announcement.</p>
+                          <p className="text-xs text-muted">Edit or remove the poll attached to this announcement.</p>
                         </div>
                         <Switch
                           id="edit-include-poll"
@@ -1665,7 +1665,7 @@ export default function ClassroomPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="edit-poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-gray-500">Let students pick more than one answer.</p>
+                              <p className="text-xs text-muted">Let students pick more than one answer.</p>
                             </div>
                             <Switch
                               id="edit-poll-allow-multiple"
@@ -1693,7 +1693,7 @@ export default function ClassroomPage() {
 
               {/* Stream Posts List */}
               {streamPosts.length === 0 ? (
-                <Card className="border border-gray-300 p-6 text-center text-gray-600">
+                <Card className="border border-border p-6 text-center text-muted bg-card">
                   No posts yet.
                 </Card>
               ) : (
@@ -1705,21 +1705,21 @@ export default function ClassroomPage() {
                     return (
                       <div
                         key={pid || `post-${index}`}
-                        className="border border-gray-200 rounded-md p-4 hover:shadow-sm transition"
+                        className="border border-border rounded-md p-4 hover:shadow-sm transition bg-card"
                       >
                         <div className="mb-2 flex items-start justify-between gap-3">
                           <div>
-                            <span className="block font-semibold text-gray-800">
+                            <span className="block font-semibold text-foreground">
                               {post.author?.name || "Unknown"}
                             </span>
-                            <span className="text-sm text-gray-500">{createdAt}</span>
+                            <span className="text-sm text-muted">{createdAt}</span>
                           </div>
                           {isInstructor && pid && (
                             <div className="flex items-center gap-1">
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                className="h-8 w-8 text-muted hover:text-accent hover:bg-accent/10"
                                 aria-label="Edit announcement"
                                 onClick={() => handleOpenEditPost(post)}
                               >
@@ -1730,7 +1730,7 @@ export default function ClassroomPage() {
                                   <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                    className="h-8 w-8 text-muted hover:text-destructive hover:bg-destructive/10"
                                     aria-label="Delete announcement"
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -1762,7 +1762,7 @@ export default function ClassroomPage() {
                         <div className="flex items-center gap-2 mb-2">
                           <h3 className="text-lg font-semibold">{post.title}</h3>
                           {isInstructor && post.audience?.type === "group" && (
-                        <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium flex items-center">
+                        <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-medium flex items-center">
                           <Users className="w-3 h-3 inline-block mr-1" />
                           {/* Find the group name from the state */}
                           {groups.find((g) => g._id === post.audience.groupId)?.name || "Group Post"}
@@ -1790,7 +1790,7 @@ export default function ClassroomPage() {
                           )}
                         </div>
 
-                        <p className="text-gray-700 mb-3 text-left">{post.content}</p>
+                        <p className="text-foreground mb-3 text-left">{post.content}</p>
 
                         {/* Post Link (e.g., annotated PDF) */}
                         {post.link?.url && (
@@ -1811,15 +1811,15 @@ export default function ClassroomPage() {
                         {post.notesText && post.notesText.trim() !== '' && (
                           <div className="mb-3 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-left">
                             <div className="text-xs font-semibold text-yellow-800 mb-1">Notes</div>
-                            <pre className="whitespace-pre-wrap break-words text-sm text-yellow-900">{post.notesText}</pre>
+                            <pre className="whitespace-pre-wrap wrap-break-word text-sm text-yellow-900">{post.notesText}</pre>
                           </div>
                         )}
 
                         {post.poll && post.poll.options && post.poll.options.length > 0 && (
                           <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4">
                             <div className="mb-3">
-                              <p className="font-semibold text-gray-800">{post.poll.question}</p>
-                              <p className="text-xs text-gray-500">
+                              <p className="font-semibold text-foreground">{post.poll.question}</p>
+                              <p className="text-xs text-muted">
                                 {post.poll.allowMultiple
                                   ? "Select all options that apply."
                                   : "Select one option."}
@@ -1830,7 +1830,7 @@ export default function ClassroomPage() {
                               const pidString = pid;
                               if (!pidString) {
                                 return (
-                                  <div className="rounded-md border border-dashed border-gray-300 bg-white px-3 py-2 text-sm text-gray-500">
+                                  <div className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-sm text-muted">
                                     Poll responses will be available once this post finishes syncing.
                                   </div>
                                 );
@@ -1872,7 +1872,7 @@ export default function ClassroomPage() {
                                           isSelected ? "border-black shadow-sm" : "border-gray-200"
                                         }`}
                                       >
-                                        <label className="flex items-center gap-3 text-sm text-gray-800">
+                                        <label className="flex items-center gap-3 text-sm text-foreground">
                                           <input
                                             type={allowMultipleSelections ? "checkbox" : "radio"}
                                             name={`poll-${pidString}`}
@@ -1884,7 +1884,7 @@ export default function ClassroomPage() {
                                         </label>
                                         <div className="mt-2">
                                           <Progress value={percentage} />
-                                          <div className="mt-1 flex justify-between text-xs text-gray-500">
+                                          <div className="mt-1 flex justify-between text-xs text-muted">
                                             <span>{optionVotes} vote{optionVotes === 1 ? "" : "s"}</span>
                                             <span>{percentage}%</span>
                                           </div>
@@ -1893,7 +1893,7 @@ export default function ClassroomPage() {
                                     );
                                   })}
 
-                                  <div className="mt-4 flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
                                     <span>{selectionSummary}</span>
                                     {user && (
                                       <Button
@@ -1934,7 +1934,7 @@ export default function ClassroomPage() {
                 <CardContent>
                   {isAssignmentsLoading && <p>Loading assignments...</p>}
                   {!isAssignmentsLoading && assignments.length === 0 && (
-                    <p className="text-gray-600">No assignments available.</p>
+                    <p className="text-muted">No assignments available.</p>
                   )}
                   {!isAssignmentsLoading && assignments.length > 0 && (
                     <div className="space-y-4">
@@ -1950,9 +1950,9 @@ export default function ClassroomPage() {
                             {a.title}
                           </button>
                           {a.description && (
-                            <p className="text-sm text-gray-700 mt-1">{a.description}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{a.description}</p>
                           )}
-                          <p className="text-xs text-gray-500 mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
+                          <p className="text-xs text-muted mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
                           {isInstructor && (
                             <div className="mt-2">
                               {!editingDeadline[a.id] ? (
@@ -1990,7 +1990,7 @@ export default function ClassroomPage() {
 
           {/* CHAT */}
           {activeTab === "chat" && (
-            <Card className="border border-gray-300">
+            <Card className="border border-border bg-card">
               <CardHeader>
                 <CardTitle className="text-xl">Class Chat</CardTitle>
                 <CardDescription>
@@ -1999,11 +1999,11 @@ export default function ClassroomPage() {
               </CardHeader>
               <CardContent className="p-0 flex flex-col" style={{ height: "600px" }}>
                 {/* Chat Message List */}
-                <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                <div className="flex-1 overflow-y-auto p-4 bg-muted/10">
                   {isChatLoading ? (
-                    <p className="text-center text-gray-500">Loading chat...</p>
+                    <p className="text-center text-muted">Loading chat...</p>
                   ) : chatMessages.length === 0 ? (
-                    <p className="text-center text-gray-500">No messages yet. Start the conversation!</p>
+                    <p className="text-center text-muted">No messages yet. Start the conversation!</p>
                   ) : (
                     <ChatMessageList
                       messages={chatMessages}
@@ -2015,7 +2015,7 @@ export default function ClassroomPage() {
                 </div>
 
                 {/* Chat Input Box */}
-                <div className="border-t border-gray-300 p-4 bg-white">
+                <div className="border-t border-border p-4 bg-card">
                   <ChatMessageInput
                     newMessage={chatInput}
                     setNewMessage={setChatInput}
@@ -2029,23 +2029,23 @@ export default function ClassroomPage() {
           {/* PEOPLE */}
           {activeTab === "people" && (
             <div className="space-y-6">
-              <Card className="border border-gray-300">
+              <Card className="border border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-xl">Instructor</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-600 text-white flex items-center justify-center text-lg font-semibold">
+                    <div className="w-10 h-10 rounded-full bg-muted text-foreground flex items-center justify-center text-lg font-semibold">
                       {classroom.instructorName ? classroom.instructorName[0].toUpperCase() : "I"}
                     </div>
-                    <span className="font-medium text-gray-800">
+                    <span className="font-medium text-foreground">
                       {classroom.instructorName}
                     </span>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border border-gray-300">
+              <Card className="border border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-xl">
                     Classmates ({classroom.students?.length || 0})
@@ -2053,14 +2053,14 @@ export default function ClassroomPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {!classroom.students || classroom.students.length === 0 ? (
-                    <p className="text-gray-600">No students enrolled yet.</p>
+                    <p className="text-muted">No students enrolled yet.</p>
                   ) : (
                     classroom.students.map((student) => (
                       <div key={student.userId} className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-500 text-white flex items-center justify-center text-lg font-semibold">
+                        <div className="w-10 h-10 rounded-full bg-muted text-foreground flex items-center justify-center text-lg font-semibold">
                           {student.name ? student.name[0].toUpperCase() : "S"}
                         </div>
-                        <span className="font-medium text-gray-800">
+                        <span className="font-medium text-foreground">
                           {student.name}
                         </span>
                       </div>
@@ -2068,7 +2068,7 @@ export default function ClassroomPage() {
                   )}
                 </CardContent>
               </Card>
-              <Card className="border border-gray-300">
+              <Card className="border border-border bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-xl">
                     Groups ({groups.length})
@@ -2086,7 +2086,7 @@ export default function ClassroomPage() {
                 <CardContent className="space-y-4">
                   {isGroupsLoading && <p>Loading groups...</p>}
                   {!isGroupsLoading && groups.length === 0 && (
-                    <p className="text-gray-600">No groups created yet.</p>
+                    <p className="text-muted-foreground">No groups created yet.</p>
                   )}
                   {!isGroupsLoading && groups.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

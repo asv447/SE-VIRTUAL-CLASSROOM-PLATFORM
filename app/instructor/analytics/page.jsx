@@ -149,9 +149,9 @@ export default function InstructorAnalyticsPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background">
-        <div className="h-12 w-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
         <p className="text-sm text-muted-foreground">
-          Crunching classroom analytics...
+          Loading course analytics...
         </p>
       </div>
     );
@@ -160,7 +160,7 @@ export default function InstructorAnalyticsPage() {
   if (!analytics) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background">
-        <AlertTriangle className="w-12 h-12 text-red-500" />
+        <AlertTriangle className="w-12 h-12 text-destructive" />
         <p className="text-sm text-muted-foreground">
           No analytics available yet. Create a course or assignment to get
           started.
@@ -176,18 +176,35 @@ export default function InstructorAnalyticsPage() {
     lateSubmissions: course.lateSubmissions,
   }));
 
+  const totalExpected = analytics.overview.engagementBreakdown.onTime + 
+                        analytics.overview.engagementBreakdown.late + 
+                        analytics.overview.engagementBreakdown.pending +
+                        analytics.overview.engagementBreakdown.missing;
+  
   const engagementData = [
     {
-      name: "On-time",
-      value: analytics.overview.engagementBreakdown.onTime,
+      name: "ontime",
+      displayName: "On-time",
+      value: totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.onTime / totalExpected) * 100) : 0,
+      count: analytics.overview.engagementBreakdown.onTime,
     },
     {
-      name: "Late",
-      value: analytics.overview.engagementBreakdown.late,
+      name: "late",
+      displayName: "Late",
+      value: totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.late / totalExpected) * 100) : 0,
+      count: analytics.overview.engagementBreakdown.late,
     },
     {
-      name: "Missing",
-      value: analytics.overview.engagementBreakdown.missing,
+      name: "pending",
+      displayName: "Pending",
+      value: totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.pending / totalExpected) * 100) : 0,
+      count: analytics.overview.engagementBreakdown.pending,
+    },
+    {
+      name: "missing",
+      displayName: "Missing",
+      value: totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.missing / totalExpected) * 100) : 0,
+      count: analytics.overview.engagementBreakdown.missing,
     },
   ].filter((item) => item.value > 0);
 
@@ -209,24 +226,24 @@ export default function InstructorAnalyticsPage() {
     : [];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Gradient Background */}
+      <div className="absolute inset-0 -z-10 h-full w-full bg-background bg-[radial-gradient(var(--color-primary)_1px,transparent_1px)]/20 bg-size-[16px_16px]"></div>
+      <div className="absolute inset-0 -z-20 bg-linear-to-br from-background via-secondary to-background"></div>
+
       <div className="container mx-auto px-4 py-8 space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm uppercase tracking-wide text-muted-foreground">
               Instructor Command Center
             </p>
-            <h1 className="text-4xl font-bold">Class Performance Analytics</h1>
-            <p className="text-muted-foreground mt-2">
-              Monitor classroom health, assignment momentum, and student
-              engagement in real time.
-            </p>
+            <h1 className="text-4xl font-bold text-foreground">Class Performance Analytics</h1>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => router.refresh()}>
               Refresh data
             </Button>
-            <Button onClick={() => router.push("/assignments")}>New assignment</Button>
+            <Button onClick={() => router.push("/admin")}>New assignment</Button>
           </div>
         </div>
 
@@ -263,9 +280,9 @@ export default function InstructorAnalyticsPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-2 bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
             <CardHeader>
-              <CardTitle>Course performance snapshot</CardTitle>
+              <CardTitle className="text-foreground">Course performance snapshot</CardTitle>
               <CardDescription>
                 Completion rate and late submission footprint per course
               </CardDescription>
@@ -277,14 +294,14 @@ export default function InstructorAnalyticsPage() {
                   config={{
                     completionRate: {
                       label: "Completion rate",
-                      color: "hsl(var(--chart-1))",
+                      color: "#006FA7",
                     },
                   }}
                 >
                   <BarChart data={coursePerformanceData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tickLine={false} interval={0} angle={-10} textAnchor="end" height={70} />
-                    <YAxis unit="%" tickLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(-border))" />
+                    <XAxis dataKey="name" tickLine={false} interval={0} angle={-10} textAnchor="end" height={70} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis unit="%" tickLine={false} stroke="hsl(var(--muted-foreground))" />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar
                       dataKey="completionRate"
@@ -301,9 +318,9 @@ export default function InstructorAnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
             <CardHeader>
-              <CardTitle>Submission health</CardTitle>
+              <CardTitle className="text-foreground">Submission health</CardTitle>
               <CardDescription>
                 On-time vs late vs missing submissions
               </CardDescription>
@@ -313,9 +330,10 @@ export default function InstructorAnalyticsPage() {
                 <ChartContainer
                   className="h-64"
                   config={{
-                    onTime: { label: "On time", color: "hsl(var(--chart-1))" },
-                    late: { label: "Late", color: "hsl(var(--chart-2))" },
-                    missing: { label: "Missing", color: "hsl(var(--chart-3))" },
+                    ontime: { label: "On time", color: "#22c55e" },
+                    late: { label: "Late", color: "#eab308" },
+                    pending: { label: "Pending", color: "#3b82f6" },
+                    missing: { label: "Missing", color: "#ef4444" },
                   }}
                 >
                   <PieChart>
@@ -326,13 +344,12 @@ export default function InstructorAnalyticsPage() {
                       innerRadius={60}
                       outerRadius={90}
                       strokeWidth={2}
+                      stroke="hsl(var(--card))"
                     >
                       {engagementData.map((entry, index) => (
                         <Cell
                           key={entry.name}
-                          fill={`var(--color-${entry.name
-                            .toLowerCase()
-                            .replace(" ", "")})`}
+                          fill={`var(--color-${entry.name})`}
                         />
                       ))}
                     </Pie>
@@ -346,14 +363,26 @@ export default function InstructorAnalyticsPage() {
               )}
               <div className="flex justify-between text-sm">
                 <span>On-time</span>
-                <span className="font-medium">
-                  {analytics.overview.onTimePercentage ?? 0}%
+                <span className="font-medium text-green-600">
+                  {totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.onTime / totalExpected) * 100) : 0}%
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Late</span>
-                <span className="font-medium">
-                  {analytics.overview.latePercentage ?? 0}%
+                <span className="font-medium text-yellow-600">
+                  {totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.late / totalExpected) * 100) : 0}%
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Pending</span>
+                <span className="font-medium text-blue-600">
+                  {totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.pending / totalExpected) * 100) : 0}%
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Missing</span>
+                <span className="font-medium text-destructive">
+                  {totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.missing / totalExpected) * 100) : 0}%
                 </span>
               </div>
             </CardContent>
@@ -361,10 +390,10 @@ export default function InstructorAnalyticsPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+          <Card className="bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
             <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <CardTitle>Course deep-dive</CardTitle>
+                <CardTitle className="text-foreground">Course deep-dive</CardTitle>
                 <CardDescription>Select a course to inspect trends</CardDescription>
               </div>
               <Select
@@ -420,10 +449,10 @@ export default function InstructorAnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
             <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <CardTitle>Assignment focus</CardTitle>
+                <CardTitle className="text-foreground">Assignment focus</CardTitle>
                 <CardDescription>Monitor submissions for a single task</CardDescription>
               </div>
               <Select
@@ -460,13 +489,13 @@ export default function InstructorAnalyticsPage() {
                   <ChartContainer
                     className="h-64"
                     config={{
-                      status: { label: "Submissions", color: "hsl(var(--chart-1))" },
+                      status: { label: "Submissions", color: "#006FA7" },
                     }}
                   >
                     <BarChart data={assignmentChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="status" tickLine={false} />
-                      <YAxis allowDecimals={false} tickLine={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="status" tickLine={false} stroke="hsl(var(--muted-foreground))" />
+                      <YAxis allowDecimals={false} tickLine={false} stroke="hsl(var(--muted-foreground))" />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar
                         dataKey="value"
@@ -505,34 +534,34 @@ export default function InstructorAnalyticsPage() {
           </Card>
         </div>
 
-        <Card>
+        <Card className="bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
           <CardHeader>
-            <CardTitle>Assignment leaderboard</CardTitle>
+            <CardTitle className="text-foreground">Assignment leaderboard</CardTitle>
             <CardDescription>
               Quickly scan throughput and bottlenecks across every assignment
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-muted-foreground">
+              <thead className="text-muted-foreground border-b border-border">
                 <tr className="text-left">
-                  <th className="py-2 pr-4 font-medium">Assignment</th>
-                  <th className="py-2 pr-4 font-medium">Course</th>
-                  <th className="py-2 pr-4 font-medium">Due</th>
-                  <th className="py-2 pr-4 font-medium">Submitted</th>
-                  <th className="py-2 pr-4 font-medium">Completion</th>
-                  <th className="py-2 pr-4 font-medium">On time</th>
-                  <th className="py-2 pr-4 font-medium">Late</th>
-                  <th className="py-2 font-medium">Avg. grade</th>
+                  <th className="py-3 pr-4 font-medium">Assignment</th>
+                  <th className="py-3 pr-4 font-medium">Course</th>
+                  <th className="py-3 pr-4 font-medium">Due</th>
+                  <th className="py-3 pr-4 font-medium">Submitted</th>
+                  <th className="py-3 pr-4 font-medium">Completion</th>
+                  <th className="py-3 pr-4 font-medium">On time</th>
+                  <th className="py-3 pr-4 font-medium">Late</th>
+                  <th className="py-3 font-medium">Avg. grade</th>
                 </tr>
               </thead>
               <tbody>
                 {(analytics.assignments || []).map((assignment) => (
                   <tr
                     key={assignment.assignmentId}
-                    className="border-t border-border/60"
+                    className="border-t border-border hover:bg-muted/30 transition-colors"
                   >
-                    <td className="py-3 pr-4 font-medium">
+                    <td className="py-3 pr-4 font-medium text-foreground">
                       {assignment.title}
                     </td>
                     <td className="py-3 pr-4">
@@ -540,20 +569,20 @@ export default function InstructorAnalyticsPage() {
                         {assignment.courseTitle}
                       </span>
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-4 text-foreground">
                       {assignment.deadline
                         ? new Date(assignment.deadline).toLocaleDateString()
                         : "—"}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-4 text-foreground">
                       {assignment.submissions}/{assignment.totalStudents}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-4 text-foreground">
                       {assignment.completionRate}%
                     </td>
-                    <td className="py-3 pr-4">{assignment.onTime}</td>
-                    <td className="py-3 pr-4">{assignment.late}</td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4 text-foreground">{assignment.onTime}</td>
+                    <td className="py-3 pr-4 text-foreground">{assignment.late}</td>
+                    <td className="py-3 text-foreground">
                       {assignment.averageGrade !== null
                         ? assignment.averageGrade
                         : "—"}
@@ -578,17 +607,17 @@ export default function InstructorAnalyticsPage() {
 
 function SummaryCard({ title, value, helper, icon: Icon, trend }) {
   return (
-    <Card>
+    <Card className="bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 hover:shadow-lg transition-all duration-300">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardDescription>{title}</CardDescription>
+        <CardDescription className="text-muted-foreground">{title}</CardDescription>
         {Icon ? <Icon className="h-5 w-5 text-muted-foreground" /> : null}
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold">{value}</div>
+        <div className="text-3xl font-bold text-foreground">{value}</div>
         <p className="text-xs text-muted-foreground mt-1">
           {helper}
           {typeof trend === "number" && (
-            <span className="ml-1 text-emerald-500 font-medium">
+            <span className="ml-1 text-green-500 font-medium">
               {trend}% on time
             </span>
           )}
@@ -600,14 +629,14 @@ function SummaryCard({ title, value, helper, icon: Icon, trend }) {
 
 function MetricTile({ label, value, helper, icon: Icon }) {
   return (
-    <div className="rounded-lg border bg-muted/30 p-4">
+    <div className="rounded-lg border-2 border-border bg-secondary/30 p-4 hover:border-primary/50 transition-all">
       <div className="flex items-center gap-2">
         {Icon ? <Icon className="h-4 w-4 text-muted-foreground" /> : null}
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
       </div>
-      <p className="text-2xl font-bold mt-2">{value}</p>
+      <p className="text-2xl font-bold mt-2 text-foreground">{value}</p>
       <p className="text-xs text-muted-foreground mt-1">{helper}</p>
     </div>
   );

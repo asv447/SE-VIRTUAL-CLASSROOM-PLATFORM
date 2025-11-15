@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -12,7 +12,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import {
   BookOpen,
   CheckCircle2,
@@ -20,7 +33,22 @@ import {
   AlertCircle,
   TrendingUp,
   Calendar,
+  Target,
+  Award,
+  BarChart3,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+  LineChart,
+  Line,
+} from "recharts";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { toast } from "sonner";
@@ -31,11 +59,16 @@ export default function StudentProgressPage() {
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState([]);
   const [progressData, setProgressData] = useState({});
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [overallStats, setOverallStats] = useState({
     totalAssignments: 0,
     completedAssignments: 0,
-    overdueAssignments: 0,
+    onTimeAssignments: 0,
+    lateAssignments: 0,
+    pendingAssignments: 0,
+    missingAssignments: 0,
     percentage: 0,
+    averageGrade: null,
   });
 
   useEffect(() => {
@@ -96,14 +129,32 @@ export default function StudentProgressPage() {
       const progressMap = {};
       let totalAssignments = 0;
       let completedAssignments = 0;
-      let overdueAssignments = 0;
+      let onTimeAssignments = 0;
+      let lateAssignments = 0;
+      let pendingAssignments = 0;
+      let missingAssignments = 0;
+      let totalGrade = 0;
+      let gradedCount = 0;
 
       progressResults.forEach(({ courseId, data }) => {
         if (data) {
           progressMap[courseId] = data;
           totalAssignments += data.totalAssignments;
           completedAssignments += data.submittedAssignments;
-          overdueAssignments += data.overdueAssignments;
+          onTimeAssignments += data.onTimeAssignments || 0;
+          lateAssignments += data.lateAssignments || 0;
+          pendingAssignments += data.pendingAssignments;
+          missingAssignments += data.missingAssignments || 0;
+          
+          // Calculate average grade
+          if (data.submissions) {
+            data.submissions.forEach(sub => {
+              if (typeof sub.grade === 'number') {
+                totalGrade += sub.grade;
+                gradedCount++;
+              }
+            });
+          }
         }
       });
 
@@ -111,12 +162,21 @@ export default function StudentProgressPage() {
       setOverallStats({
         totalAssignments,
         completedAssignments,
-        overdueAssignments,
+        onTimeAssignments,
+        lateAssignments,
+        pendingAssignments,
+        missingAssignments,
         percentage:
           totalAssignments > 0
             ? Math.round((completedAssignments / totalAssignments) * 100)
             : 0,
+        averageGrade: gradedCount > 0 ? Math.round((totalGrade / gradedCount) * 10) / 10 : null,
       });
+      
+      // Set first course as selected by default
+      if (coursesData.length > 0) {
+        setSelectedCourseId(coursesData[0].id);
+      }
     } catch (error) {
       console.error("Error fetching progress:", error);
       toast.error("Failed to load progress data");
@@ -131,6 +191,60 @@ export default function StudentProgressPage() {
     return "text-red-600";
   };
 
+  const selectedCourse = useMemo(() => {
+    return courses.find((course) => course.id === selectedCourseId);
+  }, [courses, selectedCourseId]);
+
+  const selectedProgress = useMemo(() => {
+    return selectedCourseId ? progressData[selectedCourseId] : null;
+  }, [selectedCourseId, progressData]);
+
+  // Prepare chart data
+  const courseProgressData = useMemo(() => {
+    return courses.map((course) => {
+      const progress = progressData[course.id];
+      if (!progress) return null;
+      return {
+        name: course.name || course.title,
+        completion: progress.totalAssignments > 0
+          ? Math.round((progress.submittedAssignments / progress.totalAssignments) * 100)
+          : 0,
+      };
+    }).filter(Boolean);
+  }, [courses, progressData]);
+
+  const submissionStatusData = useMemo(() => {
+    const total = overallStats.totalAssignments;
+    if (total === 0) return [];
+    
+    return [
+      {
+        name: "onTime",
+        displayName: "On-Time",
+        value: Math.round((overallStats.onTimeAssignments / total) * 100),
+        count: overallStats.onTimeAssignments,
+      },
+      {
+        name: "late",
+        displayName: "Late",
+        value: Math.round((overallStats.lateAssignments / total) * 100),
+        count: overallStats.lateAssignments,
+      },
+      {
+        name: "pending",
+        displayName: "Pending",
+        value: Math.round((overallStats.pendingAssignments / total) * 100),
+        count: overallStats.pendingAssignments,
+      },
+      {
+        name: "missing",
+        displayName: "Missing",
+        value: Math.round((overallStats.missingAssignments / total) * 100),
+        count: overallStats.missingAssignments,
+      },
+    ].filter((item) => item.value > 0);
+  }, [overallStats]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -143,251 +257,339 @@ export default function StudentProgressPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-background relative">
+      {/* Gradient Background */}
+      <div className="absolute inset-0 -z-10 h-full w-full bg-background bg-[radial-gradient(var(--color-primary)_1px,transparent_1px)]/20 bg-size-[16px_16px]"></div>
+      <div className="absolute inset-0 -z-20 bg-linear-to-br from-background via-secondary to-background"></div>
+
+      <div className="container mx-auto px-4 py-8 space-y-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-foreground">
-                My Progress
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                Track your assignment completion and performance
-              </p>
-            </div>
-            <TrendingUp className="w-12 h-12 text-primary" />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-wide text-muted-foreground">
+              Student Dashboard
+            </p>
+            <h1 className="text-4xl font-bold text-foreground">My Learning Analytics</h1>
+            <p className="text-muted-foreground mt-2">
+              Track your progress, assignments, and performance across all courses
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.refresh()}>
+              Refresh data
+            </Button>
+            <Button onClick={() => router.push("/")}>My Courses</Button>
           </div>
         </div>
 
-        {/* Overall Progress Card */}
-        <Card className="mb-8 border-2">
-          <CardHeader>
-            <CardTitle className="text-2xl">Overall Progress</CardTitle>
-            <CardDescription>
-              Your progress across all enrolled courses
-            </CardDescription>
+        {/* Summary Cards */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard
+            title="Enrolled Courses"
+            value={courses.length}
+            icon={BookOpen}
+            helper="Active enrollments"
+          />
+          <SummaryCard
+            title="Total Assignments"
+            value={overallStats.totalAssignments}
+            icon={BarChart3}
+            helper="Across all courses"
+          />
+          <SummaryCard
+            title="Completion Rate"
+            value={`${overallStats.percentage}%`}
+            icon={Target}
+            helper="Overall progress"
+          />
+          <SummaryCard
+            title="Avg. Grade"
+            value={overallStats.averageGrade !== null ? overallStats.averageGrade : "—"}
+            icon={Award}
+            helper="Based on graded work"
+          />
+          <SummaryCard
+            title="Late Submissions"
+            value={overallStats.lateAssignments}
+            icon={Clock}
+            helper="Submitted after deadline"
+            alert={overallStats.lateAssignments > 0}
+          />
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Course Progress Chart */}
+          <Card className="lg:col-span-2 bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
+            <CardHeader>
+              <CardTitle className="text-foreground">Course Completion Overview</CardTitle>
+              <CardDescription>
+                Your progress percentage across all enrolled courses
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {courseProgressData.length > 0 ? (
+                <ChartContainer
+                  className="h-80"
+                  config={{
+                    completion: {
+                      label: "Completion",
+                      color: "#006FA7",
+                    },
+                  }}
+                >
+                  <BarChart data={courseProgressData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tickLine={false} interval={0} angle={-10} textAnchor="end" height={70} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis unit="%" tickLine={false} stroke="hsl(var(--muted-foreground))" />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar
+                      dataKey="completion"
+                      fill="var(--color-completion)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-12">
+                  Enroll in courses to see your progress
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Submission Status Pie Chart */}
+          <Card className="bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
+            <CardHeader>
+              <CardTitle className="text-foreground">Submission Status</CardTitle>
+              <CardDescription>
+                Overall assignment status breakdown
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {submissionStatusData.length > 0 ? (
+                <>
+                  <ChartContainer
+                    className="h-64"
+                    config={{
+                      onTime: { label: "On-Time", color: "#22c55e" },
+                      late: { label: "Late", color: "#eab308" },
+                      pending: { label: "Pending", color: "#3b82f6" },
+                      missing: { label: "Missing", color: "#ef4444" },
+                    }}
+                  >
+                    <PieChart>
+                      <Pie
+                        data={submissionStatusData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={60}
+                        outerRadius={90}
+                        strokeWidth={2}
+                        stroke="hsl(var(--card))"
+                      >
+                        {submissionStatusData.map((entry, index) => (
+                          <Cell
+                            key={entry.name}
+                            fill={`var(--color-${entry.name})`}
+                          />
+                        ))}
+                      </Pie>
+                      <ChartLegend content={<ChartLegendContent />} />
+                    </PieChart>
+                  </ChartContainer>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>On-Time</span>
+                      <span className="font-medium text-green-600">
+                        {submissionStatusData.find(d => d.name === "onTime")?.value || 0}% ({overallStats.onTimeAssignments})
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Late</span>
+                      <span className="font-medium text-yellow-600">
+                        {submissionStatusData.find(d => d.name === "late")?.value || 0}% ({overallStats.lateAssignments})
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Pending</span>
+                      <span className="font-medium text-blue-600">
+                        {submissionStatusData.find(d => d.name === "pending")?.value || 0}% ({overallStats.pendingAssignments})
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Missing</span>
+                      <span className="font-medium text-destructive">
+                        {submissionStatusData.find(d => d.name === "missing")?.value || 0}% ({overallStats.missingAssignments})
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-12">
+                  No assignment data available
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        {/* Course Details Section */}
+        <Card className="bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 transition-all">
+          <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <CardTitle className="text-foreground">Course Deep-Dive</CardTitle>
+              <CardDescription>Select a course to view detailed progress</CardDescription>
+            </div>
+            <Select
+              value={selectedCourseId || undefined}
+              onValueChange={setSelectedCourseId}
+              disabled={courses.length === 0}
+            >
+              <SelectTrigger className="w-60">
+                <SelectValue placeholder="Select course" />
+              </SelectTrigger>
+              <SelectContent>
+                {courses.map((course) => (
+                  <SelectItem key={course.id} value={course.id}>
+                    {course.name || course.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-              <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                <BookOpen className="w-10 h-10 text-blue-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Total Assignments
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {overallStats.totalAssignments}
-                  </p>
+            {selectedProgress && selectedCourse ? (
+              <div className="space-y-6">
+                {/* Course Info */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="text-sm">
+                    {selectedCourse.instructorName ? `Instructor: ${selectedCourse.instructorName}` : 'Course Details'}
+                  </Badge>
+                  {selectedCourse.courseCode && (
+                    <Badge variant="secondary" className="text-sm font-mono">
+                      {selectedCourse.courseCode}
+                    </Badge>
+                  )}
                 </div>
-              </div>
 
-              <div className="flex items-center gap-4 p-4 bg-green-50 dark:bg-green-950 rounded-lg">
-                <CheckCircle2 className="w-10 h-10 text-green-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold">
-                    {overallStats.completedAssignments}
-                  </p>
+                {/* Progress Stats */}
+                <div className="grid gap-4 sm:grid-cols-4">
+                  <MetricTile
+                    label="On-Time"
+                    value={selectedProgress.onTimeAssignments || 0}
+                    helper="Submitted before deadline"
+                    icon={CheckCircle2}
+                  />
+                  <MetricTile
+                    label="Late"
+                    value={selectedProgress.lateAssignments || 0}
+                    helper="Submitted after deadline"
+                    icon={Clock}
+                  />
+                  <MetricTile
+                    label="Pending"
+                    value={selectedProgress.pendingAssignments}
+                    helper="Can still submit on-time"
+                    icon={Calendar}
+                  />
+                  <MetricTile
+                    label="Missing"
+                    value={selectedProgress.missingAssignments || 0}
+                    helper="Deadline passed"
+                    icon={AlertCircle}
+                  />
                 </div>
-              </div>
 
-              <div className="flex items-center gap-4 p-4 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
-                <Clock className="w-10 h-10 text-yellow-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold">
-                    {overallStats.totalAssignments -
-                      overallStats.completedAssignments}
-                  </p>
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Course Completion</span>
+                    <span className="text-2xl font-bold text-primary">
+                      {selectedProgress.totalAssignments > 0
+                        ? Math.round((selectedProgress.submittedAssignments / selectedProgress.totalAssignments) * 100)
+                        : 0}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={selectedProgress.totalAssignments > 0
+                      ? (selectedProgress.submittedAssignments / selectedProgress.totalAssignments) * 100
+                      : 0}
+                    className="h-3"
+                  />
                 </div>
-              </div>
 
-              <div className="flex items-center gap-4 p-4 bg-red-50 dark:bg-red-950 rounded-lg">
-                <AlertCircle className="w-10 h-10 text-red-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Overdue</p>
-                  <p className="text-2xl font-bold">
-                    {overallStats.overdueAssignments}
-                  </p>
-                </div>
-              </div>
-            </div>
+                {/* Missing Assignments */}
+                {selectedProgress.missingAssignmentsList && selectedProgress.missingAssignmentsList.length > 0 && (
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-medium text-destructive mb-3 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Missing Assignments ({selectedProgress.missingAssignmentsList.length})
+                    </h3>
+                    <div className="grid gap-2">
+                      {selectedProgress.missingAssignmentsList.map((assignment) => (
+                        <div
+                          key={assignment.id}
+                          className="flex items-start gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+                        >
+                          <Calendar className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <p className="font-medium text-foreground">{assignment.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Due: {new Date(assignment.deadline).toLocaleDateString()} - {" "}
+                              {Math.floor((new Date() - new Date(assignment.deadline)) / (1000 * 60 * 60 * 24))} days overdue
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">
-                  Overall Completion Rate
-                </span>
-                <span
-                  className={`text-2xl font-bold ${getStatusColor(
-                    overallStats.percentage
-                  )}`}
+                <Button
+                  className="w-full"
+                  onClick={() => router.push(`/classroom/${selectedCourseId}`)}
                 >
-                  {overallStats.percentage}%
-                </span>
+                  Go to Course
+                </Button>
               </div>
-              <Progress value={overallStats.percentage} className="h-3" />
-              <p className="text-xs text-muted-foreground">
-                {overallStats.completedAssignments} of{" "}
-                {overallStats.totalAssignments} assignments completed
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-12">
+                {courses.length === 0 ? 'No courses enrolled' : 'Select a course to view details'}
               </p>
-            </div>
+            )}
           </CardContent>
         </Card>
-
-        {/* Course-wise Progress */}
-        <div>
-          <h2 className="text-2xl font-bold mb-4">Course-wise Progress</h2>
-          {courses.length === 0 ? (
-            <Card className="p-12 text-center">
-              <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-xl font-semibold mb-2">No courses enrolled</h3>
-              <p className="text-muted-foreground">
-                Join a course to start tracking your progress
-              </p>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {courses.map((course) => {
-                const progress = progressData[course.id];
-                if (!progress) return null;
-
-                const completionRate =
-                  progress.totalAssignments > 0
-                    ? Math.round(
-                        (progress.submittedAssignments /
-                          progress.totalAssignments) *
-                          100
-                      )
-                    : 0;
-
-                return (
-                  <Card
-                    key={course.id}
-                    className="hover:shadow-lg transition-shadow"
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg">
-                            {course.name || course.title}
-                          </CardTitle>
-                          <CardDescription className="mt-1">
-                            {course.instructorName && (
-                              <span className="text-xs">
-                                Instructor: {course.instructorName}
-                              </span>
-                            )}
-                          </CardDescription>
-                        </div>
-                        <Badge
-                          variant={
-                            completionRate >= 80
-                              ? "default"
-                              : completionRate >= 50
-                              ? "secondary"
-                              : "destructive"
-                          }
-                        >
-                          {completionRate}%
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Progress Bar */}
-                      <div className="space-y-2">
-                        <Progress value={completionRate} className="h-2.5" />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>
-                            {progress.submittedAssignments}/
-                            {progress.totalAssignments} completed
-                          </span>
-                          <span>{completionRate}%</span>
-                        </div>
-                      </div>
-
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-3 gap-3 pt-2">
-                        <div className="text-center p-3 bg-muted rounded-lg">
-                          <CheckCircle2 className="w-5 h-5 mx-auto mb-1 text-green-600" />
-                          <p className="text-xs text-muted-foreground">
-                            Submitted
-                          </p>
-                          <p className="text-lg font-bold">
-                            {progress.submittedAssignments}
-                          </p>
-                        </div>
-
-                        <div className="text-center p-3 bg-muted rounded-lg">
-                          <Clock className="w-5 h-5 mx-auto mb-1 text-yellow-600" />
-                          <p className="text-xs text-muted-foreground">
-                            Pending
-                          </p>
-                          <p className="text-lg font-bold">
-                            {progress.pendingAssignments}
-                          </p>
-                        </div>
-
-                        <div className="text-center p-3 bg-muted rounded-lg">
-                          <AlertCircle className="w-5 h-5 mx-auto mb-1 text-red-600" />
-                          <p className="text-xs text-muted-foreground">
-                            Overdue
-                          </p>
-                          <p className="text-lg font-bold">
-                            {progress.overdueAssignments}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Overdue Assignments List */}
-                      {progress.overdueAssignmentsList &&
-                        progress.overdueAssignmentsList.length > 0 && (
-                          <div className="border-t pt-3">
-                            <p className="text-sm font-medium text-red-600 mb-2">
-                              Overdue Assignments:
-                            </p>
-                            <div className="space-y-2">
-                              {progress.overdueAssignmentsList.map(
-                                (assignment) => (
-                                  <div
-                                    key={assignment.id}
-                                    className="flex items-start gap-2 text-xs p-2 bg-red-50 dark:bg-red-950/20 rounded"
-                                  >
-                                    <Calendar className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
-                                    <div className="flex-1">
-                                      <p className="font-medium">
-                                        {assignment.title}
-                                      </p>
-                                      <p className="text-muted-foreground">
-                                        Due:{" "}
-                                        {new Date(
-                                          assignment.deadline
-                                        ).toLocaleDateString()}
-                                      </p>
-                                    </div>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                      <Button
-                        variant="outline"
-                        className="w-full mt-2"
-                        onClick={() => router.push(`/classroom/${course.id}`)}
-                      >
-                        View Course
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
+    </div>
+  );
+}
+
+function SummaryCard({ title, value, helper, icon: Icon, alert }) {
+  return (
+    <Card className={`bg-card/60 backdrop-blur-sm border-2 hover:border-primary/50 hover:shadow-lg transition-all duration-300 ${alert ? 'border-destructive/50' : ''}`}>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardDescription className="text-muted-foreground">{title}</CardDescription>
+        {Icon ? <Icon className={`h-5 w-5 ${alert ? 'text-destructive' : 'text-muted-foreground'}`} /> : null}
+      </CardHeader>
+      <CardContent>
+        <div className={`text-3xl font-bold ${alert ? 'text-destructive' : 'text-foreground'}`}>{value}</div>
+        <p className="text-xs text-muted-foreground mt-1">{helper}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricTile({ label, value, helper, icon: Icon }) {
+  return (
+    <div className="rounded-lg border-2 border-border bg-secondary/30 p-4 hover:border-primary/50 transition-all">
+      <div className="flex items-center gap-2">
+        {Icon ? <Icon className="h-4 w-4 text-muted-foreground" /> : null}
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+      </div>
+      <p className="text-2xl font-bold mt-2 text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground mt-1">{helper}</p>
     </div>
   );
 }

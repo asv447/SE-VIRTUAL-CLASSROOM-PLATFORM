@@ -16,14 +16,19 @@
   --secondary-foreground: oklch(0.3 0.04 230);
   --muted: oklch(0.94 0.02 230);
   --muted-foreground: oklch(0.5 0.03 230);
-  --accent: oklch(0.65 0.1 160); /* Seafoam green */
-  --accent-foreground: oklch(0.1 0.03 160);
+  --accent: #006FA7; /* Bright blue accent */
+  --accent-foreground: #FFFFFF;
   --destructive: oklch(0.55 0.2 25); /* Strong red */
   --destructive-foreground: oklch(0.98 0.01 25);
   --border: oklch(0.9 0.02 230);
   --input: oklch(0.92 0.02 230);
   --ring: oklch(0.5 0.15 230 / 0.6);
   --radius: 0.75rem;
+  --chart-1: oklch(0.5 0.15 230); /* Primary blue */
+  --chart-2: #006FA7; /* Accent blue */
+  --chart-3: oklch(0.55 0.2 25); /* Destructive red */
+  --chart-4: oklch(0.6 0.15 150); /* Green */
+  --chart-5: oklch(0.65 0.15 60); /* Yellow */
 }
 
 .dark {
@@ -39,13 +44,18 @@
   --secondary-foreground: oklch(0.9 0.02 230);
   --muted: oklch(0.25 0.04 230);
   --muted-foreground: oklch(0.65 0.03 230);
-  --accent: oklch(0.7 0.12 160); /* Brighter seafoam */
-  --accent-foreground: oklch(0.05 0.01 160);
+  --accent: #008FD5; /* Brighter blue accent for dark mode */
+  --accent-foreground: #FFFFFF;
   --destructive: oklch(0.6 0.2 25); /* Brighter red */
   --destructive-foreground: oklch(0.98 0.01 25);
   --border: oklch(0.3 0.04 230);
   --input: oklch(0.3 0.04 230);
   --ring: oklch(0.65 0.15 230 / 0.7);
+  --chart-1: oklch(0.65 0.15 230); /* Primary blue (brighter) */
+  --chart-2: #008FD5; /* Accent blue (brighter) */
+  --chart-3: oklch(0.6 0.2 25); /* Destructive red (brighter) */
+  --chart-4: oklch(0.65 0.15 150); /* Green */
+  --chart-5: oklch(0.7 0.15 60); /* Yellow */
 }
 
 @theme inline {

@@ -50,45 +50,68 @@ export async function GET(request) {
       })
       .toArray();
 
-    // Create a set of submitted assignment IDs for quick lookup
-    const submittedAssignmentIds = new Set(
-      submissions.map((s) => s.assignmentId)
+    // Create a map of submissions for quick lookup
+    const submissionsMap = new Map(
+      submissions.map((s) => [s.assignmentId, s])
     );
 
     const submittedAssignments = submissions.length;
     
-    // Calculate overdue and pending assignments
+    // Calculate on-time, late, pending, and missing assignments
     const now = new Date();
-    let overdueAssignments = 0;
-    const overdueAssignmentsList = [];
+    let onTimeAssignments = 0;
+    let lateAssignments = 0;
+    let pendingAssignments = 0;
+    let missingAssignments = 0;
+    const missingAssignmentsList = [];
 
     assignments.forEach((assignment) => {
       const assignmentId = assignment._id.toString();
-      const isSubmitted = submittedAssignmentIds.has(assignmentId);
+      const submission = submissionsMap.get(assignmentId);
+      const deadline = assignment.deadline ? new Date(assignment.deadline) : null;
       
-      if (!isSubmitted && assignment.deadline) {
-        const deadline = new Date(assignment.deadline);
-        if (deadline < now) {
-          overdueAssignments++;
-          overdueAssignmentsList.push({
-            id: assignmentId,
-            title: assignment.title,
-            deadline: assignment.deadline,
-          });
+      if (submission) {
+        // Assignment is submitted - check if on-time or late
+        const submittedAt = new Date(submission.submittedAt);
+        if (deadline && submittedAt > deadline) {
+          lateAssignments++;
+        } else {
+          onTimeAssignments++;
+        }
+      } else {
+        // Assignment is not submitted - check if pending or missing
+        if (deadline) {
+          if (deadline < now) {
+            // Deadline passed - missing
+            missingAssignments++;
+            missingAssignmentsList.push({
+              id: assignmentId,
+              title: assignment.title,
+              deadline: assignment.deadline,
+            });
+          } else {
+            // Deadline still active - pending
+            pendingAssignments++;
+          }
+        } else {
+          // No deadline set - count as pending
+          pendingAssignments++;
         }
       }
     });
 
-    const pendingAssignments = totalAssignments - submittedAssignments - overdueAssignments;
     const percentage = Math.round((submittedAssignments / totalAssignments) * 100);
 
     return NextResponse.json({
       totalAssignments,
       submittedAssignments,
-      pendingAssignments: pendingAssignments >= 0 ? pendingAssignments : 0,
-      overdueAssignments,
-      overdueAssignmentsList,
+      onTimeAssignments,
+      lateAssignments,
+      pendingAssignments,
+      missingAssignments,
+      missingAssignmentsList,
       percentage,
+      submissions, // Include submissions for grade calculation
     });
   } catch (err) {
     console.error("[API /api/student/progress] Error:", err);

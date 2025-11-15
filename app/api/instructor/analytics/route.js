@@ -121,6 +121,10 @@ export async function GET(request) {
     let gradedTotal = 0;
     let gradeSum = 0;
     let expectedSubmissions = 0;
+    let pendingTotal = 0;
+    let missingTotal = 0;
+
+    const currentDate = new Date();
 
     assignments.forEach((assignment) => {
       const assignmentId = normalizeId(assignment._id);
@@ -156,6 +160,22 @@ export async function GET(request) {
       });
 
       const notSubmitted = Math.max(courseStudentCount - relatedSubmissions.length, 0);
+      
+      // Calculate pending vs missing
+      let pending = 0;
+      let missing = 0;
+      if (notSubmitted > 0) {
+        if (deadline && currentDate > deadline) {
+          // Deadline passed - these are missing
+          missing = notSubmitted;
+          missingTotal += missing;
+        } else {
+          // Deadline not passed or no deadline - these are pending
+          pending = notSubmitted;
+          pendingTotal += pending;
+        }
+      }
+      
       const averageGrade = graded ? Number((gradeAccumulator / graded).toFixed(1)) : null;
 
       onTimeTotal += onTime;
@@ -175,6 +195,8 @@ export async function GET(request) {
         onTime,
         late,
         notSubmitted,
+        pending,
+        missing,
         averageGrade,
         completionRate:
           courseStudentCount > 0
@@ -258,7 +280,8 @@ export async function GET(request) {
       engagementBreakdown: {
         onTime: onTimeTotal,
         late: lateTotal,
-        missing: Math.max(overallExpectedSubmissions - submissions.length, 0),
+        pending: pendingTotal,
+        missing: missingTotal,
       },
     };
 
