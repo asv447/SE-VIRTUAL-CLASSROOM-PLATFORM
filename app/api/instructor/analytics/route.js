@@ -6,6 +6,8 @@ import {
 } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
+export const dynamic = 'force-dynamic';
+
 const normalizeId = (value) => {
   if (!value) return null;
   if (typeof value === "string") return value;
