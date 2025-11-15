@@ -43,7 +43,7 @@ def is_educational(text: str) -> bool:
     return False
 
 
-def initialize_llm(api_key: str, model: str = "llama-3.3-70b-versatile", temperature: float = 0.2):
+def initialize_llm(api_key: str, model: str = "openai/gpt-oss-20b", temperature: float = 0.2):
     if ChatGroq is None:
         raise RuntimeError("langchain_groq is not installed in this environment")
     return ChatGroq(groq_api_key=api_key, model_name=model, temperature=temperature)

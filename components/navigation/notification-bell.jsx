@@ -159,16 +159,27 @@ export default function NotificationBell() {
   async function markAllAsRead() {
     if (!user) return;
     try {
-      const res = await fetch(`/api/notifications`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "markAll", uid: user.uid }),
+      // Delete all notifications instead of just marking as read
+      const deletePromises = notifications.map((n) =>
+        fetch(`/api/notifications`, {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: n.id }),
+        })
+      );
+      await Promise.all(deletePromises);
+      setNotifications([]);
+      toast({
+        title: "Success",
+        description: "All notifications have been cleared.",
       });
-      if (res.ok) {
-        setNotifications((prev) => prev.map((p) => ({ ...p, read: true })));
-      }
     } catch (err) {
       console.error("markAllAsRead error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to clear notifications.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -206,7 +217,7 @@ export default function NotificationBell() {
             <div className="text-xs text-muted-foreground mt-1">{n.message}</div>
             <div className="text-xs text-muted-foreground mt-1">
               {n.createdAt
-                ? formatDistanceToNow(new Date(n.createdAt)) + " ago"
+                ? formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })
                 : ""}
             </div>
           </div>
@@ -266,9 +277,18 @@ export default function NotificationBell() {
           </div>
 
           <div className="max-h-72 overflow-auto">
-            {loading && <div className="p-4 text-sm text-foreground">Loading...</div>}
+            {loading && (
+              <div className="p-8 text-center">
+                <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <div className="text-sm text-muted-foreground mt-2">Loading notifications...</div>
+              </div>
+            )}
             {!loading && notifications.length === 0 && (
-              <div className="p-4 text-sm text-muted-foreground text-center">No notifications</div>
+              <div className="p-8 text-center">
+                <Bell className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
+                <div className="text-sm font-medium text-foreground">No notifications</div>
+                <div className="text-xs text-muted-foreground mt-1">You're all caught up!</div>
+              </div>
             )}
             {!loading && notifications.map((n) => renderNotification(n))}
           </div>
