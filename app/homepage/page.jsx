@@ -398,6 +398,24 @@ export default function ClassyncDashboard() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
+          {/* Urgent Assignments Reminder Banner */}
+          {user && !isAdmin && urgentAssignments.length > 0 && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Bell className="w-5 h-5 text-destructive" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-destructive">Assignment Deadline Reminder</h3>
+                  <p className="text-sm text-muted-foreground">
+                    You have {urgentAssignments.length} assignment{urgentAssignments.length > 1 ? 's' : ''} due within 24 hours.
+                  </p>
+                </div>
+                <Button variant="destructive" size="sm" asChild>
+                  <a href="/assignments">View Assignments</a>
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Courses & Dashboard */}
           {/* Buttons row */}
           <div className="flex flex-wrap justify-between gap-2">
@@ -458,32 +476,7 @@ export default function ClassyncDashboard() {
             ) : null}
           </div>
 
-          {/* [NEW] Urgent Assignments Section */}
-          {user && !isAdmin && urgentAssignments.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-foreground">Urgent Assignments</h2>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {urgentAssignments.map((assignment) => (
-                  <Card key={assignment.id} className="bg-card/60 backdrop-blur-sm border-destructive/50 hover:border-destructive transition-all">
-                    <CardHeader>
-                      <CardTitle className="truncate">{assignment.title}</CardTitle>
-                      <CardDescription>{assignment.courseTitle}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          <span>Due: {formatDate(assignment.deadline)}</span>
-                        </div>
-                        <Badge variant="destructive">Urgent</Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
+          {/* Courses & Dashboard */}
           {/* Courses List */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
