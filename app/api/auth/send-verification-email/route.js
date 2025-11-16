@@ -100,10 +100,10 @@ export async function POST(req) {
       }
     }
 
-    if (!appUrl) {
-      appUrl = "http://localhost:3000";
-      console.warn("[Verification Email] No public app URL detected; falling back to:", appUrl, " — set NEXT_PUBLIC_APP_URL to a public URL to avoid localhost links in emails");
-    }
+    // if (!appUrl) {
+    //   appUrl = "http://localhost:3000";
+    //   console.warn("[Verification Email] No public app URL detected; falling back to:", appUrl, " — set NEXT_PUBLIC_APP_URL to a public URL to avoid localhost links in emails");
+    // }
 
     const verificationLink = uid
       ? `${appUrl}/api/auth/verify?uid=${encodeURIComponent(uid)}`
