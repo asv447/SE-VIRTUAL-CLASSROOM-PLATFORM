@@ -1,9 +1,11 @@
 // Verification success page - shown after user clicks email link and is verified
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function VerifySuccess() {
+export const dynamic = 'force-dynamic';
+
+function VerifySuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/homepage";
@@ -37,5 +39,13 @@ export default function VerifySuccess() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function VerifySuccess() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <VerifySuccessContent />
+    </Suspense>
   );
 }

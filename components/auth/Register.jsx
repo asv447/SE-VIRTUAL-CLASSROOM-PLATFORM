@@ -29,7 +29,7 @@ export default function Register({ onBackToHome }) {
     function handleOffline() {
       setIsOnline(false);
       setError(
-        "You are offline. Please connect to the internet and try again."
+        "No internet connection. Please connect to the internet and try again."
       );
     }
 
@@ -49,12 +49,12 @@ export default function Register({ onBackToHome }) {
     setMessage("");
 
     if (!email) {
-      setError("Please enter an email.");
+      setError("Please enter your email address.");
       return;
     }
 
     if (!isOnline) {
-      setError("You're offline. Connect to the internet.");
+      setError("No internet connection. Please connect to the internet and try again.");
       return;
     }
 
@@ -77,7 +77,7 @@ export default function Register({ onBackToHome }) {
       setEmailVerificationStep(true);
     } catch (err) {
       console.error("Email verification error:", err);
-      setError(err.message || "Failed to send verification email.");
+      setError(err.message || "Unable to send verification email. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -103,11 +103,11 @@ export default function Register({ onBackToHome }) {
         setEmailVerified(true);
         setEmailVerificationStep(false);
       } else {
-        setError("Email not verified yet. Please check your inbox.");
+        setError("Email not yet verified. Please check your inbox and click the verification link.");
       }
     } catch (err) {
       console.error("Check verification error:", err);
-      setError("Failed to check verification status.");
+      setError("Unable to verify email status. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -134,7 +134,7 @@ export default function Register({ onBackToHome }) {
       setTimeout(() => setResendDisabled(false), 30 * 1000);
     } catch (err) {
       console.error("resend verification error:", err);
-      setError("Failed to resend verification email. Try again later.");
+      setError("Unable to resend verification email. Please try again in a moment.");
       setResendDisabled(false);
     }
   };
@@ -159,18 +159,18 @@ export default function Register({ onBackToHome }) {
       return;
     }
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("Passwords do not match. Please try again.");
       return;
     }
     if (!isOnline) {
-      setError("You're offline. Connect to the internet to register.");
+      setError("No internet connection. Please connect to the internet and try again.");
       return;
     }
 
     // Validate instructor credentials
     if (role === "instructor") {
       if (instructorPassword !== "instructor") {
-        setError("Invalid instructor verification password.");
+        setError("Invalid instructor verification password. Please contact your administrator.");
         return;
       }
     }
@@ -225,7 +225,7 @@ export default function Register({ onBackToHome }) {
       } catch (apiErr) {
         console.error("[Register] Server API error:", apiErr);
         setError(
-          "Account created but registration incomplete. Please refresh and try logging in."
+          "Account created successfully, but setup is incomplete. Please refresh the page and sign in."
         );
       }
     } catch (e) {
@@ -240,38 +240,38 @@ export default function Register({ onBackToHome }) {
         msg.toLowerCase().includes("network")
       ) {
         setError(
-          "❌ Failed to contact server: you appear to be offline. Connect to the internet and try again."
+          "No internet connection detected. Please connect to the internet and try again."
         );
       } else {
         if (e.code === "auth/email-already-in-use") {
           setError(
-            "❌ This email is already registered. Please sign in instead or use a different email."
+            "This email is already registered. Please sign in or use a different email address."
           );
         } else if (e.code === "auth/invalid-email") {
-          setError("❌ Invalid email address. Please check and try again.");
+          setError("Please enter a valid email address.");
         } else if (e.code === "auth/weak-password") {
           setError(
-            "❌ Password is too weak. Choose a stronger password (at least 6 characters)."
+            "Password is too weak. Please use at least 6 characters with a mix of letters and numbers."
           );
         } else if (e.code === "auth/invalid-credential") {
           setError(
-            "❌ Invalid credentials. Please check your details and try again."
+            "Invalid credentials. Please verify your information and try again."
           );
         } else if (e.code === "auth/too-many-requests") {
           setError(
-            "❌ Too many registration attempts. Please try again later."
+            "Too many registration attempts. Please wait a few minutes before trying again."
           );
         } else if (e.code === "auth/operation-not-allowed") {
           setError(
-            "❌ Registration is currently disabled. Please contact support."
+            "Registration is currently unavailable. Please contact support for assistance."
           );
         } else if (e.code === "auth/network-request-failed") {
           setError(
-            "❌ Network error. Please check your internet connection and try again."
+            "Connection failed. Please check your internet connection and try again."
           );
         } else {
           setError(
-            "❌ Registration failed. Please try again or contact support."
+            "Registration failed. Please try again or contact support if the problem persists."
           );
         }
       }
@@ -285,8 +285,8 @@ export default function Register({ onBackToHome }) {
   // Step 1: Email verification
   if (emailVerificationStep) {
     return (
-      <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-        <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+      <div className="fixed inset-0 z-100 min-h-screen flex items-center justify-center bg-white/30 backdrop-blur-md">
+        <div className="relative bg-card border border-border p-10 rounded-2xl shadow-lg w-full max-w-md">
           <button
             type="button"
             onClick={() => onBackToHome?.()}
@@ -325,7 +325,7 @@ export default function Register({ onBackToHome }) {
               type="button"
               onClick={handleCheckEmailVerification}
               disabled={loading}
-              className="w-full py-3 px-4 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors disabled:bg-gray-400"
+              className="w-full py-3 px-4 rounded-xl bg-accent text-accent-foreground font-semibold hover:bg-accent/90 transition-colors disabled:bg-muted disabled:text-muted-foreground"
             >
               {loading ? "Checking..." : "✓ I have verified — Check Now"}
             </button>
@@ -336,8 +336,8 @@ export default function Register({ onBackToHome }) {
               disabled={resendDisabled}
               className={`w-full py-2 px-4 rounded-xl font-medium transition-colors ${
                 resendDisabled
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
               }`}
             >
               {resendDisabled
@@ -346,7 +346,7 @@ export default function Register({ onBackToHome }) {
             </button>
           </div>
 
-          <p className="mt-6 text-center text-xs text-gray-500 border-t pt-4">
+          <p className="mt-6 text-center text-xs text-muted-foreground border-t border-border pt-4">
             ℹ️ Complete this step before proceeding with registration.
           </p>
         </div>
@@ -357,32 +357,32 @@ export default function Register({ onBackToHome }) {
   // Step 2: Email verification done, but user hasn't entered password yet
   if (!emailVerified) {
     return (
-      <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-        <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+      <div className="fixed inset-0 z-100 min-h-screen flex items-center justify-center bg-white/30 backdrop-blur-md">
+        <div className="relative bg-card border border-border p-10 rounded-2xl shadow-lg w-full max-w-md">
           <button
             type="button"
             onClick={() => onBackToHome?.()}
-            className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Close registration dialog"
           >
             <X className="h-4 w-4" />
           </button>
-          <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
+          <h2 className="text-center text-3xl font-extrabold text-foreground">
             Create your account
           </h2>
 
           <form className="mt-6 space-y-6" onSubmit={handleEmailVerification}>
             {error && (
-              <div className="text-red-600 text-sm text-center">{error}</div>
+              <div className="text-destructive text-sm text-center p-3 bg-destructive/10 border border-destructive/20 rounded">{error}</div>
             )}
             {message && (
-              <div className="text-green-600 text-sm text-center">
+              <div className="text-accent-foreground text-sm text-center p-3 bg-accent/20 border border-accent/30 rounded">
                 {message}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-foreground">
                 Email
               </label>
               <input
@@ -390,14 +390,14 @@ export default function Register({ onBackToHome }) {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="mt-1 block w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer disabled:bg-gray-400"
+              className="w-full py-2 px-4 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:bg-primary/90 transition-colors cursor-pointer disabled:bg-muted disabled:text-muted-foreground"
             >
               {loading ? "Sending..." : "Verify Email"}
             </button>
@@ -406,7 +406,7 @@ export default function Register({ onBackToHome }) {
               <button
                 type="button"
                 onClick={() => setShowLogin(true)}
-                className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium"
+                className="text-primary hover:text-primary/80 cursor-pointer text-sm font-medium"
               >
                 Already have an account? Login
               </button>
@@ -414,7 +414,7 @@ export default function Register({ onBackToHome }) {
                 <button
                   type="button"
                   onClick={onBackToHome}
-                  className="text-gray-600 hover:text-gray-500 text-sm block cursor-pointer"
+                  className="text-muted-foreground hover:text-foreground text-sm block cursor-pointer"
                 >
                   Back to Home
                 </button>
@@ -428,42 +428,42 @@ export default function Register({ onBackToHome }) {
 
   // Step 3: Show password and role form after email is verified
   return (
-    <div className="min-h-screen flex items-center justify-center via-indigo-200 to-purple-200 animate-gradient">
-      <div className="relative bg-white/90 backdrop-blur-lg p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white/40">
+    <div className="fixed inset-0 z-100 min-h-screen flex items-center justify-center bg-white/30 backdrop-blur-md">
+      <div className="relative bg-card border border-border p-10 rounded-2xl shadow-lg w-full max-w-md">
         <button
           type="button"
           onClick={() => onBackToHome?.()}
-          className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Close registration dialog"
-        >
+          >
           <X className="h-4 w-4" />
         </button>
-        <h2 className="text-center text-3xl font-extrabold text-gray-800 drop-shadow-sm">
+        <h2 className="text-center text-3xl font-extrabold text-foreground">
           Complete Registration
         </h2>
 
         <form className="mt-6 space-y-6" onSubmit={handleRegister}>
           {error && (
-            <div className="text-red-600 text-sm text-center">{error}</div>
+            <div className="text-destructive text-sm text-center p-3 bg-destructive/10 border border-destructive/20 rounded">{error}</div>
           )}
           {message && (
-            <div className="text-green-600 text-sm text-center">{message}</div>
+            <div className="text-accent-foreground text-sm text-center p-3 bg-accent/20 border border-accent/30 rounded">{message}</div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-foreground">
               Email (Verified)
             </label>
             <input
               type="email"
               value={email}
               disabled
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-gray-100 cursor-not-allowed"
+              className="mt-1 block w-full px-3 py-2 border border-input rounded-lg shadow-sm bg-muted text-muted-foreground cursor-not-allowed"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-foreground">
               Password
             </label>
             <input
@@ -471,12 +471,12 @@ export default function Register({ onBackToHome }) {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              className="mt-1 block w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-foreground">
               Confirm Password
             </label>
             <input
@@ -484,18 +484,18 @@ export default function Register({ onBackToHome }) {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              className="mt-1 block w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-foreground">
               Role
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 cursor-pointer"
+              className="mt-1 block w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground cursor-pointer"
             >
               <option value="student">Student</option>
               <option value="instructor">Instructor</option>
@@ -504,7 +504,7 @@ export default function Register({ onBackToHome }) {
 
           {role === "instructor" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-foreground">
                 Instructor Verification Password
               </label>
               <input
@@ -512,7 +512,7 @@ export default function Register({ onBackToHome }) {
                 required={role === "instructor"}
                 value={instructorPassword}
                 onChange={(e) => setInstructorPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="mt-1 block w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground"
               />
             </div>
           )}
@@ -520,7 +520,7 @@ export default function Register({ onBackToHome }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer disabled:bg-gray-400"
+            className="w-full py-2 px-4 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:bg-primary/90 transition-colors cursor-pointer disabled:bg-muted disabled:text-muted-foreground"
           >
             {loading ? "Creating..." : "Sign up"}
           </button>
@@ -534,14 +534,14 @@ export default function Register({ onBackToHome }) {
                 setError("");
                 setMessage("");
               }}
-              className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium"
+              className="text-primary hover:text-primary/80 cursor-pointer text-sm font-medium"
             >
               Use Different Email
             </button>
             <button
               type="button"
               onClick={() => setShowLogin(true)}
-              className="text-blue-600 hover:text-blue-500 cursor-pointer text-sm font-medium block"
+              className="text-primary hover:text-primary/80 cursor-pointer text-sm font-medium block"
             >
               Already have an account? Login
             </button>
@@ -549,7 +549,7 @@ export default function Register({ onBackToHome }) {
               <button
                 type="button"
                 onClick={onBackToHome}
-                className="text-gray-600 hover:text-gray-500 text-sm block cursor-pointer"
+                className="text-muted-foreground hover:text-foreground text-sm block cursor-pointer"
               >
                 Back to Home
               </button>
@@ -557,24 +557,6 @@ export default function Register({ onBackToHome }) {
           </div>
         </form>
       </div>
-
-      <style jsx>{`
-        .animate-gradient {
-          background-size: 200% 200%;
-          animation: gradientShift 8s ease infinite;
-        }
-        @keyframes gradientShift {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-      `}</style>
     </div>
   );
 }

@@ -529,9 +529,11 @@ export default function AssignmentsPage() {
         <CardHeader>
           <div className="flex justify-between items-start">
             <CardTitle className="text-lg">{assignment.title}</CardTitle>
-            <Badge variant={isOverdueStatus ? "destructive" : "secondary"}>
-              {isOverdueStatus ? "Overdue" : "Active"}
-            </Badge>
+            {!submission && (
+              <Badge variant={isOverdueStatus ? "destructive" : "secondary"}>
+                {isOverdueStatus ? "Overdue" : "Active"}
+              </Badge>
+            )}
           </div>
           <CardDescription>{assignment.description}</CardDescription>
         </CardHeader>
@@ -542,7 +544,7 @@ export default function AssignmentsPage() {
               {getCourseName(assignment)}
             </div>
             <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
+              <Calendar className="h-4 w-4 text-primary" />
               Due: {safeFormatDate(assignment.deadline)}
             </div>
           </div>

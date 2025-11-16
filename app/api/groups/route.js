@@ -13,18 +13,32 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const courseId = searchParams.get("courseId");
 
-    if (!courseId || !ObjectId.isValid(courseId)) {
+    if (!courseId) {
       return NextResponse.json({ error: "Invalid courseId" }, { status: 400 });
     }
 
-    // TODO: Add security check - is the user allowed to see this?
-    // (e.g., check if requester UID is in the course's student or instructor list)
-
     const groupsCol = await getGroupsCollection();
-    const groups = await groupsCol
-      .find({ courseId: new ObjectId(courseId) })
-      .toArray();
+    
+    // --- [THIS IS THE FIX] ---
+    // This query is more robust. It checks for the courseId as both
+    // an ObjectId and a string, which is a common mismatch issue.
+    let courseObjectId = null;
+    try {
+      courseObjectId = new ObjectId(courseId);
+    } catch (e) {
+      // Not a valid ObjectId, will only check as string
+    }
 
+    const query = {
+      $or: [
+        { courseId: courseObjectId }, // Check as ObjectId
+        { courseId: courseId }        // Check as String
+      ]
+    };
+    
+    const groups = await groupsCol.find(query).toArray();
+    // --- [END FIX] ---
+    
     return NextResponse.json(groups, { status: 200 });
   } catch (err) {
     console.error("[GET /api/groups]", err.message);
@@ -63,9 +77,21 @@ export async function POST(request) {
     // --- End Security Check ---
 
     const groupsCol = await getGroupsCollection();
+    const trimmedName = name.trim();
+    const existingGroup = await groupsCol.findOne({
+      courseId: new ObjectId(courseId),
+      name: trimmedName, 
+    });
+
+    if (existingGroup) {
+      return NextResponse.json(
+        { error: "A group with this name already exists in this course." },
+        { status: 409 } // 409 Conflict is a good status code here
+      );
+    }
     const newGroup = {
       courseId: new ObjectId(courseId),
-      name,
+      name: trimmedName, // --- [MODIFIED] Use the trimmed name
       representative, // { userId, name }
       members, // [ { userId, name }, ... ]
       createdAt: new Date(),

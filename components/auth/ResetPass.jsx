@@ -14,7 +14,7 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
   const handleSendLink = async (e) => {
     e.preventDefault();
     if (!email) {
-      setMessage("Please enter your registered email.");
+      setMessage("Please enter your email address.");
       setStatus("error");
       return;
     }
@@ -23,10 +23,10 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
     setStatus("pending");
     try {
       await sendPasswordResetEmail(auth, email);
-      setMessage("Password reset email sent. Check your inbox.");
+      setMessage("Password reset link sent successfully. Please check your inbox.");
       setStatus("success");
     } catch (err) {
-      setMessage(err.message || "Unable to send reset email.");
+      setMessage(err.message || "Unable to send reset link. Please try again.");
       setStatus("error");
     } finally {
       setLoading(false);

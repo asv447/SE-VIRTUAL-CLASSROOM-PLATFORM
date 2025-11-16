@@ -11,3 +11,9 @@ FIREBASE_SERVICE_ACCOUNT_BASE64=your_base64_encoded_service_account
 
 # MongoDB Configuration
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database_name?retryWrites=true&w=majority
+
+# Google Drive API (for announcement materials)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REFRESH_TOKEN=your_google_refresh_token
+GOOGLE_DRIVE_FOLDER_ID=your_shared_drive_folder_id

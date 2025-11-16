@@ -108,3 +108,57 @@ export async function POST(request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const messageId = searchParams.get("messageId");
+    const userId = searchParams.get("userId");
+
+    if (!messageId || !userId) {
+      return NextResponse.json(
+        { error: "Missing messageId or userId" },
+        { status: 400 }
+      );
+    }
+
+    const chatsCollection = await getClassroomChatsCollection();
+
+    // Find the message to verify ownership
+    const message = await chatsCollection.findOne({
+      _id: new ObjectId(messageId),
+    });
+
+    if (!message) {
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    }
+
+    // Verify that the user is the author
+    if (message.authorId !== userId) {
+      return NextResponse.json(
+        { error: "Unauthorized: You can only delete your own messages" },
+        { status: 403 }
+      );
+    }
+
+    // Delete the message
+    const result = await chatsCollection.deleteOne({
+      _id: new ObjectId(messageId),
+    });
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json(
+        { error: "Failed to delete message" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { message: "Message deleted successfully" },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("Error deleting chat message:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

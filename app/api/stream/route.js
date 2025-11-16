@@ -7,8 +7,54 @@ import {
   getGroupsCollection,
 } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import {
+  uploadToGoogleDrive,
+  deleteFromGoogleDrive,
+} from "@/lib/google-drive";
 
 const MAX_POLL_OPTIONS = 6;
+
+const parseBoolean = (value, fallback = false) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off"].includes(normalized)) return false;
+  }
+  return fallback;
+};
+
+const safeJsonParse = (value, fallback = null) => {
+  if (!value) return fallback;
+  try {
+    if (typeof value === "string") {
+      return JSON.parse(value);
+    }
+    return value;
+  } catch (_) {
+    return fallback;
+  }
+};
+
+const sanitizeLink = (linkInput) => {
+  if (!linkInput) return null;
+  if (typeof linkInput === "string") {
+    return linkInput.trim()
+      ? { url: linkInput.trim(), text: "View Link" }
+      : null;
+  }
+  if (typeof linkInput === "object") {
+    const url = typeof linkInput.url === "string" ? linkInput.url.trim() : "";
+    const text = typeof linkInput.text === "string" ? linkInput.text.trim() : "";
+    if (url) {
+      return {
+        url,
+        text: text || "View Link",
+      };
+    }
+  }
+  return null;
+};
 
 export async function GET(request) {
   try {
@@ -80,6 +126,8 @@ export async function GET(request) {
             assignment: 1,
             comments: 1,
             poll: 1,
+            notesText: 1,
+            materials: 1,
             createdAt: 1,
             isPinned: 1,
             audience: 1,
@@ -129,10 +177,59 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    // [UPDATE] Get all the new fields from the request
+    const contentType = request.headers.get("content-type") || "";
+    let payload = null;
+    let materialFiles = [];
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const payloadRaw = formData.get("payload");
+
+      if (payloadRaw) {
+        payload = safeJsonParse(payloadRaw, null);
+      } else {
+        payload = {
+          classId: formData.get("classId"),
+          authorId: formData.get("authorId"),
+          authorName: formData.get("authorName") || "",
+          title: formData.get("title"),
+          content: formData.get("content") || "",
+          link: sanitizeLink({
+            url: formData.get("linkUrl"),
+            text: formData.get("linkText"),
+          }),
+          assignment: safeJsonParse(formData.get("assignment"), null),
+          poll: safeJsonParse(formData.get("poll"), null),
+          isImportant: parseBoolean(formData.get("isImportant")),
+          isUrgent: parseBoolean(formData.get("isUrgent")),
+          isPinned: parseBoolean(formData.get("isPinned")),
+          audience: safeJsonParse(formData.get("audience"), null) || {
+            type: formData.get("audienceType") || "class",
+            groupId: formData.get("audienceGroupId") || null,
+          },
+          notesText: formData.get("notesText") || "",
+        };
+      }
+
+      const multiFiles = formData.getAll("materials");
+      const singleFile = formData.get("material");
+      const files = Array.isArray(multiFiles) ? [...multiFiles] : [];
+      if (singleFile) files.push(singleFile);
+      materialFiles = files.filter(
+        (file) => file && typeof file === "object" && typeof file.arrayBuffer === "function" && file.size > 0
+      );
+    } else {
+      payload = await request.json();
+    }
+
+    if (!payload) {
+      return NextResponse.json({ error: "Missing request payload" }, { status: 400 });
+    }
+
     const {
       classId,
       authorId,
+      authorName = "",
       title,
       content,
       isImportant,
@@ -141,10 +238,11 @@ export async function POST(request) {
       assignment,
       poll,
       isPinned,
-      audience
-    } = await request.json();
+      audience,
+      notesText = "",
+      type = "announcement",
+    } = payload;
 
-    // [UPDATE] Validate title and content
     if (!classId || !authorId || !title || !content) {
       return NextResponse.json(
         { error: "Missing required fields: classId, authorId, title, content" },
@@ -182,27 +280,68 @@ export async function POST(request) {
       }
     }
 
-    // [UPDATE] Save all the new fields to the database
+    let materials = [];
+    if (materialFiles.length > 0) {
+      try {
+        materials = await Promise.all(
+          materialFiles.map(async (file) => {
+            const uploaded = await uploadToGoogleDrive(
+              file,
+              file.name || "class-material",
+              file.type || "application/octet-stream"
+            );
+            return {
+              ...uploaded,
+              uploadedAt: new Date(),
+            };
+          })
+        );
+      } catch (err) {
+        console.error("Failed to upload class material:", err);
+        return NextResponse.json(
+          { error: "Failed to upload material to Google Drive" },
+          { status: 500 }
+        );
+      }
+    }
+
+    const normalizedAudience =
+      audience && typeof audience === "object"
+        ? {
+            type: audience.type === "group" ? "group" : "class",
+            groupId: audience.type === "group" ? audience.groupId : null,
+          }
+        : { type: "class", groupId: null };
+
+    const sanitizedLink = sanitizeLink(link);
+    const fallbackLink =
+      !sanitizedLink && materials.length > 0
+        ? { url: materials[0].viewLink, text: materials[0].fileName || "Material" }
+        : null;
+
     const newPost = {
       classId,
       authorId,
+      author: authorName ? { name: authorName, id: authorId } : undefined,
       title,
       content,
-      isImportant: isImportant || false,
-      isUrgent: isUrgent || false,
-      link: link || null,
+      type,
+      isImportant: Boolean(isImportant),
+      isUrgent: Boolean(isUrgent),
+      link: sanitizedLink || fallbackLink,
       assignment: assignment || null,
       comments: [],
       poll: pollData,
       isPinned: Boolean(isPinned),
-      audience: audience || { type: "class", groupId: null },
+      audience: normalizedAudience,
+      notesText,
+      materials,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     const result = await streamsCollection.insertOne(newPost);
 
-    // ✅ Create notifications for all enrolled students (exclude author if student)
     try {
       if (classId) {
         const coursesCollection = await getCoursesCollection();
@@ -214,22 +353,18 @@ export async function POST(request) {
         } catch (_) {
           // classId might not be an ObjectId; skip fanout safely
         }
-        if (audience?.type === "group" && audience.groupId) {
-          // If it's a group post, only get group members
+        if (normalizedAudience?.type === "group" && normalizedAudience.groupId) {
           const groupsCol = await getGroupsCollection();
           const group = await groupsCol.findOne({
-            _id: new ObjectId(audience.groupId),
+            _id: new ObjectId(normalizedAudience.groupId),
           });
           notifRecipients = group?.members || [];
         } else {
-          // It's a class post, get all students
           notifRecipients = courseDoc?.students || [];
         }
 
-       
         if (notifRecipients.length > 0) {
           const notifDocs = notifRecipients
-
             .filter((s) => s?.userId && s.userId !== authorId)
             .map((s) => ({
               userId: s.userId,
@@ -243,7 +378,8 @@ export async function POST(request) {
                 postId: result.insertedId.toString(),
                 isImportant: !!isImportant,
                 isUrgent: !!isUrgent,
-                link: link || null,
+                link: (sanitizedLink || fallbackLink) ?? null,
+                hasMaterials: materials.length > 0,
               },
             }));
           if (notifDocs.length > 0) {
@@ -253,7 +389,6 @@ export async function POST(request) {
       }
     } catch (notifError) {
       console.error("Failed to create announcement notifications:", notifError);
-      // Do not fail request
     }
 
     return NextResponse.json(
@@ -490,6 +625,19 @@ export async function DELETE(request) {
 
     if (!result.acknowledged || result.deletedCount !== 1) {
       return NextResponse.json({ error: "Failed to delete post" }, { status: 500 });
+    }
+
+    if (Array.isArray(post.materials) && post.materials.length > 0) {
+      await Promise.all(
+        post.materials
+          .map((material) => material?.fileId)
+          .filter(Boolean)
+          .map((fileId) =>
+            deleteFromGoogleDrive(fileId).catch((err) =>
+              console.error(`Failed to delete Drive file ${fileId}:`, err)
+            )
+          )
+      );
     }
 
     return NextResponse.json({ message: "Post deleted" }, { status: 200 });

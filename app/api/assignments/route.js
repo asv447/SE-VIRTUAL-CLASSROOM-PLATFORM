@@ -6,6 +6,7 @@ import {
   getCoursesCollection,
   getGroupsCollection, // <-- Requires this
   getNotificationsCollection, // <-- Requires this
+  getStreamsCollection,
 } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 // Note: This file handles file uploads. For Vercel, you'd need a blob storage.
@@ -137,9 +138,20 @@ export async function POST(request) {
       }
     }
 
+    // Ensure we have collections available for write operations
+    const assignmentsCollection = await getAssignmentsCollection();
+
+    // Generate a new assignment id and normalize file info (no storage handled here)
+    const assignmentId = new ObjectId();
+    let fileUrl = null;
+    let fileData = null;
+    if (file && typeof file.name === "string") {
+      fileData = { name: file.name, size: file.size, type: file.type };
+    }
+
     // Build assignment object
     const newAssignment = {
-      _id: new ObjectId(assignmentId),
+      _id: assignmentId,
       classId: courseId,
       courseId: courseId,
       instructorId,

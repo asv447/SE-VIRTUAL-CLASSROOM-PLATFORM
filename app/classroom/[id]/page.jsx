@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, LogOut } from "lucide-react";
+import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -55,9 +55,30 @@ import {
 } from "@/components/ui/radio-group"; // <-- ADD THIS
 import Link from "next/link"; // <-- ADD THIS
 import { Users, UserPlus } from "lucide-react"; // <-- ADD THIS
+import ChatMessageList from "@/components/chat/ChatMessageList";
+import ChatMessageInput from "@/components/chat/ChatMessageInput";
+import { formatFileSize } from "@/lib/client-utils";
 // [DELETED] All socket.io imports are gone
 
 const MAX_POLL_OPTIONS = 6;
+const MATERIAL_ACCEPT =
+  ".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+const MATERIAL_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+]);
+const MATERIAL_EXTENSIONS = [".pdf", ".doc", ".docx", ".txt"];
+
+const isAllowedMaterialFile = (file) => {
+  if (!file) return false;
+  if (file.type && MATERIAL_MIME_TYPES.has(file.type)) {
+    return true;
+  }
+  const lowerName = (file.name || "").toLowerCase();
+  return MATERIAL_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+};
 
 const sortStreamPosts = (posts) => {
   if (!Array.isArray(posts)) {
@@ -89,40 +110,47 @@ const createInitialPostState = () => ({
   includePoll: false,
   pollQuestion: "",
   pollOptions: ["", ""],
-  audienceType: "class", // 'class' or 'group'
-  audienceGroupId: null, // The _id of the selected group
+  audienceType: "class",
+  audienceGroupId: null,
   allowMultiplePollSelections: false,
   isPinned: false,
+  materialFiles: [],
 });
 
-const CreateGroupDialog = ({open,
+const CreateGroupDialog = ({
+  open,
   onOpenChange,
   onSubmit,
   classroom,
   newGroupData,
-  setNewGroupData,}) => {
+  setNewGroupData,
+}) => {
   const students = classroom?.students || [];
 
   const handleMemberToggle = (checked, userId) => {
     setNewGroupData((prev) => {
       const newMemberIds = new Set(prev.memberIds);
+      let nextRepresentativeId = prev.representativeId;
       if (checked) {
         newMemberIds.add(userId);
       } else {
         newMemberIds.delete(userId);
-        // If unchecking the rep, clear the rep
-        if (prev.representativeId === userId) {
-          prev.representativeId = "";
+        if (nextRepresentativeId === userId) {
+          nextRepresentativeId = "";
         }
       }
-      return { ...prev, memberIds: newMemberIds };
+      return {
+        ...prev,
+        representativeId: nextRepresentativeId,
+        memberIds: newMemberIds,
+      };
     });
   };
 
   const handleRepChange = (userId) => {
     setNewGroupData((prev) => {
       const newMemberIds = new Set(prev.memberIds);
-      newMemberIds.add(userId); // Automatically add rep to members
+      newMemberIds.add(userId);
       return {
         ...prev,
         representativeId: userId,
@@ -132,10 +160,7 @@ const CreateGroupDialog = ({open,
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Create New Group</DialogTitle>
@@ -177,8 +202,7 @@ const CreateGroupDialog = ({open,
             <Card className="max-h-[250px] overflow-y-auto p-4">
               <div className="space-y-3">
                 {students.map((student) => {
-                  const isRep =
-                    student.userId === newGroupData.representativeId;
+                  const isRep = student.userId === newGroupData.representativeId;
                   return (
                     <div
                       key={student.userId}
@@ -186,10 +210,8 @@ const CreateGroupDialog = ({open,
                     >
                       <Checkbox
                         id={`member-${student.userId}`}
-                        checked={
-                          newGroupData.memberIds.has(student.userId) || isRep
-                        }
-                        disabled={isRep} // Rep is always checked
+                        checked={newGroupData.memberIds.has(student.userId) || isRep}
+                        disabled={isRep}
                         onCheckedChange={(checked) =>
                           handleMemberToggle(checked, student.userId)
                         }
@@ -200,9 +222,7 @@ const CreateGroupDialog = ({open,
                       >
                         {student.name}{" "}
                         {isRep && (
-                          <span className="text-xs text-yellow-600">
-                            (Rep)
-                          </span>
+                          <span className="text-xs text-amber-600 dark:text-amber-400">(Rep)</span>
                         )}
                       </Label>
                     </div>
@@ -221,19 +241,19 @@ const CreateGroupDialog = ({open,
       </DialogContent>
     </Dialog>
   );
-}
+};
+
 export default function ClassroomPage() {
-  const { id } = useParams(); // This is the Course ID
+  const { id } = useParams();
   const [classroom, setClassroom] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("stream");
 
-  // User state
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("Student");
   const [isInstructor, setIsInstructor] = useState(false);
-  //group state
+
   const [groups, setGroups] = useState([]);
   const [isGroupsLoading, setIsGroupsLoading] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
@@ -242,36 +262,73 @@ export default function ClassroomPage() {
     representativeId: "",
     memberIds: new Set(),
   });
-  // Stream state
+
   const [streamPosts, setStreamPosts] = useState([]);
+  const [announcementSearch, setAnnouncementSearch] = useState("");
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [newPostData, setNewPostData] = useState(createInitialPostState);
+  const [newPostData, setNewPostData] = useState(() => createInitialPostState());
   const [isEditPostOpen, setIsEditPostOpen] = useState(false);
   const [editingPostId, setEditingPostId] = useState(null);
-  const [editPostData, setEditPostData] = useState(createInitialPostState);
+  const [editPostData, setEditPostData] = useState(() => createInitialPostState());
   const [editingPollOptionIds, setEditingPollOptionIds] = useState([]);
 
-  // [NEW] Chat state (back to simple version)
   const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(true);
   const [pollSelections, setPollSelections] = useState({});
   const [pollSubmitting, setPollSubmitting] = useState({});
-  const messagesEndRef = useRef(null); // For auto-scrolling chat
+  const messagesEndRef = useRef(null);
 
   const [assignments, setAssignments] = useState([]);
   const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
-  // Inline deadline edit state (per-assignment)
-  const [editingDeadline, setEditingDeadline] = useState({}); // { [assignmentId]: true|false }
-  const [deadlineInputs, setDeadlineInputs] = useState({});   // { [assignmentId]: 'YYYY-MM-DDTHH:mm' }
-  const DynamicWhiteboard = dynamic(() => import("@/components/whiteboard/WhiteboardViewer"), {
-    ssr: false,
-  });
-  const wbInputRef = useRef(null);
+  const [editingDeadline, setEditingDeadline] = useState({});
+  const [deadlineInputs, setDeadlineInputs] = useState({});
 
-  // Whiteboard state (per-course)
-  const [wbSelectedFile, setWbSelectedFile] = useState(null); // local PDF File
-  const [wbCurrentFile, setWbCurrentFile] = useState(null);   // { fileUrl, fileName, _id }
+  const DynamicWhiteboard = dynamic(
+    () => import("@/components/whiteboard/WhiteboardViewer"),
+    { ssr: false }
+  );
+  const wbInputRef = useRef(null);
+  const materialInputRef = useRef(null);
+
+  const [wbSelectedFile, setWbSelectedFile] = useState(null);
+  const [wbCurrentFile, setWbCurrentFile] = useState(null);
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+
+  const isSearchingAnnouncements = announcementSearch.trim().length > 0;
+  const visibleStreamPosts = useMemo(() => {
+    const term = announcementSearch.trim().toLowerCase();
+    if (!term) {
+      return streamPosts;
+    }
+
+    return streamPosts.filter((post) => {
+      const postType = post?.type || (post?.assignmentRef ? "assignment" : "announcement");
+      if (postType !== "announcement") {
+        return false;
+      }
+
+      const values = [
+        post?.title,
+        post?.content,
+        post?.author?.name,
+        post?.notesText,
+        post?.link?.text,
+        post?.link?.url,
+      ];
+
+      if (Array.isArray(post?.materials)) {
+        post.materials.forEach((material) => {
+          values.push(material?.fileName);
+        });
+      }
+
+      return values.some(
+        (value) => typeof value === "string" && value.toLowerCase().includes(term)
+      );
+    });
+  }, [announcementSearch, streamPosts]);
+  const hasStreamPosts = streamPosts.length > 0;
 
   // --- Data Fetching ---
 
@@ -555,6 +612,70 @@ export default function ClassroomPage() {
     }
   };
 
+  const handleMaterialFileChange = (event) => {
+    const selectedFiles = Array.from(event?.target?.files || []);
+    if (!selectedFiles.length) return;
+
+    const validFiles = [];
+    let rejectedCount = 0;
+
+    selectedFiles.forEach((file) => {
+      if (isAllowedMaterialFile(file)) {
+        validFiles.push(file);
+      } else {
+        rejectedCount += 1;
+      }
+    });
+
+    if (rejectedCount > 0) {
+      toast.error("Only PDF, DOC, DOCX, or TXT files are supported.");
+    }
+
+    if (validFiles.length === 0) {
+      if (event?.target) event.target.value = "";
+      return;
+    }
+
+    setNewPostData((prev) => {
+      const existingKeys = new Set(
+        prev.materialFiles.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+      );
+      const deduped = validFiles.filter((file) => {
+        const key = `${file.name}-${file.size}-${file.lastModified}`;
+        if (existingKeys.has(key)) {
+          return false;
+        }
+        existingKeys.add(key);
+        return true;
+      });
+      if (!deduped.length) {
+        toast.info("Those files are already attached.");
+        return prev;
+      }
+      return {
+        ...prev,
+        materialFiles: [...prev.materialFiles, ...deduped],
+      };
+    });
+
+    if (event?.target) event.target.value = "";
+  };
+
+  const removeMaterialFile = (index) => {
+    setNewPostData((prev) => {
+      const nextFiles = [...prev.materialFiles];
+      nextFiles.splice(index, 1);
+      return { ...prev, materialFiles: nextFiles };
+    });
+  };
+
+  const clearAllMaterialFiles = () => {
+    setNewPostData((prev) => ({ ...prev, materialFiles: [] }));
+    if (materialInputRef.current) {
+      materialInputRef.current.value = "";
+    }
+  };
+
   const handleCopy = () => {
     if (classroom?.courseCode) {
       navigator.clipboard.writeText(classroom.courseCode);
@@ -670,6 +791,35 @@ export default function ClassroomPage() {
     const linkUrl = (newPostData.linkUrl || "").trim();
     const linkText = (newPostData.linkText || "").trim();
     const loadingToastId = toast.loading("Creating post...");
+    const audiencePayload = {
+      type: newPostData.audienceType,
+      groupId:
+        newPostData.audienceType === "group"
+          ? newPostData.audienceGroupId
+          : null,
+    };
+    const payload = {
+      classId: id,
+      authorId: user.uid,
+      authorName: username,
+      title: newPostData.title,
+      content: newPostData.content,
+      isImportant: newPostData.isImportant,
+      isUrgent: newPostData.isUrgent,
+      link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
+      isPinned: newPostData.isPinned,
+      poll: pollPayload,
+      audience: audiencePayload,
+      notesText: "",
+      type: "announcement",
+    };
+    const formData = new FormData();
+    formData.append("payload", JSON.stringify(payload));
+    if (Array.isArray(newPostData.materialFiles)) {
+      newPostData.materialFiles.forEach((file) => {
+        formData.append("materials", file);
+      });
+    }
     const optimisticPost = {
       id: `temp-${Date.now()}`,
       classId: id,
@@ -682,6 +832,14 @@ export default function ClassroomPage() {
       author: { name: username, id: user.uid },
       comments: [],
       isPinned: newPostData.isPinned,
+      audience: audiencePayload,
+      materials: Array.isArray(newPostData.materialFiles)
+        ? newPostData.materialFiles.map((file) => ({
+            fileName: file.name,
+            fileSize: file.size,
+          }))
+        : [],
+      notesText: "",
       poll: pollPayload
         ? {
             question: pollPayload.question,
@@ -694,13 +852,6 @@ export default function ClassroomPage() {
           }
         : null,
     };
-    const audiencePayload = {
-      type: newPostData.audienceType,
-      groupId:
-        newPostData.audienceType === "group"
-          ? newPostData.audienceGroupId
-          : null,
-    };
 
     if (audiencePayload.type === "group" && !audiencePayload.groupId) {
       toast.error("Please select a group to post to.");
@@ -709,18 +860,13 @@ export default function ClassroomPage() {
     setStreamPosts((prev) => sortStreamPosts([optimisticPost, ...prev]));
     setIsCreatePostOpen(false);
     setNewPostData(createInitialPostState());
+    if (materialInputRef.current) {
+      materialInputRef.current.value = "";
+    }
     try {
       const response = await fetch("/api/stream", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          classId: id, authorId: user.uid, title: newPostData.title,
-          content: newPostData.content, isImportant: newPostData.isImportant,
-          isUrgent: newPostData.isUrgent,
-          link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
-          isPinned: newPostData.isPinned,
-          poll: pollPayload,
-          audience: audiencePayload,
-        }),
+        method: "POST",
+        body: formData,
       });
       if (!response.ok) throw new Error("Failed to save post");
       toast.success("Post created!", { id: loadingToastId });
@@ -951,7 +1097,7 @@ export default function ClassroomPage() {
       text: text,
       createdAt: new Date().toISOString(),
       author: {
-        name: user.username,
+        name: username,
         id: user.uid,
       },
     };
@@ -966,7 +1112,7 @@ export default function ClassroomPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId: id,
-          author: { id: user.uid, name: user.username },
+          author: { id: user.uid, name: username },
           text: text,
         }),
       });
@@ -981,6 +1127,39 @@ export default function ClassroomPage() {
       toast.error(err.message);
       // Rollback
       setChatMessages(chatMessages.filter(m => m.id !== optimisticMessage.id));
+    }
+  };
+
+  // Handler for deleting a chat message
+  const handleDeleteChatMessage = async (messageId) => {
+    if (!messageId || !user) return;
+
+    const initialMessages = [...chatMessages];
+    const loadingId = toast.loading("Deleting message...");
+
+    // Optimistic update
+    setChatMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+
+    try {
+      const res = await fetch(
+        `/api/chat?messageId=${encodeURIComponent(messageId)}&userId=${encodeURIComponent(user.uid)}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to delete message");
+      }
+
+      toast.success("Message deleted", { id: loadingId });
+      fetchChatMessages();
+    } catch (error) {
+      console.error("Error deleting chat message:", error);
+      toast.error(error.message || "Failed to delete message", { id: loadingId });
+      // Rollback
+      setChatMessages(initialMessages);
     }
   };
 
@@ -1090,32 +1269,32 @@ export default function ClassroomPage() {
   }
 
   if (!classroom) {
-    return <p className="text-center text-gray-500 mt-10">Loading classroom...</p>;
+    return <p className="text-center text-foreground mt-10">Loading classroom...</p>;
   }
 
   return (
-    <div className="min-h-screen bg-white text-black px-6 py-10 flex justify-center">
+    <div className="min-h-screen px-6 py-10 flex justify-center bg-background text-foreground">
       <div className="w-full max-w-5xl space-y-8">
         {/* Header - description box (left-aligned) */}
-        <Card className="border border-gray-300 shadow-sm">
+        <Card className="border border-border shadow-sm bg-card">
           <CardHeader className="text-left space-y-3">
             <CardTitle className="text-3xl font-semibold">{classroom.title}</CardTitle>
-            <p className="text-gray-700 max-w-2xl">{classroom.description}</p>
-            <div className="text-sm text-gray-700 space-y-1">
+            <p className="text-muted-foreground max-w-2xl">{classroom.description}</p>
+            <div className="text-sm text-muted-foreground space-y-1">
               <p>
                 <span className="font-semibold">Instructor:</span> {classroom.instructorName}
               </p>
               <div className="flex items-center gap-3">
                 <p>
                   <span className="font-semibold">Class Code:</span>{" "}
-                  <span className="bg-gray-100 border px-3 py-1 rounded-md text-black">
+                  <span className="bg-muted/30 border px-3 py-1 rounded-md text-foreground">
                     {classroom.courseCode}
                   </span>
                 </p>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-gray-400 text-gray-800 hover:bg-gray-200"
+                  className="border-none text-foreground hover:bg-muted/60 hover:text-foreground"
                   onClick={handleCopy}
                 >
                   <Copy className="w-4 h-4 mr-1" /> {copied ? "Copied!" : "Copy"}
@@ -1126,14 +1305,14 @@ export default function ClassroomPage() {
         </Card>
 
         {/* Tab Buttons */}
-        <div className="flex justify-center gap-4 border-b border-gray-300 pb-2">
+        <div className="flex justify-center gap-4 border-b border-border pb-2">
           {["stream", "assignments", "chat", "people"].map((tab) => (
             <Button
               key={tab}
               variant={activeTab === tab ? "default" : "outline"}
               className={`capitalize ${activeTab === tab
-                ? "bg-black text-white hover:bg-gray-800"
-                : "text-gray-800 border-gray-400 hover:bg-gray-200"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "text-foreground border-none hover:bg-muted/60 hover:text-foreground"
                 }`}
               onClick={() => setActiveTab(tab)}
             >
@@ -1148,7 +1327,7 @@ export default function ClassroomPage() {
           {activeTab === "stream" && (
             <div className="space-y-4">
               {/* Whiteboard quick editor for this course */}
-              <Card className="border border-gray-300 shadow-sm">
+              <Card className="border border-border shadow-sm bg-card">
                 <CardHeader>
                   <CardTitle className="text-xl">Whiteboard</CardTitle>
                   <CardDescription>Edit a PDF and post as an announcement</CardDescription>
@@ -1165,7 +1344,7 @@ export default function ClassroomPage() {
                     />
                     <Button
                       variant="outline"
-                      className="cursor-pointer"
+                      className="cursor-pointer border-none text-foreground hover:bg-accent hover:text-white"
                       onClick={() => wbInputRef.current && wbInputRef.current.click()}
                     >
                       Choose PDF
@@ -1174,7 +1353,7 @@ export default function ClassroomPage() {
                       Open in Whiteboard
                     </Button>
                     {wbSelectedFile && (
-                      <span className="text-sm text-gray-600 truncate">{wbSelectedFile.name}</span>
+                      <span className="text-sm text-muted-foreground truncate">{wbSelectedFile.name}</span>
                     )}
                   </div>
                 </CardContent>
@@ -1185,7 +1364,7 @@ export default function ClassroomPage() {
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full h-16 border-gray-300 text-gray-600 hover:bg-gray-100"
+                      className="w-full h-16 border-none text-foreground hover:bg-muted/60 hover:text-foreground"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Create a new post...
@@ -1200,7 +1379,9 @@ export default function ClassroomPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="post-title">Title</Label>
+                        <Label htmlFor="post-title">
+                          Title <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="post-title"
                           placeholder="e.g., Welcome to Class!"
@@ -1211,7 +1392,9 @@ export default function ClassroomPage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="post-content">Content</Label>
+                        <Label htmlFor="post-content">
+                          Content <span className="text-red-500">*</span>
+                        </Label>
                         <Textarea
                           id="post-content"
                           placeholder="What's on your mind?"
@@ -1222,7 +1405,7 @@ export default function ClassroomPage() {
                           }
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="grid gap-2">
                           <Label htmlFor="post-link-url">Link URL (Optional)</Label>
                           <Input
@@ -1246,61 +1429,127 @@ export default function ClassroomPage() {
                           />
                         </div>
                       </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="post-material">Attach materials (PDF, DOC, DOCX, TXT)</Label>
+                        <input
+                          id="post-material"
+                          ref={materialInputRef}
+                          type="file"
+                          accept={MATERIAL_ACCEPT}
+                          multiple
+                          className="hidden"
+                          onChange={handleMaterialFileChange}
+                        />
+                        <div className="rounded-md border border-dashed border-border p-3">
+                          <div className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => materialInputRef.current?.click()}
+                                className="w-full sm:w-auto border-none bg-primary/5 text-foreground font-semibold hover:bg-primary/15"
+                              >
+                                Choose Files
+                              </Button>
+                              {newPostData.materialFiles.length > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="self-start p-0 text-red-600"
+                                  onClick={clearAllMaterialFiles}
+                                >
+                                  Remove all
+                                </Button>
+                              )}
+                            </div>
+                            {newPostData.materialFiles.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">
+                                Optional. You can attach multiple files; they will be stored securely in the course Drive.
+                              </p>
+                            ) : (
+                              <ul className="space-y-2 text-sm">
+                                {newPostData.materialFiles.map((file, idx) => (
+                                  <li
+                                    key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
+                                    className="flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                                  >
+                                    <div className="flex-1">
+                                      <p className="font-medium text-card-foreground truncate">
+                                        {file.name}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatFileSize(file.size)}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="p-0 text-red-600"
+                                      onClick={() => removeMaterialFile(idx)}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                       <div className="grid gap-2 border-t pt-4">
-                    <Label>Audience</Label>
-                    <RadioGroup
-                      value={newPostData.audienceType}
-                      onValueChange={(value) =>
-                        setNewPostData({
-                          ...newPostData,
-                          audienceType: value,
-                          audienceGroupId: null, // Reset group on change
-                        })
-                      }
-                      className="flex gap-4"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="class" id="r-class" />
-                        <Label htmlFor="r-class">Whole Class</Label>
+                        <Label>Audience</Label>
+                        <RadioGroup
+                          value={newPostData.audienceType}
+                          onValueChange={(value) =>
+                            setNewPostData({
+                              ...newPostData,
+                              audienceType: value,
+                              audienceGroupId: null,
+                            })
+                          }
+                          className="flex flex-wrap gap-4"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="class" id="r-class" />
+                            <Label htmlFor="r-class">Whole Class</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="group" id="r-group" />
+                            <Label htmlFor="r-group">Specific Group</Label>
+                          </div>
+                        </RadioGroup>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="group" id="r-group" />
-                        <Label htmlFor="r-group">Specific Group</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-
-                  {newPostData.audienceType === "group" && (
-                    <div className="grid gap-2">
-                      <Label htmlFor="group-select">Select Group</Label>
-                      <Select
-                        value={newPostData.audienceGroupId}
-                        onValueChange={(value) =>
-                          setNewPostData({
-                            ...newPostData,
-                            audienceGroupId: value,
-                          })
-                        }
-                      >
-                        <SelectTrigger id="group-select">
-                          <SelectValue placeholder="Select a group..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {groups.length === 0 ? (
-                            <SelectItem disabled>
-                              No groups found.
-                            </SelectItem>
-                          ) : (
-                            groups.map((group) => (
-                              <SelectItem key={group._id} value={group._id}>
-                                {group.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+                      {newPostData.audienceType === "group" && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="group-select">Select Group</Label>
+                          <Select
+                            value={newPostData.audienceGroupId}
+                            onValueChange={(value) =>
+                              setNewPostData({
+                                ...newPostData,
+                                audienceGroupId: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger id="group-select">
+                              <SelectValue placeholder="Select a group..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {groups.length === 0 ? (
+                                <SelectItem disabled>No groups found.</SelectItem>
+                              ) : (
+                                groups.map((group) => (
+                                  <SelectItem key={group._id} value={group._id}>
+                                    {group.name}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div className="flex flex-wrap items-center gap-4 pt-2">
                         <div className="flex items-center space-x-2">
                           <Checkbox
@@ -1333,10 +1582,14 @@ export default function ClassroomPage() {
                           <Label htmlFor="post-pinned">Pin to top</Label>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                      <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
                         <div>
-                          <Label htmlFor="include-poll" className="font-medium">Include poll</Label>
-                          <p className="text-xs text-gray-500">Collect responses alongside your announcement.</p>
+                          <Label htmlFor="include-poll" className="font-medium">
+                            Include poll
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Collect responses alongside your announcement.
+                          </p>
                         </div>
                         <Switch
                           id="include-poll"
@@ -1356,9 +1609,8 @@ export default function ClassroomPage() {
                           }
                         />
                       </div>
-
                       {newPostData.includePoll && (
-                        <div className="space-y-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
                           <div className="grid gap-2">
                             <Label htmlFor="poll-question">Poll question</Label>
                             <Input
@@ -1373,7 +1625,6 @@ export default function ClassroomPage() {
                               }
                             />
                           </div>
-
                           <div className="space-y-2">
                             <Label>Options</Label>
                             {newPostData.pollOptions.map((option, index) => (
@@ -1407,15 +1658,15 @@ export default function ClassroomPage() {
                               size="sm"
                               onClick={addPollOption}
                               disabled={newPostData.pollOptions.length >= MAX_POLL_OPTIONS}
+                              className="border-none bg-primary/5 text-foreground font-semibold"
                             >
                               Add option
                             </Button>
                           </div>
-
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-gray-500">Give students the option to select more than one response.</p>
+                              <p className="text-xs text-muted-foreground">Give students the option to select more than one response.</p>
                             </div>
                             <Switch
                               id="poll-allow-multiple"
@@ -1433,13 +1684,45 @@ export default function ClassroomPage() {
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline" className="border-none bg-card text-foreground font-semibold hover:bg-muted">Cancel</Button>
                       </DialogClose>
-                      <Button onClick={handleCreatePost}>Post</Button>
+                      <Button onClick={handleCreatePost} className="bg-primary text-primary-foreground font-semibold shadow-lg">Post</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
               )}
+
+              <div className="rounded-md border border-border bg-card p-4 shadow-sm">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex w-full items-center gap-2 sm:max-w-sm">
+                    <div className="relative flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+                      <Input
+                        value={announcementSearch}
+                        onChange={(e) => setAnnouncementSearch(e.target.value)}
+                        placeholder="Search announcements..."
+                        className="pl-9"
+                      />
+                    </div>
+                    {announcementSearch && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAnnouncementSearch("")}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  {isSearchingAnnouncements && (
+                    <span className="text-xs text-muted-foreground">
+                      {visibleStreamPosts.length} match
+                      {visibleStreamPosts.length === 1 ? "" : "es"}
+                    </span>
+                  )}
+                </div>
+              </div>
 
               {isInstructor && (
                 <Dialog open={isEditPostOpen} onOpenChange={handleEditDialogChange}>
@@ -1452,7 +1735,9 @@ export default function ClassroomPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="edit-post-title">Title</Label>
+                        <Label htmlFor="edit-post-title">
+                          Title <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="edit-post-title"
                           placeholder="e.g., Updated schedule"
@@ -1463,7 +1748,9 @@ export default function ClassroomPage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="edit-post-content">Content</Label>
+                        <Label htmlFor="edit-post-content">
+                          Content <span className="text-red-500">*</span>
+                        </Label>
                         <Textarea
                           id="edit-post-content"
                           placeholder="Share your updates..."
@@ -1530,10 +1817,10 @@ export default function ClassroomPage() {
                           <Label htmlFor="edit-post-pinned">Pin to top</Label>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                      <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
                         <div>
                           <Label htmlFor="edit-include-poll" className="font-medium">Include poll</Label>
-                          <p className="text-xs text-gray-500">Edit or remove the poll attached to this announcement.</p>
+                          <p className="text-xs text-muted-foreground">Edit or remove the poll attached to this announcement.</p>
                         </div>
                         <Switch
                           id="edit-include-poll"
@@ -1572,7 +1859,7 @@ export default function ClassroomPage() {
                       </div>
 
                       {editPostData.includePoll && (
-                        <div className="space-y-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
                           <div className="grid gap-2">
                             <Label htmlFor="edit-poll-question">Poll question</Label>
                             <Input
@@ -1629,7 +1916,7 @@ export default function ClassroomPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="edit-poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-gray-500">Let students pick more than one answer.</p>
+                              <p className="text-xs text-muted-foreground">Let students pick more than one answer.</p>
                             </div>
                             <Switch
                               id="edit-poll-allow-multiple"
@@ -1656,34 +1943,38 @@ export default function ClassroomPage() {
               )}
 
               {/* Stream Posts List */}
-              {streamPosts.length === 0 ? (
-                <Card className="border border-gray-300 p-6 text-center text-gray-600">
+              {!hasStreamPosts ? (
+                <Card className="border border-border p-6 text-center text-muted-foreground">
                   No posts yet.
+                </Card>
+              ) : visibleStreamPosts.length === 0 ? (
+                <Card className="border border-border bg-card p-6 text-center text-muted-foreground">
+                  No announcements match your search.
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {streamPosts.map((post, index) => {
+                  {visibleStreamPosts.map((post, index) => {
                     const rawId = post._id ?? post.id;
                     const pid = typeof rawId === "string" ? rawId : rawId?.toString?.();
                     const createdAt = post.createdAt ? new Date(post.createdAt).toLocaleString() : "";
                     return (
                       <div
                         key={pid || `post-${index}`}
-                        className="border border-gray-200 rounded-md p-4 hover:shadow-sm transition"
+                        className="border border-border rounded-md p-4 hover:shadow-sm transition bg-card"
                       >
                         <div className="mb-2 flex items-start justify-between gap-3">
                           <div>
-                            <span className="block font-semibold text-gray-800">
+                            <span className="block font-semibold text-foreground">
                               {post.author?.name || "Unknown"}
                             </span>
-                            <span className="text-sm text-gray-500">{createdAt}</span>
+                            <span className="text-sm text-muted-foreground">{createdAt}</span>
                           </div>
                           {isInstructor && pid && (
                             <div className="flex items-center gap-1">
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                className="h-8 w-8 text-foreground hover:text-primary hover:bg-primary/10"
                                 aria-label="Edit announcement"
                                 onClick={() => handleOpenEditPost(post)}
                               >
@@ -1694,7 +1985,7 @@ export default function ClassroomPage() {
                                   <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                    className="h-8 w-8 text-foreground hover:text-destructive hover:bg-destructive/10"
                                     aria-label="Delete announcement"
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -1711,7 +2002,7 @@ export default function ClassroomPage() {
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleDeletePost(pid)}
-                                      className="bg-red-600 text-white hover:bg-red-700"
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                     >
                                       Delete
                                     </AlertDialogAction>
@@ -1726,35 +2017,35 @@ export default function ClassroomPage() {
                         <div className="flex items-center gap-2 mb-2">
                           <h3 className="text-lg font-semibold">{post.title}</h3>
                           {isInstructor && post.audience?.type === "group" && (
-                        <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium flex items-center">
+                        <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-medium flex items-center">
                           <Users className="w-3 h-3 inline-block mr-1" />
                           {/* Find the group name from the state */}
                           {groups.find((g) => g._id === post.audience.groupId)?.name || "Group Post"}
                         </span>
                       )}
                           {post.isPinned && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-900 dark:text-amber-100 text-xs font-medium">
                               PINNED
                             </span>
                           )}
                           {(post.type === "assignment" || post.assignmentRef) && (
-                            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-900 dark:text-purple-100 text-xs font-medium">
                               ASSIGNMENT
                             </span>
                           )}
                           {post.isImportant && (
-                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-900 dark:text-blue-100 text-xs font-medium">
                               IMPORTANT
                             </span>
                           )}
                           {post.isUrgent && (
-                            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-medium">
+                            <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-900 dark:text-red-100 text-xs font-medium">
                               URGENT
                             </span>
                           )}
                         </div>
 
-                        <p className="text-gray-700 mb-3 text-left">{post.content}</p>
+                        <p className="text-foreground mb-3 text-left">{post.content}</p>
 
                         {/* Post Link (e.g., annotated PDF) */}
                         {post.link?.url && (
@@ -1763,7 +2054,7 @@ export default function ClassroomPage() {
                               href={post.link.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                             >
                               <LinkIcon className="w-3 h-3" />
                               {post.link.text || 'Annotated Material'}
@@ -1773,17 +2064,76 @@ export default function ClassroomPage() {
 
                         {/* Notes (from whiteboard) shown separately */}
                         {post.notesText && post.notesText.trim() !== '' && (
-                          <div className="mb-3 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-left">
-                            <div className="text-xs font-semibold text-yellow-800 mb-1">Notes</div>
-                            <pre className="whitespace-pre-wrap break-words text-sm text-yellow-900">{post.notesText}</pre>
+                          <div className="mb-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-left">
+                            <div className="text-xs font-semibold text-amber-900 dark:text-amber-100 mb-1">Notes</div>
+                            <pre className="whitespace-pre-wrap wrap-break-word text-sm text-amber-900 dark:text-amber-50">{post.notesText}</pre>
+                          </div>
+                        )}
+
+                        {Array.isArray(post.materials) && post.materials.length > 0 && (
+                          <div className="mb-3 rounded-md border border-border bg-muted/30 p-3 text-left">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Materials
+                            </div>
+                            <div className="mt-2 space-y-3">
+                              {post.materials.map((material, idx) => (
+                                <div
+                                  key={`${pid || idx}-material-${material?.fileId || idx}`}
+                                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                  <div>
+                                    <p className="font-medium text-foreground">
+                                      {material?.fileName || "Attachment"}
+                                    </p>
+                                    {material?.fileSize ? (
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatFileSize(material.fileSize)}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {material?.viewLink && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        asChild
+                                      >
+                                        <a
+                                          href={material.viewLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Open
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {material?.downloadLink && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        asChild
+                                      >
+                                        <a
+                                          href={material.downloadLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Download
+                                        </a>
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
                         {post.poll && post.poll.options && post.poll.options.length > 0 && (
-                          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+                          <div className="mb-4 rounded-md border border-border bg-muted/30 p-4">
                             <div className="mb-3">
-                              <p className="font-semibold text-gray-800">{post.poll.question}</p>
-                              <p className="text-xs text-gray-500">
+                              <p className="font-semibold text-foreground">{post.poll.question}</p>
+                              <p className="text-xs text-muted-foreground">
                                 {post.poll.allowMultiple
                                   ? "Select all options that apply."
                                   : "Select one option."}
@@ -1794,7 +2144,7 @@ export default function ClassroomPage() {
                               const pidString = pid;
                               if (!pidString) {
                                 return (
-                                  <div className="rounded-md border border-dashed border-gray-300 bg-white px-3 py-2 text-sm text-gray-500">
+                                  <div className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-sm text-muted-foreground">
                                     Poll responses will be available once this post finishes syncing.
                                   </div>
                                 );
@@ -1832,11 +2182,11 @@ export default function ClassroomPage() {
                                     return (
                                       <div
                                         key={option.id}
-                                        className={`rounded-md border bg-white px-3 py-2 transition ${
-                                          isSelected ? "border-black shadow-sm" : "border-gray-200"
+                                        className={`rounded-md border bg-card px-3 py-2 transition ${
+                                          isSelected ? "border-primary shadow-sm" : "border-border"
                                         }`}
                                       >
-                                        <label className="flex items-center gap-3 text-sm text-gray-800">
+                                        <label className="flex items-center gap-3 text-sm text-foreground">
                                           <input
                                             type={allowMultipleSelections ? "checkbox" : "radio"}
                                             name={`poll-${pidString}`}
@@ -1848,7 +2198,7 @@ export default function ClassroomPage() {
                                         </label>
                                         <div className="mt-2">
                                           <Progress value={percentage} />
-                                          <div className="mt-1 flex justify-between text-xs text-gray-500">
+                                          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                                             <span>{optionVotes} vote{optionVotes === 1 ? "" : "s"}</span>
                                             <span>{percentage}%</span>
                                           </div>
@@ -1857,7 +2207,7 @@ export default function ClassroomPage() {
                                     );
                                   })}
 
-                                  <div className="mt-4 flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                                     <span>{selectionSummary}</span>
                                     {user && (
                                       <Button
@@ -1890,15 +2240,15 @@ export default function ClassroomPage() {
           {/* ASSIGNMENTS */}
           {activeTab === "assignments" && (
             <div className="space-y-4">
-              <Card className="border border-gray-300 shadow-sm">
+              <Card className="border border-border shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-xl">Assignments</CardTitle>
                   <CardDescription>Course assignments and deadlines</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {isAssignmentsLoading && <p>Loading assignments...</p>}
+                  {isAssignmentsLoading && <p className="text-foreground">Loading assignments...</p>}
                   {!isAssignmentsLoading && assignments.length === 0 && (
-                    <p className="text-gray-600">No assignments available.</p>
+                    <p className="text-muted-foreground">No assignments available.</p>
                   )}
                   {!isAssignmentsLoading && assignments.length > 0 && (
                     <div className="space-y-4">
@@ -1907,20 +2257,20 @@ export default function ClassroomPage() {
                         .map((a) => (
                         <div key={a.id} className="border rounded-md p-4 hover:shadow-sm transition">
                           <button
-                            className="font-semibold text-lg text-left text-blue-700 hover:underline"
+                            className="font-semibold text-lg text-left text-primary hover:underline"
                             onClick={() => window.location.href = `/assignments`}
                             title="Open assignments page"
                           >
                             {a.title}
                           </button>
                           {a.description && (
-                            <p className="text-sm text-gray-700 mt-1">{a.description}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{a.description}</p>
                           )}
-                          <p className="text-xs text-gray-500 mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
+                          <p className="text-xs text-muted-foreground mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
                           {isInstructor && (
                             <div className="mt-2">
                               {!editingDeadline[a.id] ? (
-                                <Button variant="outline" size="sm" onClick={() => startEditDeadline(a.id, a.deadline)}>Edit Deadline</Button>
+                                <Button variant="outline" size="sm" className="border-none" onClick={() => startEditDeadline(a.id, a.deadline)}>Edit Deadline</Button>
                               ) : (
                                 <div className="flex items-center gap-2 mt-2">
                                   <Input
@@ -1929,14 +2279,14 @@ export default function ClassroomPage() {
                                     onChange={(e) => setDeadlineInputs((p) => ({ ...p, [a.id]: e.target.value }))}
                                   />
                                   <Button size="sm" onClick={() => saveDeadline(a.id)}>Save</Button>
-                                  <Button size="sm" variant="outline" onClick={() => cancelEditDeadline(a.id)}>Cancel</Button>
+                                  <Button size="sm" variant="outline" className="border-none" onClick={() => cancelEditDeadline(a.id)}>Cancel</Button>
                                 </div>
                               )}
                             </div>
                           )}
                           {a.fileUrl && (
                             <div className="mt-3">
-                              <Button variant="outline" size="sm" asChild>
+                              <Button variant="outline" size="sm" className="border-none" asChild>
                                 <a href={a.fileUrl} target="_blank" rel="noopener noreferrer">Download File</a>
                               </Button>
                             </div>
@@ -1954,68 +2304,37 @@ export default function ClassroomPage() {
 
           {/* CHAT */}
           {activeTab === "chat" && (
-            <Card className="border border-gray-300">
+            <Card className="border border-border bg-card">
+              <CardHeader>
+                <CardTitle className="text-xl">Class Chat</CardTitle>
+                <CardDescription>
+                  Discuss with your classmates and instructor
+                </CardDescription>
+              </CardHeader>
               <CardContent className="p-0 flex flex-col" style={{ height: "600px" }}>
-
                 {/* Chat Message List */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-4 bg-muted/10">
                   {isChatLoading ? (
-                    <p className="text-center text-gray-500">Loading chat...</p>
+                    <p className="text-center text-foreground">Loading chat...</p>
                   ) : chatMessages.length === 0 ? (
-                    <p className="text-center text-gray-500">No messages yet. Start the conversation!</p>
+                    <p className="text-center text-muted-foreground">No messages yet. Start the conversation!</p>
                   ) : (
-                    chatMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.author.id === user?.uid ? "justify-end" : "justify-start"
-                          }`}
-                      >
-                        <div
-                          className={`flex items-end max-w-xs md:max-w-md ${msg.author.id === user?.uid ? "flex-row-reverse" : "flex-row"
-                            }`}
-                        >
-                          <div className="w-8 h-8 rounded-full bg-gray-400 text-white flex items-center justify-center text-sm font-semibold mx-2 shrink-0">
-                            {msg.author.name ? msg.author.name[0].toUpperCase() : "?"}
-                          </div>
-                          <div
-                            className={`p-3 rounded-lg ${msg.author.id === user?.uid
-                              ? "bg-black text-white"
-                              : "bg-gray-200 text-black"
-                              }`}
-                          >
-                            <span className="text-xs font-semibold block mb-1">
-                              {msg.author.name || "Unknown"}
-                            </span>
-                            <p className="text-sm">{msg.text}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                    <ChatMessageList
+                      messages={chatMessages}
+                      currentUserId={user?.uid}
+                      messagesEndRef={messagesEndRef}
+                      onDeleteMessage={handleDeleteChatMessage}
+                    />
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* Chat Input Box */}
-                <div className="border-t border-gray-300 p-4 bg-white">
-                  <form
-                    className="flex items-center gap-2"
-                    onSubmit={handleSendChatMessage}
-                  >
-                    <Input
-                      type="text"
-                      placeholder="Type a message..."
-                      className="flex-1 border-gray-300 focus:ring-gray-400"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                    />
-                    <Button
-                      type="submit"
-                      className="bg-black text-white hover:bg-gray-800"
-                      disabled={!chatInput.trim()}
-                    >
-                      Send
-                    </Button>
-                  </form>
+                <div className="border-t border-border p-4 bg-card">
+                  <ChatMessageInput
+                    newMessage={chatInput}
+                    setNewMessage={setChatInput}
+                    onSendMessage={handleSendChatMessage}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -2024,23 +2343,23 @@ export default function ClassroomPage() {
           {/* PEOPLE */}
           {activeTab === "people" && (
             <div className="space-y-6">
-              <Card className="border border-gray-300">
+              <Card className="border border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-xl">Instructor</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-600 text-white flex items-center justify-center text-lg font-semibold">
+                    <div className="w-10 h-10 rounded-full bg-muted text-foreground flex items-center justify-center text-lg font-semibold">
                       {classroom.instructorName ? classroom.instructorName[0].toUpperCase() : "I"}
                     </div>
-                    <span className="font-medium text-gray-800">
+                    <span className="font-medium text-foreground">
                       {classroom.instructorName}
                     </span>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border border-gray-300">
+              <Card className="border border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-xl">
                     Classmates ({classroom.students?.length || 0})
@@ -2048,14 +2367,14 @@ export default function ClassroomPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {!classroom.students || classroom.students.length === 0 ? (
-                    <p className="text-gray-600">No students enrolled yet.</p>
+                    <p className="text-muted-foreground">No students enrolled yet.</p>
                   ) : (
                     classroom.students.map((student) => (
                       <div key={student.userId} className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-500 text-white flex items-center justify-center text-lg font-semibold">
+                        <div className="w-10 h-10 rounded-full bg-muted text-foreground flex items-center justify-center text-lg font-semibold">
                           {student.name ? student.name[0].toUpperCase() : "S"}
                         </div>
-                        <span className="font-medium text-gray-800">
+                        <span className="font-medium text-foreground">
                           {student.name}
                         </span>
                       </div>
@@ -2063,7 +2382,7 @@ export default function ClassroomPage() {
                   )}
                 </CardContent>
               </Card>
-              <Card className="border border-gray-300">
+              <Card className="border border-border bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-xl">
                     Groups ({groups.length})
@@ -2079,9 +2398,9 @@ export default function ClassroomPage() {
                   )}
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {isGroupsLoading && <p>Loading groups...</p>}
+                  {isGroupsLoading && <p className="text-foreground">Loading groups...</p>}
                   {!isGroupsLoading && groups.length === 0 && (
-                    <p className="text-gray-600">No groups created yet.</p>
+                    <p className="text-muted-foreground">No groups created yet.</p>
                   )}
                   {!isGroupsLoading && groups.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2092,7 +2411,7 @@ export default function ClassroomPage() {
                         >
                           <Card className="hover:shadow-md transition-shadow">
                             <CardHeader>
-                              <CardTitle className="text-lg text-blue-700 hover:underline">
+                              <CardTitle className="text-lg text-primary hover:underline">
                                 {group.name}
                               </CardTitle>
                               <CardDescription>
@@ -2125,14 +2444,16 @@ export default function ClassroomPage() {
             authorName={username}
           />
         )}
-        {isInstructor && <CreateGroupDialog
-    open={isCreateGroupOpen}
-    onOpenChange={setIsCreateGroupOpen}
-    onSubmit={handleCreateGroup}
-    classroom={classroom}
-    newGroupData={newGroupData}
-    setNewGroupData={setNewGroupData}
-  />}
+        {isInstructor && (
+          <CreateGroupDialog
+            open={isCreateGroupOpen}
+            onOpenChange={setIsCreateGroupOpen}
+            onSubmit={handleCreateGroup}
+            classroom={classroom}
+            newGroupData={newGroupData}
+            setNewGroupData={setNewGroupData}
+          />
+        )}
       </div>
     </div>
   );

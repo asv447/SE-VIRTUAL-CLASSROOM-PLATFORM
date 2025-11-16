@@ -41,7 +41,7 @@ export default function ClassroomLayout({ children }) {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-background text-foreground">
       {/* Sidebar */}
       <Sidebar />
 
@@ -56,15 +56,13 @@ export default function ClassroomLayout({ children }) {
       >
         {/* Mobile Header */}
         {isMobile && (
-          <header className="bg-white border-b border-gray-200 h-16 flex items-center px-4 sticky top-0 z-10">
-            <h1 className="text-xl font-semibold text-gray-800">
-              Classroom
-            </h1>
+          <header className="bg-card border-b border-border h-16 flex items-center px-4 sticky top-0 z-10">
+            <h1 className="text-xl font-semibold text-foreground">Classroom</h1>
           </header>
         )}
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
           <div className="max-w-7xl mx-auto w-full">
             {children}
           </div>
