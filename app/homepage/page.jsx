@@ -397,7 +397,7 @@ export default function ClassyncDashboard() {
               className="h-20 flex-col gap-2 bg-transparent"
               asChild
             >
-              <a href="/ai-tools/chatbot">
+              <a href="/ai-tools">
                 <Sparkles className="w-6 h-6" />
                 <span className="text-sm">AI Tools</span>
               </a>

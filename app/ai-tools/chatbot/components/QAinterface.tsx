@@ -292,7 +292,7 @@ export default function QAInterface() {
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-2xl font-bold bg-linear-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              AI Learning Assistant
+              Learning Assistant
             </h1>
           </div>
 
@@ -304,7 +304,7 @@ export default function QAInterface() {
               }`}
               onClick={() => setActiveTab("qa")}
             >
-              🤖 Doubt Resolver
+              💬 Ask a Tutor
             </Button>
             <Button
               className={`px-6 py-3 text-lg ${
@@ -312,7 +312,7 @@ export default function QAInterface() {
               }`}
               onClick={() => setActiveTab("quiz")}
             >
-              📝 Quiz Generator
+              📝 Practice Quiz
             </Button>
           </div>
 
@@ -380,7 +380,7 @@ export default function QAInterface() {
                 {answer && (
                   <Card className="border-purple-300">
                     <CardHeader className="flex items-center justify-between">
-                      <CardTitle>AI Answer</CardTitle>
+                      <CardTitle>Answer</CardTitle>
                       <Button
                         size="sm"
                         variant="outline"

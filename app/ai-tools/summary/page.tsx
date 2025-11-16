@@ -52,7 +52,7 @@ export default function SummaryTool() {
   return (
     <div className="min-h-screen bg-gray-50 px-8 py-12">
       <h1 className="text-3xl font-bold text-center mb-6 text-indigo-600">
-        🧠 AI Document Summarizer
+        📘 Document Summarizer
       </h1>
 
       <form
