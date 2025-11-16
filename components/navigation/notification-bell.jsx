@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Check, Bell, X, Trash2 } from "lucide-react";
+import { Check, Bell, X } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
@@ -201,6 +201,28 @@ export default function NotificationBell() {
     }
   }
 
+  // Single action: mark as read, then delete (tick behavior)
+  async function tickNotification(id) {
+    try {
+      await Promise.allSettled([
+        fetch(`/api/notifications`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id }),
+        }),
+        fetch(`/api/notifications`, {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id }),
+        }),
+      ]);
+    } catch (_) {
+      // ignore network error; we'll still optimistically update UI
+    } finally {
+      setNotifications((prev) => prev.filter((p) => p.id !== id));
+    }
+  }
+
   function renderNotification(n) {
     const id = n.id;
     return (
@@ -222,21 +244,12 @@ export default function NotificationBell() {
             </div>
           </div>
           <div className="ml-3 flex items-center gap-1">
-            {!n.read && (
-              <button
-                onClick={() => markAsRead(id)}
-                className="rounded-full p-1.5 bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
-                title="Mark as read"
-              >
-                <Check className="w-3 h-3" />
-              </button>
-            )}
             <button
-              onClick={() => deleteNotification(id)}
-              className="rounded-full p-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
-              title="Delete notification"
+              onClick={() => tickNotification(id)}
+              className="p-1 text-primary hover:text-primary/80 transition-colors focus:outline-none"
+              title="Mark as read and dismiss"
             >
-              <Trash2 className="w-3 h-3" />
+              <Check className="w-4 h-4" strokeWidth={3} />
             </button>
           </div>
         </div>
