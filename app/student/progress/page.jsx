@@ -64,7 +64,6 @@ export default function StudentProgressPage() {
     totalAssignments: 0,
     completedAssignments: 0,
     onTimeAssignments: 0,
-    lateAssignments: 0,
     pendingAssignments: 0,
     missingAssignments: 0,
     percentage: 0,
@@ -130,7 +129,6 @@ export default function StudentProgressPage() {
       let totalAssignments = 0;
       let completedAssignments = 0;
       let onTimeAssignments = 0;
-      let lateAssignments = 0;
       let pendingAssignments = 0;
       let missingAssignments = 0;
       let totalGrade = 0;
@@ -142,7 +140,6 @@ export default function StudentProgressPage() {
           totalAssignments += data.totalAssignments;
           completedAssignments += data.submittedAssignments;
           onTimeAssignments += data.onTimeAssignments || 0;
-          lateAssignments += data.lateAssignments || 0;
           pendingAssignments += data.pendingAssignments;
           missingAssignments += data.missingAssignments || 0;
           
@@ -163,7 +160,6 @@ export default function StudentProgressPage() {
         totalAssignments,
         completedAssignments,
         onTimeAssignments,
-        lateAssignments,
         pendingAssignments,
         missingAssignments,
         percentage:
@@ -225,12 +221,6 @@ export default function StudentProgressPage() {
         count: overallStats.onTimeAssignments,
       },
       {
-        name: "late",
-        displayName: "Late",
-        value: Math.round((overallStats.lateAssignments / total) * 100),
-        count: overallStats.lateAssignments,
-      },
-      {
         name: "pending",
         displayName: "Pending",
         value: Math.round((overallStats.pendingAssignments / total) * 100),
@@ -283,7 +273,7 @@ export default function StudentProgressPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
             title="Enrolled Courses"
             value={courses.length}
@@ -307,13 +297,6 @@ export default function StudentProgressPage() {
             value={overallStats.averageGrade !== null ? overallStats.averageGrade : "—"}
             icon={Award}
             helper="Based on graded work"
-          />
-          <SummaryCard
-            title="Late Submissions"
-            value={overallStats.lateAssignments}
-            icon={Clock}
-            helper="Submitted after deadline"
-            alert={overallStats.lateAssignments > 0}
           />
         </div>
 
@@ -373,7 +356,6 @@ export default function StudentProgressPage() {
                     className="h-64"
                     config={{
                       onTime: { label: "On-Time", color: "#22c55e" },
-                      late: { label: "Late", color: "#eab308" },
                       pending: { label: "Pending", color: "#3b82f6" },
                       missing: { label: "Missing", color: "#ef4444" },
                     }}
@@ -403,12 +385,6 @@ export default function StudentProgressPage() {
                       <span>On-Time</span>
                       <span className="font-medium text-green-600">
                         {submissionStatusData.find(d => d.name === "onTime")?.value || 0}% ({overallStats.onTimeAssignments})
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Late</span>
-                      <span className="font-medium text-yellow-600">
-                        {submissionStatusData.find(d => d.name === "late")?.value || 0}% ({overallStats.lateAssignments})
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
@@ -473,18 +449,12 @@ export default function StudentProgressPage() {
                 </div>
 
                 {/* Progress Stats */}
-                <div className="grid gap-4 sm:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <MetricTile
                     label="On-Time"
                     value={selectedProgress.onTimeAssignments || 0}
                     helper="Submitted before deadline"
                     icon={CheckCircle2}
-                  />
-                  <MetricTile
-                    label="Late"
-                    value={selectedProgress.lateAssignments || 0}
-                    helper="Submitted after deadline"
-                    icon={Clock}
                   />
                   <MetricTile
                     label="Pending"

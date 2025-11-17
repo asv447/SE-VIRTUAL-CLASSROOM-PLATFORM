@@ -173,11 +173,9 @@ export default function InstructorAnalyticsPage() {
   const coursePerformanceData = (analytics.courses || []).map((course) => ({
     name: course.title,
     completionRate: course.completionRate,
-    lateSubmissions: course.lateSubmissions,
   }));
 
   const totalExpected = analytics.overview.engagementBreakdown.onTime + 
-                        analytics.overview.engagementBreakdown.late + 
                         analytics.overview.engagementBreakdown.pending +
                         analytics.overview.engagementBreakdown.missing;
   
@@ -187,12 +185,6 @@ export default function InstructorAnalyticsPage() {
       displayName: "On-time",
       value: totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.onTime / totalExpected) * 100) : 0,
       count: analytics.overview.engagementBreakdown.onTime,
-    },
-    {
-      name: "late",
-      displayName: "Late",
-      value: totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.late / totalExpected) * 100) : 0,
-      count: analytics.overview.engagementBreakdown.late,
     },
     {
       name: "pending",
@@ -213,10 +205,6 @@ export default function InstructorAnalyticsPage() {
         {
           status: "On time",
           value: selectedAssignment.onTime,
-        },
-        {
-          status: "Late",
-          value: selectedAssignment.late,
         },
         {
           status: "Missing",
@@ -284,7 +272,7 @@ export default function InstructorAnalyticsPage() {
             <CardHeader>
               <CardTitle className="text-foreground">Course performance snapshot</CardTitle>
               <CardDescription>
-                Completion rate and late submission footprint per course
+                Completion rate per course
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -322,7 +310,7 @@ export default function InstructorAnalyticsPage() {
             <CardHeader>
               <CardTitle className="text-foreground">Submission health</CardTitle>
               <CardDescription>
-                On-time vs late vs missing submissions
+                On-time vs pending vs missing submissions
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -331,7 +319,6 @@ export default function InstructorAnalyticsPage() {
                   className="h-64"
                   config={{
                     ontime: { label: "On time", color: "#22c55e" },
-                    late: { label: "Late", color: "#eab308" },
                     pending: { label: "Pending", color: "#3b82f6" },
                     missing: { label: "Missing", color: "#ef4444" },
                   }}
@@ -365,12 +352,6 @@ export default function InstructorAnalyticsPage() {
                 <span>On-time</span>
                 <span className="font-medium text-green-600">
                   {totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.onTime / totalExpected) * 100) : 0}%
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Late</span>
-                <span className="font-medium text-yellow-600">
-                  {totalExpected > 0 ? Math.round((analytics.overview.engagementBreakdown.late / totalExpected) * 100) : 0}%
                 </span>
               </div>
               <div className="flex justify-between text-sm">
@@ -415,7 +396,7 @@ export default function InstructorAnalyticsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {selectedCourse ? (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <MetricTile
                     label="Students"
                     value={selectedCourse.studentCount}
@@ -433,12 +414,6 @@ export default function InstructorAnalyticsPage() {
                     value={`${selectedCourse.completionRate}%`}
                     helper="Submission coverage"
                     icon={CheckCircle2}
-                  />
-                  <MetricTile
-                    label="Late submissions"
-                    value={selectedCourse.lateSubmissions}
-                    helper="Needs attention"
-                    icon={AlertTriangle}
                   />
                 </div>
               ) : (
@@ -504,7 +479,7 @@ export default function InstructorAnalyticsPage() {
                       />
                     </BarChart>
                   </ChartContainer>
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <MetricTile
                       label="Submitted"
                       value={selectedAssignment.submissions}
@@ -516,12 +491,6 @@ export default function InstructorAnalyticsPage() {
                       value={selectedAssignment.onTime}
                       helper="Before deadline"
                       icon={CheckCircle2}
-                    />
-                    <MetricTile
-                      label="Late"
-                      value={selectedAssignment.late}
-                      helper="After deadline"
-                      icon={AlertTriangle}
                     />
                   </div>
                 </div>
@@ -551,7 +520,6 @@ export default function InstructorAnalyticsPage() {
                   <th className="py-3 pr-4 font-medium">Submitted</th>
                   <th className="py-3 pr-4 font-medium">Completion</th>
                   <th className="py-3 pr-4 font-medium">On time</th>
-                  <th className="py-3 pr-4 font-medium">Late</th>
                   <th className="py-3 font-medium">Avg. grade</th>
                 </tr>
               </thead>
@@ -581,7 +549,6 @@ export default function InstructorAnalyticsPage() {
                       {assignment.completionRate}%
                     </td>
                     <td className="py-3 pr-4 text-foreground">{assignment.onTime}</td>
-                    <td className="py-3 pr-4 text-foreground">{assignment.late}</td>
                     <td className="py-3 text-foreground">
                       {assignment.averageGrade !== null
                         ? assignment.averageGrade
