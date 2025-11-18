@@ -29,6 +29,7 @@ export async function GET(request) {
     const groupsCollection = await getGroupsCollection();
 
     let assignments = [];
+    let submissionMap = new Map();
 
     if (role === "instructor") {
       // --- Instructor Logic: Get all assignments they created ---
@@ -73,6 +74,14 @@ export async function GET(request) {
         }
         return false;
       });
+
+      // 4. Check submission status for each assignment
+      const submissionsCollection = await getSubmissionsCollection();
+      const submissions = await submissionsCollection.find({ studentId: userId }).toArray();
+      const submissionMap = new Map();
+      submissions.forEach(sub => {
+        submissionMap.set(sub.assignmentId, true);
+      });
     }
 
     // --- Enrich assignments with Course Titles (for Admin Dashboard) ---
@@ -87,6 +96,7 @@ export async function GET(request) {
       id: a._id.toString(),
       courseId: a.courseId || a.classId, // Standardize courseId
       courseTitle: courseMap.get(a.courseId) || courseMap.get(a.classId) || "Unknown Course",
+      submitted: submissionMap.has(a._id.toString()) || false,
       _id: undefined, // Remove _id
     }));
 

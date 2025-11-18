@@ -141,7 +141,7 @@ export default function ClassyncDashboard() {
 
       const urgent = allAssignments.filter(assignment => {
         const deadline = new Date(assignment.deadline);
-        return deadline > now && deadline <= twentyFourHoursFromNow;
+        return deadline > now && deadline <= twentyFourHoursFromNow && !assignment.submitted;
       });
 
       setUrgentAssignments(urgent);
