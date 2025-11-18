@@ -284,142 +284,156 @@ export default function QAInterface() {
 
   return (
     <>
-      <div className="min-h-screen bg-background px-4 py-8 flex justify-center">
-        <div className="w-full max-w-6xl space-y-8">
-          {/* Header */}
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 bg-linear-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold bg-linear-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Learning Assistant
-            </h1>
-          </div>
-
+      <div className="flex justify-center px-4">
+        <div className="w-full max-w-4xl">
           {/* Mode Buttons */}
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-3 mb-8">
             <Button
-              className={`px-6 py-3 text-lg ${
-                activeTab === "qa" ? "bg-purple-600 text-white" : ""
-              }`}
+              size="lg"
+              variant={activeTab === "qa" ? "default" : "outline"}
+              className="px-8 py-6 text-base font-semibold rounded-[16px] shadow-sm"
               onClick={() => setActiveTab("qa")}
             >
-              💬 Ask a Tutor
+              <span className="flex items-center gap-2">
+                <span className="text-2xl">💬</span>
+                <span>Ask a Tutor</span>
+              </span>
             </Button>
             <Button
-              className={`px-6 py-3 text-lg ${
-                activeTab === "quiz" ? "bg-purple-600 text-white" : ""
-              }`}
+              size="lg"
+              variant={activeTab === "quiz" ? "default" : "outline"}
+              className="px-8 py-6 text-base font-semibold rounded-[16px] shadow-sm"
               onClick={() => setActiveTab("quiz")}
             >
-              📝 Practice Quiz
+              <span className="flex items-center gap-2">
+                <span className="text-2xl">📝</span>
+                <span>Practice Quiz</span>
+              </span>
             </Button>
           </div>
 
           {/* ================= Q&A TAB ================= */}
           {activeTab === "qa" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-6">
-                {/* Top row: actions */}
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={newChat}>
-                    <Plus className="w-4 h-4 mr-2" /> New Chat
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowQaHistory(!showQaHistory)}
-                  >
-                    <History className="w-4 h-4 mr-2" />{" "}
-                    {showQaHistory ? "Hide" : "Show"} History
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="ml-auto"
-                    onClick={() => setShowClearQaHistory(true)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" /> Clear History
-                  </Button>
-                </div>
+            <div className="space-y-6">
+              {/* Top row: actions */}
+              <div className="flex flex-wrap justify-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={newChat}
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> New Chat
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowQaHistory(!showQaHistory)}
+                  size="sm"
+                >
+                  <History className="w-4 h-4 mr-2" />{" "}
+                  {showQaHistory ? "Hide" : "Show"} History
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowClearQaHistory(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" /> Clear History
+                </Button>
+              </div>
 
-                {/* Input Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Ask a Question</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Input
-                      placeholder="Enter topic"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                    />
-                    <Textarea
-                      rows={2}
-                      placeholder="Type your question..."
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                    />
-                    <Button
-                      disabled={qaLoading}
-                      onClick={handleAsk}
-                      className="bg-black text-white"
-                    >
-                      {qaLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-                      <span className="ml-2">Get Answer</span>
-                    </Button>
-                    {qaError && (
-                      <p className="text-red-500 text-sm">{qaError}</p>
+              {/* Input Card */}
+              <Card className="rounded-[20px] shadow-md">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <span className="text-2xl">💡</span>
+                    Ask a Question
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Input
+                    placeholder="Enter topic (e.g., Physics, Math, History)"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    className="h-12 text-base"
+                  />
+                  <Textarea
+                    rows={4}
+                    placeholder="Type your question in detail..."
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    className="text-base resize-none"
+                  />
+                  <Button
+                    disabled={qaLoading}
+                    onClick={handleAsk}
+                    size="lg"
+                    className="w-full"
+                  >
+                    {qaLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    ) : (
+                      <Send className="w-5 h-5 mr-2" />
                     )}
+                    <span>Get Answer</span>
+                  </Button>
+                  {qaError && (
+                    <p className="text-red-500 text-sm">{qaError}</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Answer */}
+              {answer && (
+                <Card className="rounded-[20px] shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between pb-4">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      <span className="text-2xl">✨</span>
+                      Answer
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(answer);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      }}
+                    >
+                      {copied ? (
+                        <><Check className="w-4 h-4 mr-1" /> Copied</>
+                      ) : (
+                        <><Copy className="w-4 h-4 mr-1" /> Copy</>
+                      )}
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="prose dark:prose-invert max-w-none bg-muted/50 rounded-lg p-6">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {answer}
+                    </ReactMarkdown>
                   </CardContent>
                 </Card>
-
-                {/* Answer */}
-                {answer && (
-                  <Card className="border-purple-300">
-                    <CardHeader className="flex items-center justify-between">
-                      <CardTitle>Answer</CardTitle>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          navigator.clipboard.writeText(answer);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 1500);
-                        }}
-                      >
-                        {copied ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="prose dark:prose-invert max-w-none">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {answer}
-                      </ReactMarkdown>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              )}
 
               {/* Q&A History */}
               {showQaHistory && (
-                <div className="space-y-3">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">Q&A History</CardTitle>
-                    </CardHeader>
-                    <CardContent className="max-h-[60vh] overflow-y-auto space-y-2">
-                      {qaHistory.length === 0 ? (
+                <Card className="rounded-[20px] shadow-md mt-6">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center justify-center gap-2">
+                      <History className="w-5 h-5" />
+                      Q&A History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="max-h-[400px] overflow-y-auto space-y-2">
+                    {qaHistory.length === 0 ? (
+                      <div className="text-center py-8">
+                        <History className="w-12 h-12 mx-auto text-muted-foreground/30 mb-2" />
                         <p className="text-sm text-muted-foreground">
-                          No saved chats.
+                          No saved chats yet
                         </p>
-                      ) : (
-                        qaHistory.map((h) => (
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {qaHistory.map((h) => (
                           <button
                             key={h.id}
                             onClick={() => {
@@ -427,215 +441,241 @@ export default function QAInterface() {
                               setQuestion(h.question);
                               setAnswer(h.answer);
                             }}
-                            className="w-full text-left p-2 rounded-md border hover:bg-muted/30"
+                            className="text-left p-3 rounded-[12px] border hover:border-primary hover:shadow-sm transition-all bg-card"
                           >
-                            <p className="text-xs text-purple-500">{h.topic}</p>
-                            <p className="truncate">{h.question}</p>
+                            <p className="text-xs font-semibold text-primary mb-1">{h.topic}</p>
+                            <p className="text-sm truncate mb-1 text-foreground">{h.question}</p>
                             <p className="text-xs text-muted-foreground">
                               {h.timestamp}
                             </p>
                           </button>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
             </div>
           )}
 
           {/* ================= QUIZ TAB ================= */}
           {activeTab === "quiz" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-6">
-                {/* Top row: actions */}
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={newQuiz}>
-                    <Plus className="w-4 h-4 mr-2" /> New Quiz
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowQuizHistory(!showQuizHistory)}
-                  >
-                    <History className="w-4 h-4 mr-2" />{" "}
-                    {showQuizHistory ? "Hide" : "Show"} History
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="ml-auto"
-                    onClick={() => setShowClearQuizHistory(true)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" /> Clear History
-                  </Button>
-                </div>
+            <div className="space-y-6">
+              {/* Top row: actions */}
+              <div className="flex flex-wrap justify-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={newQuiz}
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> New Quiz
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowQuizHistory(!showQuizHistory)}
+                  size="sm"
+                >
+                  <History className="w-4 h-4 mr-2" />{" "}
+                  {showQuizHistory ? "Hide" : "Show"} History
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowClearQuizHistory(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" /> Clear History
+                </Button>
+              </div>
 
-                {/* Generate Quiz */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Generate Quiz</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <Input
-                        placeholder="Enter topic for quiz"
-                        value={quizTopic}
-                        onChange={(e) => setQuizTopic(e.target.value)}
-                      />
+              {/* Generate Quiz */}
+              <Card className="rounded-[20px] shadow-md">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <span className="text-2xl">🎯</span>
+                    Generate Quiz
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <Input
+                      placeholder="Enter topic for quiz"
+                      value={quizTopic}
+                      onChange={(e) => setQuizTopic(e.target.value)}
+                      className="h-12 text-base"
+                    />
 
-                      {/* Quiz Type selector */}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant={quizType === "mcq" ? undefined : "outline"}
-                          onClick={() => setQuizType("mcq")}
-                        >
-                          MCQ
-                        </Button>
-                        <Button
-                          variant={quizType === "tf" ? undefined : "outline"}
-                          onClick={() => setQuizType("tf")}
-                        >
-                          True / False
-                        </Button>
-                      </div>
-
-                      {/* Grade selector */}
-                      <select
-                        value={grade}
-                        onChange={(e) => setGrade(e.target.value)}
-                        className="rounded-md border p-2"
-                      >
-                        <option>Grade 5</option>
-                        <option>Grade 6</option>
-                        <option>Grade 7</option>
-                        <option>Grade 8</option>
-                        <option>Grade 9</option>
-                        <option>Grade 10</option>
-                        <option>Grade 11</option>
-                        <option>Grade 12</option>
-                        <option>Undergraduate</option>
-                      </select>
-                    </div>
-
-                    {/* Number of questions */}
+                    {/* Quiz Type selector */}
                     <div className="flex items-center gap-2">
-                      <label className="text-sm">No. of questions:</label>
-                      <select
-                        value={numQuestions}
-                        onChange={(e) => setNumQuestions(Number(e.target.value))}
-                        className="rounded-md border p-2"
+                      <Button
+                        variant={quizType === "mcq" ? "default" : "outline"}
+                        onClick={() => setQuizType("mcq")}
                       >
-                        <option value={5}>5</option>
-                        <option value={10}>10</option>
-                        <option value={15}>15</option>
-                        <option value={20}>20</option>
-                      </select>
-                      <div className="ml-auto">
-                        <Button
-                          disabled={quizLoading}
-                          onClick={generateQuiz}
-                          className="bg-black text-white"
-                        >
-                          {quizLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            "Generate Quiz"
-                          )}
-                        </Button>
-                      </div>
+                        MCQ
+                      </Button>
+                      <Button
+                        variant={quizType === "tf" ? "default" : "outline"}
+                        onClick={() => setQuizType("tf")}
+                      >
+                        True / False
+                      </Button>
                     </div>
+
+                    {/* Grade selector */}
+                    <select
+                      value={grade}
+                      onChange={(e) => setGrade(e.target.value)}
+                      aria-label="Select grade level"
+                      className="h-12 rounded-lg border border-input px-3 bg-background text-foreground font-medium"
+                    >
+                      <option>Grade 5</option>
+                      <option>Grade 6</option>
+                      <option>Grade 7</option>
+                      <option>Grade 8</option>
+                      <option>Grade 9</option>
+                      <option>Grade 10</option>
+                      <option>Grade 11</option>
+                      <option>Grade 12</option>
+                      <option>Undergraduate</option>
+                    </select>
+                  </div>
+
+                  {/* Number of questions */}
+                  <div className="flex items-center gap-3 pt-2">
+                    <label className="text-sm font-semibold">No. of questions:</label>
+                    <select
+                      value={numQuestions}
+                      onChange={(e) => setNumQuestions(Number(e.target.value))}
+                      aria-label="Select number of questions"
+                      className="rounded-lg border border-input px-3 py-2 bg-background text-foreground font-medium"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={15}>15</option>
+                      <option value={20}>20</option>
+                    </select>
+                    <div className="ml-auto">
+                      <Button
+                        disabled={quizLoading}
+                        onClick={generateQuiz}
+                        size="lg"
+                      >
+                        {quizLoading ? (
+                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        ) : (
+                          <span className="mr-2">✨</span>
+                        )}
+                        Generate Quiz
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quiz View */}
+              {questions.length > 0 && (
+                <Card className="rounded-[20px] shadow-md">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      <span className="text-2xl">📝</span>
+                      Test — {quizType === "mcq" ? "MCQ" : "True/False"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {questions.map((q, qi) => (
+                      <div
+                        key={qi}
+                        className="p-5 border rounded-[12px] space-y-3 bg-card shadow-sm"
+                      >
+                        <p className="font-semibold text-base">
+                          {qi + 1}. {q.question}
+                        </p>
+                        <div className="grid gap-2">
+                          {q.options.map((opt, oi) => (
+                            <label key={oi} className={`${optionClass(qi, oi)} cursor-pointer transition-all`}>
+                              <input
+                                type="radio"
+                                className="mr-2"
+                                name={`q${qi}`}
+                                disabled={submitted}
+                                checked={userAnswers[qi] === oi}
+                                onChange={() => {
+                                  const arr = [...userAnswers];
+                                  arr[qi] = oi;
+                                  setUserAnswers(arr);
+                                }}
+                              />
+                              {opt}
+                            </label>
+                          ))}
+                        </div>
+
+                        {submitted && userAnswers[qi] !== q.correctIndex && (
+                          <p className="text-sm text-green-700 dark:text-green-400 font-medium bg-green-50 dark:bg-green-950/30 p-2 rounded-md">
+                            ✅ Correct answer:{" "}
+                            <span className="font-semibold">
+                              {q.options[q.correctIndex]}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    ))}
+
+                    {!submitted ? (
+                      <Button
+                        onClick={submitQuiz}
+                        size="lg"
+                        className="w-full"
+                      >
+                        Submit Quiz
+                      </Button>
+                    ) : (
+                      <Card className="p-5 rounded-[12px] shadow-md">
+                        <p className="text-2xl font-bold text-primary text-center">
+                          🎉 Score: {score}/{questions.length}
+                        </p>
+                      </Card>
+                    )}
                   </CardContent>
                 </Card>
-
-                {/* Quiz View */}
-                {questions.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Test — {quizType === "mcq" ? "MCQ" : "True/False"}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {questions.map((q, qi) => (
-                        <div
-                          key={qi}
-                          className="p-4 border rounded-md space-y-2"
-                        >
-                          <p className="font-medium">
-                            {qi + 1}. {q.question}
-                          </p>
-                          <div className="grid gap-2">
-                            {q.options.map((opt, oi) => (
-                              <label key={oi} className={optionClass(qi, oi)}>
-                                <input
-                                  type="radio"
-                                  className="mr-2"
-                                  name={`q${qi}`}
-                                  disabled={submitted}
-                                  checked={userAnswers[qi] === oi}
-                                  onChange={() => {
-                                    const arr = [...userAnswers];
-                                    arr[qi] = oi;
-                                    setUserAnswers(arr);
-                                  }}
-                                />
-                                {opt}
-                              </label>
-                            ))}
-                          </div>
-
-                          {submitted && userAnswers[qi] !== q.correctIndex && (
-                            <p className="text-sm text-green-700">
-                              ✅ Correct answer:{" "}
-                              <span className="font-semibold">
-                                {q.options[q.correctIndex]}
-                              </span>
-                            </p>
-                          )}
-                        </div>
-                      ))}
-
-                      {!submitted ? (
-                        <Button onClick={submitQuiz} className="w-full">
-                          Submit Quiz
-                        </Button>
-                      ) : (
-                        <Card className="p-3 border-green-300 bg-green-50">
-                          <p className="text-lg font-semibold text-green-800">
-                            Score: {score}/{questions.length}
-                          </p>
-                        </Card>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              )}
 
               {/* Quiz History */}
               {showQuizHistory && (
-                <div className="space-y-3">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">Quiz History</CardTitle>
-                    </CardHeader>
-                    <CardContent className="max-h-[60vh] overflow-y-auto space-y-2">
-                      {quizHistory.length === 0 ? (
+                <Card className="rounded-[20px] shadow-md">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center justify-center gap-2">
+                      <History className="w-5 h-5" />
+                      Quiz History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="max-h-[400px] overflow-y-auto space-y-2">
+                    {quizHistory.length === 0 ? (
+                      <div className="text-center py-8">
+                        <History className="w-12 h-12 mx-auto text-muted-foreground/30 mb-2" />
                         <p className="text-sm text-muted-foreground">
                           No quizzes saved.
                         </p>
-                      ) : (
-                        quizHistory.map((h) => (
-                          <div key={h.id} className="border rounded-md p-2">
-                            <p className="text-xs text-purple-500">{h.topic}</p>
-                            <p className="text-sm">
-                              Type: {h.quizType.toUpperCase()} • {h.grade} • Score: {h.score}/{h.total}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {quizHistory.map((h) => (
+                          <div key={h.id} className="border rounded-[12px] p-3 bg-card hover:border-primary transition-all hover:shadow-sm">
+                            <p className="text-xs font-semibold text-primary mb-1">{h.topic}</p>
+                            <p className="text-sm mb-1">
+                              Type: {h.quizType.toUpperCase()} • {h.grade}
+                            </p>
+                            <p className="text-sm font-semibold text-foreground mb-1">
+                              Score: {h.score}/{h.total}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {h.timestamp}
                             </p>
                           </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
             </div>
           )}
