@@ -7,6 +7,7 @@ import {
   getGroupsCollection, // <-- Requires this
   getNotificationsCollection, // <-- Requires this
   getStreamsCollection,
+  getSubmissionsCollection,
 } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 // Note: This file handles file uploads. For Vercel, you'd need a blob storage.
