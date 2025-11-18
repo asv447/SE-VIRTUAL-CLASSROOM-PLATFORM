@@ -2257,9 +2257,16 @@ export default function ClassroomPage() {
                         .map((a) => (
                         <div key={a.id} className="border rounded-md p-4 hover:shadow-sm transition">
                           {isInstructor ? (
-                            <h3 className="font-semibold text-lg text-foreground">
+                            // <h3 className="font-semibold text-lg text-foreground">
+                            //   {a.title}
+                            // </h3>
+                            <button
+                              className="font-semibold text-lg text-left text-primary hover:underline"
+                              onClick={() => window.location.href = `/admin`}
+                              title="Open assignments page"
+                            >
                               {a.title}
-                            </h3>
+                            </button>
                           ) : (
                             <button
                               className="font-semibold text-lg text-left text-primary hover:underline"
