@@ -2256,13 +2256,19 @@ export default function ClassroomPage() {
                         .filter((a) => String(a.classId || a.courseId) === String(id))
                         .map((a) => (
                         <div key={a.id} className="border rounded-md p-4 hover:shadow-sm transition">
-                          <button
-                            className="font-semibold text-lg text-left text-primary hover:underline"
-                            onClick={() => window.location.href = `/assignments`}
-                            title="Open assignments page"
-                          >
-                            {a.title}
-                          </button>
+                          {isInstructor ? (
+                            <h3 className="font-semibold text-lg text-foreground">
+                              {a.title}
+                            </h3>
+                          ) : (
+                            <button
+                              className="font-semibold text-lg text-left text-primary hover:underline"
+                              onClick={() => window.location.href = `/assignments`}
+                              title="Open assignments page"
+                            >
+                              {a.title}
+                            </button>
+                          )}
                           {a.description && (
                             <p className="text-sm text-muted-foreground mt-1">{a.description}</p>
                           )}
