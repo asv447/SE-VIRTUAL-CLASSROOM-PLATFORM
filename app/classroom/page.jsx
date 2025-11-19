@@ -79,11 +79,16 @@ export default function ClassroomDetails() {
     }
 
     try {
-      const res = await fetch(`/api/assignments/${assignmentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deadline: value }),
-      });
+      const res = await fetch(
+        `/api/assignments/${assignmentId}?role=instructor&userId=${encodeURIComponent(
+          user?.uid || ""
+        )}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-uid": user?.uid || "" },
+          body: JSON.stringify({ deadline: value }),
+        }
+      );
       if (res.ok) {
         // update local classroom assignments to reflect new deadline
         const updated = await res.json();
