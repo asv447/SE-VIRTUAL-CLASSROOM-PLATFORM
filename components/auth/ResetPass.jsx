@@ -23,9 +23,12 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
     setStatus("pending");
     try {
       await sendPasswordResetEmail(auth, email);
-      setMessage("Password reset link sent successfully. Please check your inbox.");
+      setMessage(
+        "Password reset link sent successfully. Please check your inbox."
+      );
       setStatus("success");
     } catch (err) {
+      console.error("[ResetPasswordModal] sendPasswordResetEmail error:", err);
       setMessage(err.message || "Unable to send reset link. Please try again.");
       setStatus("error");
     } finally {
