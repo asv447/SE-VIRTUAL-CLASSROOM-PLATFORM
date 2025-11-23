@@ -75,7 +75,6 @@ export default function SharedNavbar() {
   const pathname = usePathname();
   const isHomepage = pathname === "/" || pathname === "/homepage";
 
-  // Helper to check if a path is active
   const isActive = (path) => {
     if (path === "/") {
       return pathname === "/" || pathname === "/homepage";
@@ -166,7 +165,6 @@ export default function SharedNavbar() {
             setUsername(data.user.username || currentUser.email.split("@")[0]);
             setIsAdmin(data.user.role === "instructor");
             setUserRole(data.user.role || null);
-            // prefer photo stored in Mongo (photoBase64) or fallback to photoURL
             if (data.user?.photoBase64) {
               setUserPhoto(
                 `data:${data.user.photoContentType};base64,${data.user.photoBase64}`
@@ -208,12 +206,10 @@ export default function SharedNavbar() {
     }
   }, [isLoginOpen, isRegisterOpen]);
 
-  // file select handler for profile pic
   const handleFileChange = (e) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
-    // Basic client-side validation
-    const MAX_MB = 6; // don't accept extremely large files
+    const MAX_MB = 6; 
     if (file.size > MAX_MB * 1024 * 1024) {
       toast({
         title: "Image too large",
@@ -257,7 +253,6 @@ export default function SharedNavbar() {
 
     setUploading(true);
     try {
-      // Read file as base64 data URL
       const reader = new FileReader();
       const fileRead = new Promise((resolve, reject) => {
         reader.onload = () => resolve(reader.result);
@@ -304,7 +299,6 @@ export default function SharedNavbar() {
         return;
       }
 
-      // show the uploaded image immediately
       setUserPhoto(dataUrl);
       handleCloseUploadModal();
       toast({
@@ -507,9 +501,7 @@ export default function SharedNavbar() {
             <button
               onClick={() => {
                 setIsProfileOpen(false);
-                // open upload modal at root level
                 setIsUploadOpen(true);
-                // preload preview with current stored photo
                 setPreviewUrl(userPhoto || user?.photoURL || "");
               }}
               className="cursor-pointer w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
@@ -536,7 +528,6 @@ export default function SharedNavbar() {
     <>
       <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 shadow-md">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          {/* Logo */}
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 flex items-center justify-center">
               <img
@@ -551,7 +542,6 @@ export default function SharedNavbar() {
               </span>
             </Link>
           </div>
-          {/* Navigation */}
           {!isHomepage && (
             <nav className="hidden md:flex items-center space-x-8">
               <Link
@@ -564,11 +554,8 @@ export default function SharedNavbar() {
               >
                 Home
               </Link>
-              {/* Single Assignments entry will be shown under authenticated section */}
-              {/* Setup link removed (was used for dummy data) */}
               {user && (
                 <>
-                  {/* Show Assignments only for students (role-based) */}
                   {userRole === "student" && (
                     <>
                       <Link
@@ -633,7 +620,6 @@ export default function SharedNavbar() {
               </Link>
             </nav>
           )}
-          {/* User Actions */}
           <div className="flex items-center space-x-4">
             <button
               type="button"
@@ -668,7 +654,6 @@ export default function SharedNavbar() {
         </div>
       </header>
 
-      {/* Mobile Menu - for smaller screens */}
       {!isHomepage && (
         <div className="md:hidden border-b border-border bg-background">
           <div className="container mx-auto px-4 py-3">
@@ -683,8 +668,6 @@ export default function SharedNavbar() {
               >
                 Home
               </Link>
-              {/* Authenticated users see Assignments below */}
-              {/* Setup link removed (was used for dummy data) */}
               {user && (
                 <>
                   {userRole === "student" && (
@@ -754,7 +737,6 @@ export default function SharedNavbar() {
         </div>
       )}
 
-      {/* Login Modal */}
       {isLoginOpen && mounted && (
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
           <div className="relative w-full max-w-md mx-auto z-10000">
@@ -763,7 +745,6 @@ export default function SharedNavbar() {
         </div>
       )}
 
-      {/* Register Modal */}
       {isRegisterOpen && mounted && (
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-auto">
           <div className="relative w-full max-w-md mx-auto z-10000">
@@ -949,7 +930,6 @@ export default function SharedNavbar() {
           </form>
         </DialogContent>
       </Dialog>
-      {/* Upload Profile Picture Modal */}
       {isUploadOpen && mounted && (
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="relative w-full max-w-md mx-auto bg-card border border-border rounded-2xl shadow-2xl p-6">
@@ -973,7 +953,6 @@ export default function SharedNavbar() {
             <div className="flex flex-col items-center gap-4">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-muted">
                 {previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={previewUrl}
                     alt="preview"
