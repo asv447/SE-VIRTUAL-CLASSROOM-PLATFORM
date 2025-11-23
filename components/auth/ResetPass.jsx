@@ -37,32 +37,32 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
   };
 
   return (
-    <div className="min-h-[502px] fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 backdrop-blur-sm rounded-2xl">
-      <div className="relative w-full max-w-sm rounded-xl bg-white shadow-xl ring-1 ring-black/5 transition-all">
+    <div className="fixed inset-0 z-100 min-h-screen flex items-center justify-center bg-white/30 backdrop-blur-md">
+      <div className="relative w-full max-w-md bg-card border border-border p-10 rounded-2xl shadow-lg transition-all">
         <button
           onClick={onClose}
-          className="cursor-pointer absolute right-3 top-3 rounded-full p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="cursor-pointer absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Close reset password dialog"
         >
           <X className="h-4 w-4" />
         </button>
 
-        <div className="px-6 pb-6 pt-7">
-          <div className="space-y-1 text-center">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Reset password
+        <div className="space-y-6">
+          <div className="space-y-2 text-center">
+            <h2 className="text-2xl font-bold text-foreground">
+              Reset Password
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Enter the email you used to register and we&apos;ll send a reset
               link.
             </p>
           </div>
 
-          <form onSubmit={handleSendLink} className="mt-5 space-y-4">
+          <form onSubmit={handleSendLink} className="space-y-6">
             <div className="space-y-2">
               <label
                 htmlFor="reset-password-email"
-                className="text-xs font-medium uppercase tracking-wide text-gray-500"
+                className="block text-sm font-medium text-foreground"
               >
                 Email address
               </label>
@@ -70,7 +70,7 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
                 type="email"
                 placeholder="you@example.com"
                 id="reset-password-email"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-ring text-foreground"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
@@ -86,7 +86,7 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
             <button
               type="submit"
               disabled={loading}
-              className="cursor-pointer flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+              className="cursor-pointer w-full py-2 px-4 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Sending..." : "Send reset link"}
             </button>
@@ -94,10 +94,10 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
 
           {message && (
             <div
-              className={`mt-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+              className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
                 status === "success"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-red-200 bg-red-50 text-red-700"
+                  ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400"
+                  : "bg-destructive/10 border-destructive/20 text-destructive"
               }`}
             >
               {status === "success" ? (
@@ -111,7 +111,7 @@ export default function ResetPasswordModal({ defaultEmail = "", onClose }) {
 
           <button
             onClick={onClose}
-            className="cursor-pointer mt-6 w-full text-sm font-medium text-gray-500 transition hover:text-gray-700"
+            className="cursor-pointer w-full py-2 px-4 rounded-xl bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors"
           >
             Close
           </button>

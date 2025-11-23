@@ -1,4 +1,3 @@
-// components/CreateCourseForm.js
 import { useState } from "react";
 import PropTypes from "prop-types";
 import { Input } from "@/components/ui/input";
@@ -73,7 +72,7 @@ export default function CreateCourseForm({ instructor }) {
         type="text"
         placeholder="Subject"
         value={subject}
-        onChange={(e) => setSubject(e.target.value)}
+        onChange={(e) => setSubject(e.g.value)}
         required
       />
       <Button type="submit" disabled={creating} className="w-full sm:w-auto">

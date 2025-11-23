@@ -1,8 +1,8 @@
-"use client";
+'use client';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useParams, useRouter } from 'next/navigation';
 import dynamic from "next/dynamic";
-import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,6 +11,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
+<<<<<<< HEAD
 import {
   Copy,
   Plus,
@@ -19,6 +20,9 @@ import {
   Pencil,
   Search,
 } from "lucide-react";
+=======
+import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, Search, Users, UserPlus } from "lucide-react";
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
 import {
   Dialog,
   DialogContent,
@@ -55,6 +59,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+<<<<<<< HEAD
 } from "@/components/ui/select"; // <-- ADD THIS
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // <-- ADD THIS
 import Link from "next/link"; // <-- ADD THIS
@@ -63,6 +68,17 @@ import ChatMessageList from "@/components/chat/ChatMessageList";
 import ChatMessageInput from "@/components/chat/ChatMessageInput";
 import { formatFileSize } from "@/lib/client-utils";
 import { useChatSocket } from "@/hooks/use-chat-socket";
+=======
+} from "@/components/ui/select";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
+import Link from "next/link";
+import ChatMessageList from "@/components/chat/ChatMessageList";
+import ChatMessageInput from "@/components/chat/ChatMessageInput";
+import { formatFileSize } from "@/lib/client-utils";
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
 
 const MAX_POLL_OPTIONS = 6;
 const MATERIAL_ACCEPT =
@@ -121,6 +137,7 @@ const createInitialPostState = () => ({
   materialFiles: [],
 });
 
+// --- Create Group Dialog ---
 const CreateGroupDialog = ({
   open,
   onOpenChange,
@@ -252,8 +269,114 @@ const CreateGroupDialog = ({
   );
 };
 
+// --- Edit Group Dialog ---
+const EditGroupDialog = ({ open, onOpenChange, group, classroom, onUpdate, onDelete }) => {
+  const [formData, setFormData] = useState({ name: "", representativeId: "", memberIds: new Set() });
+  const students = classroom?.students || [];
+
+  useEffect(() => {
+    if (group && open) {
+      setFormData({
+        name: group.name || "",
+        representativeId: group.representative?.userId || "",
+        memberIds: new Set(group.members?.map(m => m.userId) || []),
+      });
+    }
+  }, [group, open]);
+
+  const handleMemberToggle = (checked, userId) => {
+    setFormData((prev) => {
+      const newMemberIds = new Set(prev.memberIds);
+      let nextRepresentativeId = prev.representativeId;
+      if (checked) {
+        newMemberIds.add(userId);
+      } else {
+        newMemberIds.delete(userId);
+        if (nextRepresentativeId === userId) nextRepresentativeId = "";
+      }
+      return { ...prev, representativeId: nextRepresentativeId, memberIds: newMemberIds };
+    });
+  };
+
+  const handleRepChange = (userId) => {
+    setFormData((prev) => {
+      const newMemberIds = new Set(prev.memberIds);
+      newMemberIds.add(userId);
+      return { ...prev, representativeId: userId, memberIds: newMemberIds };
+    });
+  };
+
+  const handleSubmit = () => {
+    onUpdate(group._id, formData);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Edit Group: {group?.name}</DialogTitle>
+          <DialogDescription>Modify group details, members, or delete the group.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4 overflow-y-auto">
+          <div className="grid gap-2">
+            <Label>Group Name</Label>
+            <Input value={formData.name} onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))} />
+          </div>
+          <div className="grid gap-2">
+            <Label>Representative</Label>
+            <Select value={formData.representativeId} onValueChange={handleRepChange}>
+              <SelectTrigger><SelectValue placeholder="Select Rep" /></SelectTrigger>
+              <SelectContent>
+                {students.map((s) => <SelectItem key={s.userId} value={s.userId}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>Members</Label>
+            <Card className="max-h-[200px] overflow-y-auto p-4">
+              <div className="space-y-2">
+                {students.map((student) => {
+                  const isRep = student.userId === formData.representativeId;
+                  return (
+                    <div key={student.userId} className="flex items-center space-x-2">
+                      <Checkbox checked={formData.memberIds.has(student.userId) || isRep} disabled={isRep} onCheckedChange={(c) => handleMemberToggle(c, student.userId)} />
+                      <Label className="font-normal">{student.name} {isRep && "(Rep)"}</Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        </div>
+        <DialogFooter className="flex flex-col sm:flex-row justify-between items-center w-full gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" type="button"><Trash2 className="w-4 h-4 mr-2" />Delete Group</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Group?</AlertDialogTitle>
+                <AlertDialogDescription>This action cannot be undone. All group posts will remain but loose their group tag.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onDelete(group._id)} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={handleSubmit}>Save Changes</Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export default function ClassroomPage() {
   const { id } = useParams();
+  const router = useRouter();
   const [classroom, setClassroom] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -263,6 +386,7 @@ export default function ClassroomPage() {
   const [username, setUsername] = useState("Student");
   const [isInstructor, setIsInstructor] = useState(false);
 
+  // Group Management State
   const [groups, setGroups] = useState([]);
   const [isGroupsLoading, setIsGroupsLoading] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
@@ -271,6 +395,10 @@ export default function ClassroomPage() {
     representativeId: "",
     memberIds: new Set(),
   });
+
+  // Selected Group for Editing
+  const [selectedGroup, setGroup] = useState(null);
+  const [isEditGroupOpen, setIsEditGroupOpen] = useState(false);
 
   const [streamPosts, setStreamPosts] = useState([]);
   const [announcementSearch, setAnnouncementSearch] = useState("");
@@ -357,7 +485,10 @@ export default function ClassroomPage() {
           if (res.ok) {
             const data = await res.json();
             setUsername(data.user.username || "User");
-            setIsInstructor(data.user.role === "instructor");
+            // Accept multiple role strings that mean "can edit/manage class/groups"
+            const role = (data.user?.role || "").toString().toLowerCase();
+            const canEdit = ["instructor", "teacher", "admin"].includes(role);
+            setIsInstructor(canEdit);
           }
         } catch (err) {
           console.error("Error fetching user details:", err);
@@ -377,15 +508,13 @@ export default function ClassroomPage() {
       const res = await fetch(`/api/classroom/${id}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load classroom");
-      // API returns { classroom }
       setClassroom(data.classroom || null);
     } catch (err) {
       console.error("Failed to fetch classroom:", err);
       setError("Failed to load classroom");
-    } finally {
-      // no-op for assignments here
     }
   };
+
   // Fetch groups for this class
   const fetchGroups = async () => {
     if (!id) return;
@@ -402,15 +531,27 @@ export default function ClassroomPage() {
       setIsGroupsLoading(false);
     }
   };
+
   // Fetch stream posts for this class
   const fetchStreamPosts = async () => {
     if (!id || !user?.uid) return;
     try {
+<<<<<<< HEAD
       const res = await fetch(`/api/stream?classId=${encodeURIComponent(id)}`, {
         headers: {
           "x-uid": user.uid,
         },
       });
+=======
+      const res = await fetch(
+        `/api/stream?classId=${encodeURIComponent(id)}`,
+        {
+          headers: {
+            "x-uid": user.uid,
+          },
+        }
+      );
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
 
       if (!res.ok) throw new Error("Failed to fetch stream posts");
 
@@ -444,7 +585,6 @@ export default function ClassroomPage() {
     if (!id) return;
     setIsAssignmentsLoading(true);
     try {
-      // include the current user's role and id so the API can enforce access control
       const role = isInstructor ? "instructor" : "student";
       const userId = user?.uid || "";
       const res = await fetch(
@@ -515,7 +655,6 @@ export default function ClassroomPage() {
       }
       toast.success("Deadline updated", { id: loadingId });
       setEditingDeadline((p) => ({ ...p, [assignmentId]: false }));
-      // refresh list
       fetchAssignments();
     } catch (e) {
       console.error("Update deadline error:", e);
@@ -525,9 +664,8 @@ export default function ClassroomPage() {
 
   // Main useEffect to fetch data based on tab
   useEffect(() => {
-    if (!id || !user) return; // Wait for user and id
+    if (!id || !user) return;
 
-    // Fetch classroom details (always needed)
     fetchClassroom();
 
     if (activeTab === "stream") {
@@ -538,6 +676,7 @@ export default function ClassroomPage() {
     } else if (activeTab === "assignments") {
       fetchAssignments();
     } else if (activeTab === "people") {
+<<<<<<< HEAD
       fetchGroups(); // <-- ADD THIS
     }
   }, [id, user, activeTab]);
@@ -561,8 +700,21 @@ export default function ClassroomPage() {
       );
     }
   );
+=======
+      fetchGroups();
+    }
+  }, [id, user, activeTab]);
 
-  // useEffect for auto-scrolling chat
+  // Chat polling
+  useEffect(() => {
+    if (activeTab === 'chat' && id) {
+      const interval = setInterval(fetchChatMessages, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, id]);
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
+
+  // Auto-scrolling chat
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
@@ -593,7 +745,6 @@ export default function ClassroomPage() {
   }, [streamPosts, user]);
 
   // --- Handlers ---
-  // Whiteboard helpers
   const openLocalPdfForWhiteboard = () => {
     if (!wbSelectedFile) return toast.error("Please choose a PDF to edit");
     const url = URL.createObjectURL(wbSelectedFile);
@@ -620,18 +771,20 @@ export default function ClassroomPage() {
       if (wbCurrentFile && String(wbCurrentFile._id).startsWith("local-")) {
         URL.revokeObjectURL(wbCurrentFile.fileUrl);
       }
-    } catch (_) {}
+    } catch (_) { }
     setIsWhiteboardOpen(false);
     setWbCurrentFile(null);
   };
 
   const handleWhiteboardSave = async (payload, filename) => {
+<<<<<<< HEAD
     console.log("handleWhiteboardSave called", { payload, filename });
     // The WhiteboardViewer now uploads directly to /api/announcements
     // This handler just needs to close and refresh
+=======
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
     try {
       closeWhiteboard();
-      // Refresh stream to show the new announcement
       await fetchStreamPosts();
       setWbSelectedFile(null);
       toast.success("Announcement posted successfully!");
@@ -728,7 +881,6 @@ export default function ClassroomPage() {
       return toast.error("Please select at least one group member.");
     }
 
-    // Get the full student objects for the selected IDs
     const allStudents = classroom?.students || [];
 
     const getStudent = (userId) => allStudents.find((s) => s.userId === userId);
@@ -738,11 +890,20 @@ export default function ClassroomPage() {
       return toast.error("Representative details not found.");
     }
 
+<<<<<<< HEAD
     // Ensure rep is also in the member list
     const finalMemberIds = new Set(memberIds);
     finalMemberIds.add(representativeId);
 
     const members = Array.from(finalMemberIds).map(getStudent).filter(Boolean); // Filter out any undefined
+=======
+    const finalMemberIds = new Set(memberIds);
+    finalMemberIds.add(representativeId);
+
+    const members = Array.from(finalMemberIds)
+      .map(getStudent)
+      .filter(Boolean);
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
 
     const loadingId = toast.loading("Creating group...");
 
@@ -773,14 +934,69 @@ export default function ClassroomPage() {
         representativeId: "",
         memberIds: new Set(),
       });
-      fetchGroups(); // Refresh the group list
+      fetchGroups();
     } catch (err) {
       console.error("Create group error:", err);
       toast.error(err.message, { id: loadingId });
     }
   };
 
+<<<<<<< HEAD
   // Handler for creating a new advanced post (stream)
+=======
+  const handleUpdateGroup = async (groupId, updatedData) => {
+    if (!updatedData.name.trim()) return toast.error("Group name required");
+
+    const loadingId = toast.loading("Updating group...");
+
+    // Reconstruct full member objects
+    const allStudents = classroom?.students || [];
+    const rep = allStudents.find(s => s.userId === updatedData.representativeId);
+    const finalMemberIds = new Set(updatedData.memberIds); finalMemberIds.add(updatedData.representativeId);
+    const members = Array.from(finalMemberIds).map(uid => allStudents.find(s => s.userId === uid)).filter(Boolean);
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-uid": user.uid },
+        body: JSON.stringify({
+          name: updatedData.name,
+          representative: { userId: rep.userId, name: rep.name },
+          members: members.map(m => ({ userId: m.userId, name: m.name }))
+        })
+      });
+
+      if (!res.ok) throw new Error("Failed to update");
+
+      toast.success("Group updated successfully", { id: loadingId });
+      setIsEditGroupOpen(false);
+      setGroup(null);
+      fetchGroups();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update group", { id: loadingId });
+    }
+  };
+
+  const handleDeleteGroup = async (groupId) => {
+    const loadingId = toast.loading("Deleting group...");
+    try {
+      const res = await fetch(`/api/groups/${groupId}?courseId=${id}`, {
+        method: "DELETE",
+        headers: { "x-uid": user.uid }
+      });
+      if (!res.ok) throw new Error("Failed");
+
+      toast.success("Group deleted", { id: loadingId });
+      setIsEditGroupOpen(false);
+      setGroup(null);
+      fetchGroups();
+    } catch (e) {
+      toast.error("Failed to delete group", { id: loadingId });
+    }
+  };
+
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
   const handleCreatePost = async () => {
     if (!newPostData.title.trim() || !newPostData.content.trim() || !user) {
       toast.error("Title and Content are required.");
@@ -808,10 +1024,10 @@ export default function ClassroomPage() {
 
     const pollPayload = newPostData.includePoll
       ? {
-          question: pollQuestion,
-          allowMultiple: newPostData.allowMultiplePollSelections,
-          options: pollOptions.map((text) => ({ text })),
-        }
+        question: pollQuestion,
+        allowMultiple: newPostData.allowMultiplePollSelections,
+        options: pollOptions.map((text) => ({ text })),
+      }
       : null;
     const linkUrl = (newPostData.linkUrl || "").trim();
     const linkText = (newPostData.linkText || "").trim();
@@ -860,21 +1076,21 @@ export default function ClassroomPage() {
       audience: audiencePayload,
       materials: Array.isArray(newPostData.materialFiles)
         ? newPostData.materialFiles.map((file) => ({
-            fileName: file.name,
-            fileSize: file.size,
-          }))
+          fileName: file.name,
+          fileSize: file.size,
+        }))
         : [],
       notesText: "",
       poll: pollPayload
         ? {
-            question: pollPayload.question,
-            allowMultiple: pollPayload.allowMultiple,
-            options: pollOptions.map((text, index) => ({
-              id: `temp-${Date.now()}-${index}`,
-              text,
-              voterIds: [],
-            })),
-          }
+          question: pollPayload.question,
+          allowMultiple: pollPayload.allowMultiple,
+          options: pollOptions.map((text, index) => ({
+            id: `temp-${Date.now()}-${index}`,
+            text,
+            voterIds: [],
+          })),
+        }
         : null,
     };
 
@@ -925,21 +1141,32 @@ export default function ClassroomPage() {
     const pid = (post._id ?? post.id)?.toString?.();
     if (!pid) return;
 
-    const baseState = createInitialPostState();
-    baseState.title = post.title || "";
-    baseState.content = post.content || "";
-    baseState.isImportant = !!post.isImportant;
-    baseState.isUrgent = !!post.isUrgent;
-    baseState.isPinned = !!post.isPinned;
-    baseState.linkUrl = post.link?.url || "";
-    baseState.linkText = post.link?.text || "";
+    const hasPoll = Array.isArray(post.poll?.options) && post.poll.options.length > 0;
 
+<<<<<<< HEAD
     const hasPoll = Boolean(post.poll);
     baseState.includePoll = hasPoll;
     baseState.pollQuestion = hasPoll ? post.poll?.question || "" : "";
     baseState.allowMultiplePollSelections = hasPoll
       ? !!post.poll?.allowMultiple
       : false;
+=======
+    let baseState = {
+      ...createInitialPostState(),
+      id: pid,
+      title: post.title || "",
+      content: post.content || "",
+      isImportant: !!post.isImportant,
+      isUrgent: !!post.isUrgent,
+      isPinned: !!post.isPinned,
+      linkUrl: post.link?.url || "",
+      linkText: post.link?.text || "",
+      audienceType: post.audience?.type || "class",
+      audienceGroupId: post.audience?.groupId || null,
+      includePoll: hasPoll,
+      allowMultiplePollSelections: hasPoll ? post.poll.allowMultiple : false,
+    };
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
 
     if (hasPoll) {
       const existingOptions = (post.poll?.options || []).slice(
@@ -957,9 +1184,6 @@ export default function ClassroomPage() {
         : ["", ""];
 
       const optionIds = existingOptions.map((option) => option?.id || null);
-      while (optionIds.length < baseState.pollOptions.length) {
-        optionIds.push(null);
-      }
       setEditingPollOptionIds(optionIds);
     } else {
       baseState.pollOptions = ["", ""];
@@ -1025,21 +1249,18 @@ export default function ClassroomPage() {
       }
     }
 
-    const linkUrl = (editPostData.linkUrl || "").trim();
-    const linkText = (editPostData.linkText || "").trim();
-
     const pollPayload = editPostData.includePoll
       ? {
-          question: pollQuestion,
-          allowMultiple: editPostData.allowMultiplePollSelections,
-          options: editPostData.pollOptions
-            .map((option, index) => ({
-              id: editingPollOptionIds[index] || null,
-              text: option.trim(),
-            }))
-            .filter((option) => option.text),
-        }
+        question: pollQuestion,
+        allowMultiple: editPostData.allowMultiplePollSelections,
+        options: trimmedOptions.map((text, index) => ({
+          id: editingPollOptionIds[index] || null,
+          text: text,
+        })),
+      }
       : null;
+    const linkUrl = (editPostData.linkUrl || "").trim();
+    const linkText = (editPostData.linkText || "").trim();
 
     const updatesPayload = {
       title,
@@ -1050,9 +1271,7 @@ export default function ClassroomPage() {
       link: linkUrl ? { url: linkUrl, text: linkText || "View Link" } : null,
       poll: pollPayload,
     };
-
     const loadingId = toast.loading("Updating post...");
-
     try {
       const res = await fetch("/api/stream", {
         method: "PATCH",
@@ -1069,7 +1288,6 @@ export default function ClassroomPage() {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to update post");
       }
-
       toast.success("Post updated", { id: loadingId });
       setIsEditPostOpen(false);
       resetEditState();
@@ -1111,7 +1329,6 @@ export default function ClassroomPage() {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to delete post");
       }
-
       toast.success("Post deleted", { id: loadingId });
       if (editingPostId === pid) {
         setIsEditPostOpen(false);
@@ -1125,10 +1342,10 @@ export default function ClassroomPage() {
     }
   };
 
-  // [NEW] Handler for sending a new chat message
   const handleSendChatMessage = async (e) => {
     if (e) e.preventDefault();
     const text = chatInput.trim();
+
     if (!text || !user) return;
 
     const optimisticMessage = {
@@ -1143,7 +1360,7 @@ export default function ClassroomPage() {
     };
 
     // Optimistic update
-    setChatMessages([...chatMessages, optimisticMessage]);
+    setChatMessages((prev) => [...prev, optimisticMessage]);
     setChatInput("");
 
     try {
@@ -1165,13 +1382,16 @@ export default function ClassroomPage() {
       console.error("Error sending chat message:", err);
       toast.error(err.message);
       // Rollback
+<<<<<<< HEAD
       setChatMessages(
         chatMessages.filter((m) => m.id !== optimisticMessage.id)
       );
+=======
+      setChatMessages((prev) => prev.filter((m) => m.id !== optimisticMessage.id));
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
     }
   };
 
-  // Handler for deleting a chat message
   const handleDeleteChatMessage = async (messageId) => {
     if (!messageId || !user) return;
 
@@ -1200,10 +1420,14 @@ export default function ClassroomPage() {
       fetchChatMessages();
     } catch (error) {
       console.error("Error deleting chat message:", error);
+<<<<<<< HEAD
       toast.error(error.message || "Failed to delete message", {
         id: loadingId,
       });
       // Rollback
+=======
+      toast.error(error.message || "Failed to delete message", { id: loadingId });
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
       setChatMessages(initialMessages);
     }
   };
@@ -1243,7 +1467,6 @@ export default function ClassroomPage() {
     setPollSubmitting((prev) => ({ ...prev, [pid]: true }));
 
     try {
-      console.log("Submitting poll vote", { postId: pid, selections });
       const res = await fetch("/api/stream/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1260,7 +1483,6 @@ export default function ClassroomPage() {
       }
 
       const payload = await res.json().catch(() => ({}));
-
       if (payload?.poll) {
         setStreamPosts((prev) =>
           prev.map((p) => {
@@ -1278,7 +1500,6 @@ export default function ClassroomPage() {
           })
         );
       }
-
       toast.success("Vote saved");
       setPollSelections((prev) => ({ ...prev, [pid]: selections }));
       fetchStreamPosts();
@@ -1310,7 +1531,6 @@ export default function ClassroomPage() {
   };
 
   // --- Render Logic ---
-
   if (error) {
     return <p className="text-center text-red-500 mt-10">{error}</p>;
   }
@@ -1324,7 +1544,7 @@ export default function ClassroomPage() {
   return (
     <div className="min-h-screen px-6 py-10 flex justify-center bg-background text-foreground">
       <div className="w-full max-w-5xl space-y-8">
-        {/* Header - description box (left-aligned) */}
+        {/* Header */}
         <Card className="border border-border shadow-sm bg-card">
           <CardHeader className="text-left space-y-3">
             <CardTitle className="text-3xl font-semibold">
@@ -1423,6 +1643,7 @@ export default function ClassroomPage() {
                   </div>
                 </CardContent>
               </Card>
+
               {/* "Create Post" Dialog for instructors */}
               {isInstructor && (
                 <Dialog
@@ -1699,12 +1920,12 @@ export default function ClassroomPage() {
                               checked
                                 ? { ...prev, includePoll: true }
                                 : {
-                                    ...prev,
-                                    includePoll: false,
-                                    pollQuestion: "",
-                                    pollOptions: ["", ""],
-                                    allowMultiplePollSelections: false,
-                                  }
+                                  ...prev,
+                                  includePoll: false,
+                                  pollQuestion: "",
+                                  pollOptions: ["", ""],
+                                  allowMultiplePollSelections: false,
+                                }
                             )
                           }
                         />
@@ -1772,6 +1993,7 @@ export default function ClassroomPage() {
                               Add option
                             </Button>
                           </div>
+
                           <div className="flex items-center justify-between">
                             <div>
                               <Label htmlFor="poll-allow-multiple">
@@ -1815,7 +2037,6 @@ export default function ClassroomPage() {
                   </DialogContent>
                 </Dialog>
               )}
-
               <div className="rounded-md border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex w-full items-center gap-2 sm:max-w-sm">
@@ -2022,7 +2243,6 @@ export default function ClassroomPage() {
                           }}
                         />
                       </div>
-
                       {editPostData.includePoll && (
                         <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
                           <div className="grid gap-2">
@@ -2041,7 +2261,6 @@ export default function ClassroomPage() {
                               }
                             />
                           </div>
-
                           <div className="space-y-2">
                             <Label>Options</Label>
                             {editPostData.pollOptions.map((option, index) => (
@@ -2215,10 +2434,14 @@ export default function ClassroomPage() {
                           {isInstructor && post.audience?.type === "group" && (
                             <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-medium flex items-center">
                               <Users className="w-3 h-3 inline-block mr-1" />
+<<<<<<< HEAD
                               {/* Find the group name from the state */}
                               {groups.find(
                                 (g) => g._id === post.audience.groupId
                               )?.name || "Group Post"}
+=======
+                              {groups.find((g) => g._id === post.audience.groupId)?.name || "Group Post"}
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
                             </span>
                           )}
                           {post.isPinned && (
@@ -2293,6 +2516,7 @@ export default function ClassroomPage() {
                                       <p className="font-medium text-foreground">
                                         {material?.fileName || "Attachment"}
                                       </p>
+<<<<<<< HEAD
                                       {material?.fileSize ? (
                                         <p className="text-xs text-muted-foreground">
                                           {formatFileSize(material.fileSize)}
@@ -2320,6 +2544,38 @@ export default function ClassroomPage() {
                                           variant="ghost"
                                           size="sm"
                                           asChild
+=======
+                                    ) : null}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {material?.viewLink && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-none"
+                                        asChild
+                                      >
+                                        <a
+                                          href={material.viewLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Open
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {material?.downloadLink && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="border-none"
+                                        asChild
+                                      >
+                                        <a
+                                          href={material.downloadLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
                                         >
                                           <a
                                             href={material.downloadLink}
@@ -2416,6 +2672,7 @@ export default function ClassroomPage() {
                                         option.id
                                       );
 
+<<<<<<< HEAD
                                       return (
                                         <div
                                           key={option.id}
@@ -2471,16 +2728,64 @@ export default function ClassroomPage() {
                                           {pollSubmitting[pidString]
                                             ? "Saving..."
                                             : hasVoted
+=======
+                                    return (
+                                      <div
+                                        key={option.id}
+                                        className={`rounded-md border bg-card px-3 py-2 transition ${isSelected ? "border-primary shadow-sm" : "border-border"
+                                          }`}
+                                      >
+                                        <label className="flex items-center gap-3 text-sm text-foreground">
+                                          <input
+                                            type={allowMultipleSelections ? "checkbox" : "radio"}
+                                            name={`poll-${pidString}`}
+                                            checked={isSelected}
+                                            onChange={() => handlePollOptionToggle(pidString, option.id, allowMultipleSelections)}
+                                            className="h-4 w-4"
+                                          />
+                                          <span>{option.text}</span>
+                                        </label>
+                                        <div className="mt-2">
+                                          <Progress value={percentage} />
+                                          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                                            <span>{optionVotes} vote{optionVotes === 1 ? "" : "s"}</span>
+                                            <span>{percentage}%</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                                    <span>{selectionSummary}</span>
+                                    {user && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => handlePollSubmit(post)}
+                                        disabled={buttonDisabled}
+                                      >
+                                        {pollSubmitting[pidString]
+                                          ? "Saving..."
+                                          : hasVoted
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
                                             ? "Update Vote"
                                             : "Submit Vote"}
                                         </Button>
                                       )}
                                     </div>
                                   </div>
+<<<<<<< HEAD
                                 );
                               })()}
                             </div>
                           )}
+=======
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
                       </div>
                     );
                   })}
@@ -2488,6 +2793,7 @@ export default function ClassroomPage() {
               )}
             </div>
           )}
+
           {/* ASSIGNMENTS */}
           {activeTab === "assignments" && (
             <div className="space-y-4">
@@ -2514,6 +2820,7 @@ export default function ClassroomPage() {
                           (a) => String(a.classId || a.courseId) === String(id)
                         )
                         .map((a) => (
+<<<<<<< HEAD
                           <div
                             key={a.id}
                             className="border rounded-md p-4 hover:shadow-sm transition"
@@ -2551,10 +2858,39 @@ export default function ClassroomPage() {
                                   >
                                     Edit Deadline
                                   </Button>
+=======
+                          <div key={a.id} className="border rounded-md p-4 hover:shadow-sm transition">
+                            {isInstructor ? (
+                              <button
+                                className="font-semibold text-lg text-left text-primary hover:underline"
+                                onClick={() => window.location.href = `/admin`}
+                                title="Open assignments page"
+                              >
+                                {a.title}
+                              </button>
+                            ) : (
+                              <button
+                                className="font-semibold text-lg text-left text-primary hover:underline"
+                                onClick={() => window.location.href = `/assignments`}
+                                title="Open assignments page"
+                              >
+                                {a.title}
+                              </button>
+                            )}
+                            {a.description && (
+                              <p className="text-sm text-muted-foreground mt-1">{a.description}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
+                            {isInstructor && (
+                              <div className="mt-2">
+                                {!editingDeadline[a.id] ? (
+                                  <Button variant="outline" size="sm" className="border-none" onClick={() => startEditDeadline(a.id, a.deadline)}>Edit Deadline</Button>
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
                                 ) : (
                                   <div className="flex items-center gap-2 mt-2">
                                     <Input
                                       type="datetime-local"
+<<<<<<< HEAD
                                       value={deadlineInputs[a.id] || ""}
                                       onChange={(e) =>
                                         setDeadlineInputs((p) => ({
@@ -2577,12 +2913,20 @@ export default function ClassroomPage() {
                                     >
                                       Cancel
                                     </Button>
+=======
+                                      value={deadlineInputs[a.id] || ''}
+                                      onChange={(e) => setDeadlineInputs((p) => ({ ...p, [a.id]: e.target.value }))}
+                                    />
+                                    <Button size="sm" onClick={() => saveDeadline(a.id)}>Save</Button>
+                                    <Button size="sm" variant="outline" className="border-none" onClick={() => cancelEditDeadline(a.id)}>Cancel</Button>
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
                                   </div>
                                 )}
                               </div>
                             )}
                             {a.fileUrl && (
                               <div className="mt-3">
+<<<<<<< HEAD
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -2596,6 +2940,10 @@ export default function ClassroomPage() {
                                   >
                                     Download File
                                   </a>
+=======
+                                <Button variant="outline" size="sm" className="border-none" asChild>
+                                  <a href={a.fileUrl} target="_blank" rel="noopener noreferrer">Download File</a>
+>>>>>>> b32ed8dbc2337ba87d4dcc183eeabae03d6d9d1a
                                 </Button>
                               </div>
                             )}
@@ -2640,7 +2988,6 @@ export default function ClassroomPage() {
                     />
                   )}
                 </div>
-
                 {/* Chat Input Box */}
                 <div className="border-t border-border p-4 bg-card">
                   <ChatMessageInput
@@ -2698,10 +3045,11 @@ export default function ClassroomPage() {
                           {student.name}
                         </span>
                       </div>
-                    ))
-                  )}
+                    )))
+                  }
                 </CardContent>
               </Card>
+
               <Card className="border border-border bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-xl">
@@ -2729,15 +3077,42 @@ export default function ClassroomPage() {
                   {!isGroupsLoading && groups.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {groups.map((group) => (
-                        <Link
+                        <div
                           key={group._id}
-                          href={`/classroom/${id}/group/${group._id}`}
+                          onClick={() => {
+                            if (isInstructor) {
+                              setGroup(group);
+                              setIsEditGroupOpen(true);
+                            } else {
+                              // students view group details page
+                              router.push(`/classroom/${id}/group/${group._id}`);
+                            }
+                          }}
+                          className={`transition-shadow ${isInstructor ? "cursor-pointer" : ""}`}
                         >
-                          <Card className="hover:shadow-md transition-shadow">
+                          <Card className="hover:shadow-md h-full">
                             <CardHeader>
-                              <CardTitle className="text-lg text-primary hover:underline">
-                                {group.name}
-                              </CardTitle>
+                              <div className="flex justify-between items-start">
+                                <CardTitle className="text-lg text-primary hover:underline">
+                                  {group.name}
+                                </CardTitle>
+                                {isInstructor ? (
+                                  // explicit Edit button for instructors (stop propagation)
+                                  <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
+                                    <Pencil className="w-4 h-4 text-muted-foreground opacity-60" />
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setGroup(group);
+                                        setIsEditGroupOpen(true);
+                                      }}
+                                    >
+                                      Edit
+                                    </Button>
+                                  </div>
+                                ) : null}
+                              </div>
                               <CardDescription>
                                 {group.members.length} member(s)
                               </CardDescription>
@@ -2748,7 +3123,7 @@ export default function ClassroomPage() {
                               </p>
                             </CardContent>
                           </Card>
-                        </Link>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -2757,6 +3132,7 @@ export default function ClassroomPage() {
             </div>
           )}
         </div>
+
         {/* Mount the Whiteboard modal when opened */}
         {isWhiteboardOpen && wbCurrentFile && (
           <DynamicWhiteboard
@@ -2768,15 +3144,28 @@ export default function ClassroomPage() {
             authorName={username}
           />
         )}
+        
+        {/* Modals */}
         {isInstructor && (
-          <CreateGroupDialog
-            open={isCreateGroupOpen}
-            onOpenChange={setIsCreateGroupOpen}
-            onSubmit={handleCreateGroup}
-            classroom={classroom}
-            newGroupData={newGroupData}
-            setNewGroupData={setNewGroupData}
-          />
+          <>
+            <CreateGroupDialog
+              open={isCreateGroupOpen}
+              onOpenChange={setIsCreateGroupOpen}
+              onSubmit={handleCreateGroup}
+              classroom={classroom}
+              newGroupData={newGroupData}
+              setNewGroupData={setNewGroupData}
+            />
+            
+            <EditGroupDialog 
+              open={isEditGroupOpen}
+              onOpenChange={setIsEditGroupOpen}
+              group={selectedGroup}
+              classroom={classroom}
+              onUpdate={handleUpdateGroup}
+              onDelete={handleDeleteGroup}
+            />
+          </>
         )}
       </div>
     </div>
