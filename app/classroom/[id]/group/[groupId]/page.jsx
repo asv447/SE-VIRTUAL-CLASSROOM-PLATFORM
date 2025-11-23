@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
 } from "@/components/ui/card";
-import { Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Star, ArrowLeft } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const GroupEditControls = dynamic(
@@ -18,6 +19,7 @@ const GroupEditControls = dynamic(
 
 export default function GroupDetailsPage(props) {
   const params = useParams();
+  const router = useRouter();
   const { id: courseId, groupId } = params; 
 
   const { currentUserRole, allStudents } = props;
@@ -70,6 +72,20 @@ export default function GroupDetailsPage(props) {
   return (
     <div className="min-h-screen bg-background text-foreground px-6 py-10 flex justify-center">
       <div className="w-full max-w-3xl space-y-8">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // Navigate back to classroom and set people tab
+              router.push(`/classroom/${courseId}?tab=people`);
+            }}
+            className="gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to People
+          </Button>
+        </div>
         <h1 className="text-3xl font-semibold text-foreground">{group.name}</h1>
 
         <Card className="border border-border bg-card shadow-sm">

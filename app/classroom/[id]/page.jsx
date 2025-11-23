@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import {
@@ -355,10 +355,14 @@ const EditGroupDialog = ({ open, onOpenChange, group, classroom, onUpdate, onDel
 export default function ClassroomPage() {
   const { id } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [classroom, setClassroom] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("stream");
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabFromUrl = searchParams.get('tab');
+    return ['stream', 'assignments', 'chat', 'people'].includes(tabFromUrl) ? tabFromUrl : 'stream';
+  });
 
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("Student");
@@ -534,9 +538,9 @@ export default function ClassroomPage() {
   };
 
   // Fetch chat messages for this class
-  const fetchChatMessages = async () => {
+  const fetchChatMessages = async (background = false) => {
     if (!id) return;
-    setIsChatLoading(true);
+    if (!background) setIsChatLoading(true);
     try {
       const res = await fetch(`/api/chat?classId=${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error("Failed to fetch chat messages");
@@ -546,7 +550,7 @@ export default function ClassroomPage() {
       console.error("Error fetching chat messages:", err);
       setChatMessages([]);
     } finally {
-      setIsChatLoading(false);
+      if (!background) setIsChatLoading(false);
     }
   };
 
@@ -653,14 +657,32 @@ export default function ClassroomPage() {
   // Chat polling
   useEffect(() => {
     if (activeTab === 'chat' && id) {
-      const interval = setInterval(fetchChatMessages, 10000);
+      // Poll in the background to avoid showing the loading state and
+      // avoid janky UI refreshes while the user is reading history.
+      const interval = setInterval(() => fetchChatMessages(true), 10000);
       return () => clearInterval(interval);
     }
   }, [activeTab, id]);
 
-  // Auto-scrolling chat
+  // Auto-scrolling chat: only auto-scroll when the user is already
+  // near the bottom. This prevents jumping to the bottom while the
+  // user is reading earlier messages.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const end = messagesEndRef.current;
+    if (!end) return;
+
+    const container = end.parentElement;
+    if (!container) {
+      end.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+
+    // distance from bottom in pixels
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const THRESHOLD = 200; // if within 200px of bottom, auto-scroll
+    if (distanceFromBottom < THRESHOLD) {
+      end.scrollIntoView({ behavior: "smooth" });
+    }
   }, [chatMessages]);
 
   useEffect(() => {
@@ -2801,15 +2823,10 @@ export default function ClassroomPage() {
                         <div
                           key={group._id}
                           onClick={() => {
-                            if (isInstructor) {
-                              setGroup(group);
-                              setIsEditGroupOpen(true);
-                            } else {
-                              // students view group details page
-                              router.push(`/classroom/${id}/group/${group._id}`);
-                            }
+                            // Both instructors and students view group details page
+                            router.push(`/classroom/${id}/group/${group._id}`);
                           }}
-                          className={`transition-shadow ${isInstructor ? "cursor-pointer" : ""}`}
+                          className="transition-shadow cursor-pointer"
                         >
                           <Card className="hover:shadow-md h-full">
                             <CardHeader>
@@ -2819,8 +2836,7 @@ export default function ClassroomPage() {
                                 </CardTitle>
                                 {isInstructor ? (
                                   // explicit Edit button for instructors (stop propagation)
-                                  <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
-                                    <Pencil className="w-4 h-4 text-muted-foreground opacity-60" />
+                                  <div onClick={(e) => e.stopPropagation()}>
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -2829,6 +2845,7 @@ export default function ClassroomPage() {
                                         setIsEditGroupOpen(true);
                                       }}
                                     >
+                                      <Pencil className="w-4 h-4 mr-1" />
                                       Edit
                                     </Button>
                                   </div>
