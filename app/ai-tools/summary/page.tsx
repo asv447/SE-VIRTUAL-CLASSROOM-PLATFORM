@@ -110,7 +110,7 @@ export default function SummaryTool() {
               <option value="brief">📋 Quick overview (5 min read)</option>
               <option value="long">📚 Detailed notes (complete coverage)</option>
               <option value="examples">💡 Practice questions & examples</option>
-            </select>
+             </select>
           </div>
 
           <button
