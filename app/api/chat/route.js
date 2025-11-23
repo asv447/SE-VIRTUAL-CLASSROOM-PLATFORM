@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import {
-  getClassroomChatsCollection,
-  getUsersCollection,
-} from "@/lib/mongodb";
+import { getClassroomChatsCollection, getUsersCollection } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { getSocketIOServer } from "@/lib/socket-io-server";
+
+// Ensure this route executes in the Node.js runtime so it can access the
+// Socket.IO server instance stored on the Node global object by `pages/api/socket.js`.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {
@@ -102,6 +105,13 @@ export async function POST(request) {
       _id: undefined,
     };
 
+    // Broadcast the new message to all connected clients in this classroom via WebSocket
+    const io = getSocketIOServer();
+    if (io) {
+      io.to(`classroom:${classId}`).emit("new_chat_message", createdMessage);
+      console.log(`Broadcast new chat message to classroom:${classId}`);
+    }
+
     return NextResponse.json(createdMessage, { status: 201 });
   } catch (err) {
     console.error("Error sending chat message:", err);
@@ -151,6 +161,16 @@ export async function DELETE(request) {
         { error: "Failed to delete message" },
         { status: 500 }
       );
+    }
+
+    // Broadcast the deletion to all connected clients in this classroom via WebSocket
+    const io = getSocketIOServer();
+    if (io) {
+      io.to(`classroom:${message.classId}`).emit(
+        "chat_message_deleted",
+        messageId
+      );
+      console.log(`Broadcast message deletion to classroom:${message.classId}`);
     }
 
     return NextResponse.json(

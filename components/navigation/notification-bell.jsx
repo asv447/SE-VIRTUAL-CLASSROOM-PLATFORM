@@ -195,18 +195,19 @@ export default function NotificationBell() {
 
   async function tickNotification(id) {
     try {
-      await Promise.allSettled([
-        fetch(`/api/notifications`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
-        }),
-        fetch(`/api/notifications`, {
-          method: "DELETE",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
-        }),
-      ]);
+      // First mark as read
+      await fetch(`/api/notifications`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      
+      // Then delete
+      await fetch(`/api/notifications`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
     } catch (_) {
     } finally {
       setNotifications((prev) => prev.filter((p) => p.id !== id));

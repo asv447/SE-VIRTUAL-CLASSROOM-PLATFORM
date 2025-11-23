@@ -13,7 +13,9 @@ async function findAssignmentDocument(collection, identifier) {
   if (!identifier) return null;
   // Try by _id as ObjectId
   if (ObjectId.isValid(identifier)) {
-    const byObjectId = await collection.findOne({ _id: new ObjectId(identifier) });
+    const byObjectId = await collection.findOne({
+      _id: new ObjectId(identifier),
+    });
     if (byObjectId) return byObjectId;
   }
   // Try by _id stored as a string (legacy/malformed)
@@ -23,7 +25,9 @@ async function findAssignmentDocument(collection, identifier) {
   const byClientId = await collection.findOne({ id: identifier });
   if (byClientId) return byClientId;
   // Fallback: find by course/class references matching identifier
-  const byClassOrCourse = await collection.findOne({ $or: [ { classId: identifier }, { courseId: identifier } ] });
+  const byClassOrCourse = await collection.findOne({
+    $or: [{ classId: identifier }, { courseId: identifier }],
+  });
   return byClassOrCourse || null;
 }
 
@@ -31,7 +35,9 @@ async function findCourseDocument(collection, identifier) {
   if (!identifier) return null;
   // Try by _id as ObjectId
   if (ObjectId.isValid(identifier)) {
-    const byObjectId = await collection.findOne({ _id: new ObjectId(identifier) });
+    const byObjectId = await collection.findOne({
+      _id: new ObjectId(identifier),
+    });
     if (byObjectId) return byObjectId;
   }
   // Try by _id stored as a string
@@ -222,7 +228,13 @@ export async function PATCH(request) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
     const { submissionId, grade, maxScore, feedback } = body || {};
-    console.log("[PATCH] Payload:", { submissionId, grade, maxScore, feedback, graderId });
+    console.log("[PATCH] Payload:", {
+      submissionId,
+      grade,
+      maxScore,
+      feedback,
+      graderId,
+    });
 
     if (!submissionId) {
       console.log("[PATCH] Missing submissionId");
@@ -254,7 +266,10 @@ export async function PATCH(request) {
     }
 
     console.log("[PATCH] Step 3: Getting collections");
-    let submissionsCollection, assignmentsCollection, coursesCollection, notificationsCollection;
+    let submissionsCollection,
+      assignmentsCollection,
+      coursesCollection,
+      notificationsCollection;
     try {
       submissionsCollection = await getSubmissionsCollection();
       assignmentsCollection = await getAssignmentsCollection();
@@ -263,7 +278,10 @@ export async function PATCH(request) {
       console.log("[PATCH] Collections obtained successfully");
     } catch (collErr) {
       console.error("[PATCH] Failed to get collections:", collErr);
-      return NextResponse.json({ error: "Database connection failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Database connection failed" },
+        { status: 500 }
+      );
     }
 
     console.log("[PATCH] Step 4: Finding submission");
@@ -272,10 +290,16 @@ export async function PATCH(request) {
       submission = await submissionsCollection.findOne({
         _id: submissionObjectId,
       });
-      console.log("[PATCH] Found submission:", submission?._id?.toString() || "NULL");
+      console.log(
+        "[PATCH] Found submission:",
+        submission?._id?.toString() || "NULL"
+      );
     } catch (findErr) {
       console.error("[PATCH] Failed to find submission:", findErr);
-      return NextResponse.json({ error: "Database query failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Database query failed" },
+        { status: 500 }
+      );
     }
 
     if (!submission) {
@@ -292,16 +316,27 @@ export async function PATCH(request) {
       assignmentsCollection,
       assignmentId
     );
-    console.log("[PATCH] Found assignmentDoc:", assignmentDoc?._id?.toString() || "NULL");
+    console.log(
+      "[PATCH] Found assignmentDoc:",
+      assignmentDoc?._id?.toString() || "NULL"
+    );
 
     const courseId = assignmentDoc?.courseId || assignmentDoc?.classId;
     console.log("[PATCH] Looking up courseId:", courseId);
     const courseDoc = await findCourseDocument(coursesCollection, courseId);
-    console.log("[PATCH] Found courseDoc:", courseDoc?._id?.toString() || "NULL");
+    console.log(
+      "[PATCH] Found courseDoc:",
+      courseDoc?._id?.toString() || "NULL"
+    );
 
     const instructorId =
       assignmentDoc?.instructorId || courseDoc?.instructorId || null;
-    console.log("[PATCH] Authorization check - instructorId:", instructorId, "graderId:", graderId);
+    console.log(
+      "[PATCH] Authorization check - instructorId:",
+      instructorId,
+      "graderId:",
+      graderId
+    );
     if (instructorId && instructorId !== graderId) {
       return NextResponse.json(
         { error: "You are not allowed to grade this submission" },
@@ -347,13 +382,19 @@ export async function PATCH(request) {
     };
 
     console.log("[PATCH] Updating submission with:", update);
-    console.log("[PATCH] Updating submission _id:", submissionObjectId.toString());
+    console.log(
+      "[PATCH] Updating submission _id:",
+      submissionObjectId.toString()
+    );
     console.log("[PATCH] Existing submission _id:", submission._id.toString());
-    
+
     // Verify the IDs match
     if (submission._id.toString() !== submissionObjectId.toString()) {
       console.error("[PATCH] ID mismatch!");
-      return NextResponse.json({ error: "Submission ID mismatch" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Submission ID mismatch" },
+        { status: 500 }
+      );
     }
 
     let result;
@@ -368,8 +409,15 @@ export async function PATCH(request) {
         console.log("[PATCH] Updated submission _id:", result._id?.toString());
       }
     } catch (updateErr) {
-      console.error("[PATCH] Update operation failed:", updateErr.message, updateErr.stack);
-      return NextResponse.json({ error: "Failed to update submission: " + updateErr.message }, { status: 500 });
+      console.error(
+        "[PATCH] Update operation failed:",
+        updateErr.message,
+        updateErr.stack
+      );
+      return NextResponse.json(
+        { error: "Failed to update submission: " + updateErr.message },
+        { status: 500 }
+      );
     }
 
     if (!result) {
@@ -381,10 +429,12 @@ export async function PATCH(request) {
           { $set: update }
         );
         console.log("[PATCH] Direct update result:", directUpdate);
-        
+
         if (directUpdate.modifiedCount > 0 || directUpdate.matchedCount > 0) {
           // Re-fetch the document
-          const updatedDoc = await submissionsCollection.findOne({ _id: submissionObjectId });
+          const updatedDoc = await submissionsCollection.findOne({
+            _id: submissionObjectId,
+          });
           if (updatedDoc) {
             console.log("[PATCH] Successfully updated using direct method");
             result = updatedDoc;
@@ -393,10 +443,13 @@ export async function PATCH(request) {
       } catch (directErr) {
         console.error("[PATCH] Direct update also failed:", directErr);
       }
-      
+
       if (!result) {
         return NextResponse.json(
-          { error: "Failed to update submission - document not found after update" },
+          {
+            error:
+              "Failed to update submission - document not found after update",
+          },
           { status: 500 }
         );
       }
@@ -404,22 +457,48 @@ export async function PATCH(request) {
 
     // Notify the student of grading (best-effort)
     try {
-      console.log("[PATCH] Creating notification for studentId:", submission.studentId);
+      console.log(
+        "[PATCH] Creating notification for studentId:",
+        submission.studentId
+      );
       if (submission.studentId) {
         const isGradeRemoval = parsedGrade === null && previouslyGraded;
         const isFirstGrade = parsedGrade !== null && !previouslyGraded;
         const isGradeUpdate = parsedGrade !== null && previouslyGraded;
+
+        const previousGradeValue = previouslyGraded ? submission.grade : null;
+        const titleOrFallback = assignmentDoc?.title || "an assignment";
+        const scoreFragment =
+          parsedGrade !== null
+            ? parsedMaxScore !== null
+              ? `${parsedGrade}/${parsedMaxScore}`
+              : `${parsedGrade}`
+            : "";
 
         const notifTitle = isGradeRemoval
           ? "Grade removed"
           : isFirstGrade
           ? "Assignment graded"
           : "Grade updated";
-        const notifMessage = isGradeRemoval
-          ? `Your grade for ${assignmentDoc?.title || "an assignment"} was removed.`
-          : isFirstGrade
-          ? `Your submission for ${assignmentDoc?.title || "an assignment"} has been graded.`
-          : `Your grade for ${assignmentDoc?.title || "an assignment"} has been updated.`;
+
+        const notifMessage = (() => {
+          if (isGradeRemoval) {
+            return `Your grade for ${titleOrFallback} was removed.`;
+          }
+          if (isFirstGrade) {
+            return `Your submission for ${titleOrFallback} has been graded. Score: ${scoreFragment}.`;
+          }
+          if (isGradeUpdate) {
+            const previousFragment =
+              previousGradeValue !== null
+                ? parsedMaxScore !== null
+                  ? `${previousGradeValue}/${parsedMaxScore}`
+                  : `${previousGradeValue}`
+                : "previous grade unavailable";
+            return `Your grade for ${titleOrFallback} has been updated. New score: ${scoreFragment} (was ${previousFragment}).`;
+          }
+          return `Grade status changed for ${titleOrFallback}.`;
+        })();
 
         const notifDoc = {
           userId: submission.studentId,
@@ -442,7 +521,11 @@ export async function PATCH(request) {
         console.log("[PATCH] Notification inserted successfully");
       }
     } catch (notifyErr) {
-      console.error("[PATCH] Failed to notify student of grade:", notifyErr.message, notifyErr.stack);
+      console.error(
+        "[PATCH] Failed to notify student of grade:",
+        notifyErr.message,
+        notifyErr.stack
+      );
     }
 
     // Persist per-student grade under the assignment document (best-effort)
@@ -464,7 +547,10 @@ export async function PATCH(request) {
             },
           }
         );
-        console.log("[PATCH] Update existing result - modified:", updateExisting?.modifiedCount);
+        console.log(
+          "[PATCH] Update existing result - modified:",
+          updateExisting?.modifiedCount
+        );
 
         if (!updateExisting || updateExisting.modifiedCount === 0) {
           // No existing entry; push a new record
@@ -485,18 +571,30 @@ export async function PATCH(request) {
               },
             }
           );
-          console.log("[PATCH] Push result - modified:", pushResult?.modifiedCount);
+          console.log(
+            "[PATCH] Push result - modified:",
+            pushResult?.modifiedCount
+          );
         }
       } else {
-        console.log("[PATCH] Skipping assignment grade sync - missing assignmentDoc._id or studentId");
+        console.log(
+          "[PATCH] Skipping assignment grade sync - missing assignmentDoc._id or studentId"
+        );
       }
     } catch (assignGradeErr) {
-      console.error("[PATCH] Failed to sync grade into assignment document:", assignGradeErr.message, assignGradeErr.stack);
+      console.error(
+        "[PATCH] Failed to sync grade into assignment document:",
+        assignGradeErr.message,
+        assignGradeErr.stack
+      );
       // Non-fatal
     }
 
     const { _id, fileData, ...rest } = result;
-    console.log("[PATCH] Successfully completed grade update for submission:", _id.toString());
+    console.log(
+      "[PATCH] Successfully completed grade update for submission:",
+      _id.toString()
+    );
 
     return NextResponse.json(
       {
@@ -508,6 +606,9 @@ export async function PATCH(request) {
   } catch (err) {
     console.error("[API /api/submissions PATCH] Fatal Error:", err.message);
     console.error("[API /api/submissions PATCH] Stack:", err.stack);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Internal server error" },
+      { status: 500 }
+    );
   }
 }
