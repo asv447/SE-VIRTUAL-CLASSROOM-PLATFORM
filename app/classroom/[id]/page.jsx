@@ -11,7 +11,14 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { Copy, Plus, Link as LinkIcon, Trash2, Pencil, Search } from "lucide-react";
+import {
+  Copy,
+  Plus,
+  Link as LinkIcon,
+  Trash2,
+  Pencil,
+  Search,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -49,16 +56,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"; // <-- ADD THIS
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group"; // <-- ADD THIS
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // <-- ADD THIS
 import Link from "next/link"; // <-- ADD THIS
 import { Users, UserPlus } from "lucide-react"; // <-- ADD THIS
 import ChatMessageList from "@/components/chat/ChatMessageList";
 import ChatMessageInput from "@/components/chat/ChatMessageInput";
 import { formatFileSize } from "@/lib/client-utils";
-// [DELETED] All socket.io imports are gone
+import { useChatSocket } from "@/hooks/use-chat-socket";
 
 const MAX_POLL_OPTIONS = 6;
 const MATERIAL_ACCEPT =
@@ -202,7 +206,8 @@ const CreateGroupDialog = ({
             <Card className="max-h-[250px] overflow-y-auto p-4">
               <div className="space-y-3">
                 {students.map((student) => {
-                  const isRep = student.userId === newGroupData.representativeId;
+                  const isRep =
+                    student.userId === newGroupData.representativeId;
                   return (
                     <div
                       key={student.userId}
@@ -210,7 +215,9 @@ const CreateGroupDialog = ({
                     >
                       <Checkbox
                         id={`member-${student.userId}`}
-                        checked={newGroupData.memberIds.has(student.userId) || isRep}
+                        checked={
+                          newGroupData.memberIds.has(student.userId) || isRep
+                        }
                         disabled={isRep}
                         onCheckedChange={(checked) =>
                           handleMemberToggle(checked, student.userId)
@@ -222,7 +229,9 @@ const CreateGroupDialog = ({
                       >
                         {student.name}{" "}
                         {isRep && (
-                          <span className="text-xs text-amber-600 dark:text-amber-400">(Rep)</span>
+                          <span className="text-xs text-amber-600 dark:text-amber-400">
+                            (Rep)
+                          </span>
                         )}
                       </Label>
                     </div>
@@ -266,10 +275,14 @@ export default function ClassroomPage() {
   const [streamPosts, setStreamPosts] = useState([]);
   const [announcementSearch, setAnnouncementSearch] = useState("");
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [newPostData, setNewPostData] = useState(() => createInitialPostState());
+  const [newPostData, setNewPostData] = useState(() =>
+    createInitialPostState()
+  );
   const [isEditPostOpen, setIsEditPostOpen] = useState(false);
   const [editingPostId, setEditingPostId] = useState(null);
-  const [editPostData, setEditPostData] = useState(() => createInitialPostState());
+  const [editPostData, setEditPostData] = useState(() =>
+    createInitialPostState()
+  );
   const [editingPollOptionIds, setEditingPollOptionIds] = useState([]);
 
   const [chatMessages, setChatMessages] = useState([]);
@@ -303,7 +316,8 @@ export default function ClassroomPage() {
     }
 
     return streamPosts.filter((post) => {
-      const postType = post?.type || (post?.assignmentRef ? "assignment" : "announcement");
+      const postType =
+        post?.type || (post?.assignmentRef ? "assignment" : "announcement");
       if (postType !== "announcement") {
         return false;
       }
@@ -324,7 +338,8 @@ export default function ClassroomPage() {
       }
 
       return values.some(
-        (value) => typeof value === "string" && value.toLowerCase().includes(term)
+        (value) =>
+          typeof value === "string" && value.toLowerCase().includes(term)
       );
     });
   }, [announcementSearch, streamPosts]);
@@ -391,18 +406,14 @@ export default function ClassroomPage() {
   const fetchStreamPosts = async () => {
     if (!id || !user?.uid) return;
     try {
-     
-      const res = await fetch(
-        `/api/stream?classId=${encodeURIComponent(id)}`, 
-        {
-          headers: {
-            "x-uid": user.uid,
-          },
-        }
-      );
-      
+      const res = await fetch(`/api/stream?classId=${encodeURIComponent(id)}`, {
+        headers: {
+          "x-uid": user.uid,
+        },
+      });
+
       if (!res.ok) throw new Error("Failed to fetch stream posts");
-      
+
       const posts = await res.json();
       setStreamPosts(sortStreamPosts(Array.isArray(posts) ? posts : []));
     } catch (err) {
@@ -437,9 +448,11 @@ export default function ClassroomPage() {
       const role = isInstructor ? "instructor" : "student";
       const userId = user?.uid || "";
       const res = await fetch(
-        `/api/assignments?classId=${encodeURIComponent(id)}&role=${encodeURIComponent(
-          role
-        )}&userId=${encodeURIComponent(userId)}`
+        `/api/assignments?classId=${encodeURIComponent(
+          id
+        )}&role=${encodeURIComponent(role)}&userId=${encodeURIComponent(
+          userId
+        )}`
       );
       if (!res.ok) throw new Error("Failed to fetch assignments");
       const list = await res.json();
@@ -472,7 +485,10 @@ export default function ClassroomPage() {
 
   const startEditDeadline = (assignmentId, existing) => {
     setEditingDeadline((p) => ({ ...p, [assignmentId]: true }));
-    setDeadlineInputs((p) => ({ ...p, [assignmentId]: toLocalDatetimeInput(existing) }));
+    setDeadlineInputs((p) => ({
+      ...p,
+      [assignmentId]: toLocalDatetimeInput(existing),
+    }));
   };
 
   const cancelEditDeadline = (assignmentId) => {
@@ -521,21 +537,30 @@ export default function ClassroomPage() {
       fetchChatMessages();
     } else if (activeTab === "assignments") {
       fetchAssignments();
-    }else if (activeTab === "people") {
+    } else if (activeTab === "people") {
       fetchGroups(); // <-- ADD THIS
     }
-    }, [id, user, activeTab]);
-  // [NEW] useEffect for chat polling (auto-refresh)
-  useEffect(() => {
-    if (activeTab === 'chat' && id) {
-      // Fetch messages every 10 seconds
-      const interval = setInterval(fetchChatMessages, 10000);
+  }, [id, user, activeTab]);
 
-      // Clear interval on cleanup
-      return () => clearInterval(interval);
+  // Real-time chat updates via WebSocket
+  useChatSocket(
+    id,
+    (newMessage) => {
+      // Add new message to the chat
+      setChatMessages((prev) => {
+        // Check if message already exists (avoid duplicates)
+        const exists = prev.some((msg) => msg.id === newMessage.id);
+        if (exists) return prev;
+        return [...prev, newMessage];
+      });
+    },
+    (deletedMessageId) => {
+      // Remove deleted message from the chat
+      setChatMessages((prev) =>
+        prev.filter((msg) => msg.id !== deletedMessageId)
+      );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, id]);
+  );
 
   // useEffect for auto-scrolling chat
   useEffect(() => {
@@ -572,7 +597,11 @@ export default function ClassroomPage() {
   const openLocalPdfForWhiteboard = () => {
     if (!wbSelectedFile) return toast.error("Please choose a PDF to edit");
     const url = URL.createObjectURL(wbSelectedFile);
-    setWbCurrentFile({ fileUrl: url, fileName: wbSelectedFile.name, _id: `local-${Date.now()}` });
+    setWbCurrentFile({
+      fileUrl: url,
+      fileName: wbSelectedFile.name,
+      _id: `local-${Date.now()}`,
+    });
     setIsWhiteboardOpen(true);
   };
 
@@ -597,7 +626,7 @@ export default function ClassroomPage() {
   };
 
   const handleWhiteboardSave = async (payload, filename) => {
-    console.log('handleWhiteboardSave called', { payload, filename });
+    console.log("handleWhiteboardSave called", { payload, filename });
     // The WhiteboardViewer now uploads directly to /api/announcements
     // This handler just needs to close and refresh
     try {
@@ -638,7 +667,9 @@ export default function ClassroomPage() {
 
     setNewPostData((prev) => {
       const existingKeys = new Set(
-        prev.materialFiles.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+        prev.materialFiles.map(
+          (file) => `${file.name}-${file.size}-${file.lastModified}`
+        )
       );
       const deduped = validFiles.filter((file) => {
         const key = `${file.name}-${file.size}-${file.lastModified}`;
@@ -700,21 +731,18 @@ export default function ClassroomPage() {
     // Get the full student objects for the selected IDs
     const allStudents = classroom?.students || [];
 
-    const getStudent = (userId) =>
-      allStudents.find((s) => s.userId === userId);
+    const getStudent = (userId) => allStudents.find((s) => s.userId === userId);
 
     const representative = getStudent(representativeId);
     if (!representative) {
       return toast.error("Representative details not found.");
     }
-    
+
     // Ensure rep is also in the member list
     const finalMemberIds = new Set(memberIds);
     finalMemberIds.add(representativeId);
 
-    const members = Array.from(finalMemberIds)
-      .map(getStudent)
-      .filter(Boolean); // Filter out any undefined
+    const members = Array.from(finalMemberIds).map(getStudent).filter(Boolean); // Filter out any undefined
 
     const loadingId = toast.loading("Creating group...");
 
@@ -751,9 +779,6 @@ export default function ClassroomPage() {
       toast.error(err.message, { id: loadingId });
     }
   };
-
-  
- 
 
   // Handler for creating a new advanced post (stream)
   const handleCreatePost = async () => {
@@ -874,7 +899,9 @@ export default function ClassroomPage() {
     } catch (err) {
       toast.error(`Error: ${err.message}`, { id: loadingToastId });
       setStreamPosts((prev) =>
-        sortStreamPosts(prev.filter((p) => (p._id ?? p.id) !== optimisticPost.id))
+        sortStreamPosts(
+          prev.filter((p) => (p._id ?? p.id) !== optimisticPost.id)
+        )
       );
     }
   };
@@ -910,17 +937,24 @@ export default function ClassroomPage() {
     const hasPoll = Boolean(post.poll);
     baseState.includePoll = hasPoll;
     baseState.pollQuestion = hasPoll ? post.poll?.question || "" : "";
-    baseState.allowMultiplePollSelections = hasPoll ? !!post.poll?.allowMultiple : false;
+    baseState.allowMultiplePollSelections = hasPoll
+      ? !!post.poll?.allowMultiple
+      : false;
 
     if (hasPoll) {
-      const existingOptions = (post.poll?.options || []).slice(0, MAX_POLL_OPTIONS);
+      const existingOptions = (post.poll?.options || []).slice(
+        0,
+        MAX_POLL_OPTIONS
+      );
       const sanitizedOptions = existingOptions.map((option) =>
         typeof option?.text === "string" ? option.text : ""
       );
       while (sanitizedOptions.length < 2) {
         sanitizedOptions.push("");
       }
-      baseState.pollOptions = sanitizedOptions.length ? sanitizedOptions : ["", ""];
+      baseState.pollOptions = sanitizedOptions.length
+        ? sanitizedOptions
+        : ["", ""];
 
       const optionIds = existingOptions.map((option) => option?.id || null);
       while (optionIds.length < baseState.pollOptions.length) {
@@ -952,9 +986,13 @@ export default function ClassroomPage() {
 
     setEditPostData((prev) => ({
       ...prev,
-      pollOptions: prev.pollOptions.filter((_, optionIndex) => optionIndex !== index),
+      pollOptions: prev.pollOptions.filter(
+        (_, optionIndex) => optionIndex !== index
+      ),
     }));
-    setEditingPollOptionIds((prev) => prev.filter((_, optionIndex) => optionIndex !== index));
+    setEditingPollOptionIds((prev) =>
+      prev.filter((_, optionIndex) => optionIndex !== index)
+    );
   };
 
   const handleUpdatePost = async () => {
@@ -968,7 +1006,9 @@ export default function ClassroomPage() {
       return;
     }
 
-    const pollQuestion = editPostData.includePoll ? editPostData.pollQuestion.trim() : "";
+    const pollQuestion = editPostData.includePoll
+      ? editPostData.pollQuestion.trim()
+      : "";
     const trimmedOptions = editPostData.includePoll
       ? editPostData.pollOptions.map((option) => option.trim()).filter(Boolean)
       : [];
@@ -1121,12 +1161,13 @@ export default function ClassroomPage() {
 
       // On success, refetch to sync
       fetchChatMessages();
-
     } catch (err) {
       console.error("Error sending chat message:", err);
       toast.error(err.message);
       // Rollback
-      setChatMessages(chatMessages.filter(m => m.id !== optimisticMessage.id));
+      setChatMessages(
+        chatMessages.filter((m) => m.id !== optimisticMessage.id)
+      );
     }
   };
 
@@ -1142,7 +1183,9 @@ export default function ClassroomPage() {
 
     try {
       const res = await fetch(
-        `/api/chat?messageId=${encodeURIComponent(messageId)}&userId=${encodeURIComponent(user.uid)}`,
+        `/api/chat?messageId=${encodeURIComponent(
+          messageId
+        )}&userId=${encodeURIComponent(user.uid)}`,
         {
           method: "DELETE",
         }
@@ -1157,7 +1200,9 @@ export default function ClassroomPage() {
       fetchChatMessages();
     } catch (error) {
       console.error("Error deleting chat message:", error);
-      toast.error(error.message || "Failed to delete message", { id: loadingId });
+      toast.error(error.message || "Failed to delete message", {
+        id: loadingId,
+      });
       // Rollback
       setChatMessages(initialMessages);
     }
@@ -1257,7 +1302,9 @@ export default function ClassroomPage() {
       if (prev.pollOptions.length <= 2) return prev;
       return {
         ...prev,
-        pollOptions: prev.pollOptions.filter((_, optionIndex) => optionIndex !== index),
+        pollOptions: prev.pollOptions.filter(
+          (_, optionIndex) => optionIndex !== index
+        ),
       };
     });
   };
@@ -1269,7 +1316,9 @@ export default function ClassroomPage() {
   }
 
   if (!classroom) {
-    return <p className="text-center text-foreground mt-10">Loading classroom...</p>;
+    return (
+      <p className="text-center text-foreground mt-10">Loading classroom...</p>
+    );
   }
 
   return (
@@ -1278,11 +1327,16 @@ export default function ClassroomPage() {
         {/* Header - description box (left-aligned) */}
         <Card className="border border-border shadow-sm bg-card">
           <CardHeader className="text-left space-y-3">
-            <CardTitle className="text-3xl font-semibold">{classroom.title}</CardTitle>
-            <p className="text-muted-foreground max-w-2xl">{classroom.description}</p>
+            <CardTitle className="text-3xl font-semibold">
+              {classroom.title}
+            </CardTitle>
+            <p className="text-muted-foreground max-w-2xl">
+              {classroom.description}
+            </p>
             <div className="text-sm text-muted-foreground space-y-1">
               <p>
-                <span className="font-semibold">Instructor:</span> {classroom.instructorName}
+                <span className="font-semibold">Instructor:</span>{" "}
+                {classroom.instructorName}
               </p>
               <div className="flex items-center gap-3">
                 <p>
@@ -1297,7 +1351,8 @@ export default function ClassroomPage() {
                   className="border-none text-foreground hover:bg-muted/60 hover:text-foreground"
                   onClick={handleCopy}
                 >
-                  <Copy className="w-4 h-4 mr-1" /> {copied ? "Copied!" : "Copy"}
+                  <Copy className="w-4 h-4 mr-1" />{" "}
+                  {copied ? "Copied!" : "Copy"}
                 </Button>
               </div>
             </div>
@@ -1310,10 +1365,11 @@ export default function ClassroomPage() {
             <Button
               key={tab}
               variant={activeTab === tab ? "default" : "outline"}
-              className={`capitalize ${activeTab === tab
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "text-foreground border-none hover:bg-muted/60 hover:text-foreground"
-                }`}
+              className={`capitalize ${
+                activeTab === tab
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "text-foreground border-none hover:bg-muted/60 hover:text-foreground"
+              }`}
               onClick={() => setActiveTab(tab)}
             >
               {tab}
@@ -1330,7 +1386,9 @@ export default function ClassroomPage() {
               <Card className="border border-border shadow-sm bg-card">
                 <CardHeader>
                   <CardTitle className="text-xl">Whiteboard</CardTitle>
-                  <CardDescription>Edit a PDF and post as an announcement</CardDescription>
+                  <CardDescription>
+                    Edit a PDF and post as an announcement
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -1345,22 +1403,32 @@ export default function ClassroomPage() {
                     <Button
                       variant="outline"
                       className="cursor-pointer border-none text-foreground hover:bg-accent hover:text-white"
-                      onClick={() => wbInputRef.current && wbInputRef.current.click()}
+                      onClick={() =>
+                        wbInputRef.current && wbInputRef.current.click()
+                      }
                     >
                       Choose PDF
                     </Button>
-                    <Button onClick={openLocalPdfForWhiteboard} disabled={!wbSelectedFile}>
+                    <Button
+                      onClick={openLocalPdfForWhiteboard}
+                      disabled={!wbSelectedFile}
+                    >
                       Open in Whiteboard
                     </Button>
                     {wbSelectedFile && (
-                      <span className="text-sm text-muted-foreground truncate">{wbSelectedFile.name}</span>
+                      <span className="text-sm text-muted-foreground truncate">
+                        {wbSelectedFile.name}
+                      </span>
                     )}
                   </div>
                 </CardContent>
               </Card>
               {/* "Create Post" Dialog for instructors */}
               {isInstructor && (
-                <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+                <Dialog
+                  open={isCreatePostOpen}
+                  onOpenChange={setIsCreatePostOpen}
+                >
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
@@ -1387,7 +1455,10 @@ export default function ClassroomPage() {
                           placeholder="e.g., Welcome to Class!"
                           value={newPostData.title}
                           onChange={(e) =>
-                            setNewPostData({ ...newPostData, title: e.target.value })
+                            setNewPostData({
+                              ...newPostData,
+                              title: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -1401,36 +1472,51 @@ export default function ClassroomPage() {
                           className="min-h-[120px]"
                           value={newPostData.content}
                           onChange={(e) =>
-                            setNewPostData({ ...newPostData, content: e.target.value })
+                            setNewPostData({
+                              ...newPostData,
+                              content: e.target.value,
+                            })
                           }
                         />
                       </div>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="grid gap-2">
-                          <Label htmlFor="post-link-url">Link URL (Optional)</Label>
+                          <Label htmlFor="post-link-url">
+                            Link URL (Optional)
+                          </Label>
                           <Input
                             id="post-link-url"
                             placeholder="https://example.com"
                             value={newPostData.linkUrl}
                             onChange={(e) =>
-                              setNewPostData({ ...newPostData, linkUrl: e.target.value })
+                              setNewPostData({
+                                ...newPostData,
+                                linkUrl: e.target.value,
+                              })
                             }
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="post-link-text">Link Text (Optional)</Label>
+                          <Label htmlFor="post-link-text">
+                            Link Text (Optional)
+                          </Label>
                           <Input
                             id="post-link-text"
                             placeholder="e.g., View Resource"
                             value={newPostData.linkText}
                             onChange={(e) =>
-                              setNewPostData({ ...newPostData, linkText: e.target.value })
+                              setNewPostData({
+                                ...newPostData,
+                                linkText: e.target.value,
+                              })
                             }
                           />
                         </div>
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="post-material">Attach materials (PDF, DOC, DOCX, TXT)</Label>
+                        <Label htmlFor="post-material">
+                          Attach materials (PDF, DOC, DOCX, TXT)
+                        </Label>
                         <input
                           id="post-material"
                           ref={materialInputRef}
@@ -1446,7 +1532,9 @@ export default function ClassroomPage() {
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => materialInputRef.current?.click()}
+                                onClick={() =>
+                                  materialInputRef.current?.click()
+                                }
                                 className="w-full sm:w-auto border-none bg-primary/5 text-foreground font-semibold hover:bg-primary/15"
                               >
                                 Choose Files
@@ -1465,7 +1553,8 @@ export default function ClassroomPage() {
                             </div>
                             {newPostData.materialFiles.length === 0 ? (
                               <p className="text-sm text-muted-foreground">
-                                Optional. You can attach multiple files; they will be stored securely in the course Drive.
+                                Optional. You can attach multiple files; they
+                                will be stored securely in the course Drive.
                               </p>
                             ) : (
                               <ul className="space-y-2 text-sm">
@@ -1538,7 +1627,9 @@ export default function ClassroomPage() {
                             </SelectTrigger>
                             <SelectContent>
                               {groups.length === 0 ? (
-                                <SelectItem disabled>No groups found.</SelectItem>
+                                <SelectItem disabled>
+                                  No groups found.
+                                </SelectItem>
                               ) : (
                                 groups.map((group) => (
                                   <SelectItem key={group._id} value={group._id}>
@@ -1556,7 +1647,10 @@ export default function ClassroomPage() {
                             id="post-important"
                             checked={newPostData.isImportant}
                             onCheckedChange={(checked) =>
-                              setNewPostData({ ...newPostData, isImportant: checked })
+                              setNewPostData({
+                                ...newPostData,
+                                isImportant: checked,
+                              })
                             }
                           />
                           <Label htmlFor="post-important">Important</Label>
@@ -1566,7 +1660,10 @@ export default function ClassroomPage() {
                             id="post-urgent"
                             checked={newPostData.isUrgent}
                             onCheckedChange={(checked) =>
-                              setNewPostData({ ...newPostData, isUrgent: checked })
+                              setNewPostData({
+                                ...newPostData,
+                                isUrgent: checked,
+                              })
                             }
                           />
                           <Label htmlFor="post-urgent">Urgent</Label>
@@ -1576,7 +1673,10 @@ export default function ClassroomPage() {
                             id="post-pinned"
                             checked={newPostData.isPinned}
                             onCheckedChange={(checked) =>
-                              setNewPostData({ ...newPostData, isPinned: checked })
+                              setNewPostData({
+                                ...newPostData,
+                                isPinned: checked,
+                              })
                             }
                           />
                           <Label htmlFor="post-pinned">Pin to top</Label>
@@ -1628,7 +1728,10 @@ export default function ClassroomPage() {
                           <div className="space-y-2">
                             <Label>Options</Label>
                             {newPostData.pollOptions.map((option, index) => (
-                              <div key={index} className="flex items-center gap-2">
+                              <div
+                                key={index}
+                                className="flex items-center gap-2"
+                              >
                                 <Input
                                   placeholder={`Option ${index + 1}`}
                                   value={option}
@@ -1636,7 +1739,10 @@ export default function ClassroomPage() {
                                     setNewPostData((prev) => {
                                       const nextOptions = [...prev.pollOptions];
                                       nextOptions[index] = e.target.value;
-                                      return { ...prev, pollOptions: nextOptions };
+                                      return {
+                                        ...prev,
+                                        pollOptions: nextOptions,
+                                      };
                                     })
                                   }
                                 />
@@ -1657,7 +1763,10 @@ export default function ClassroomPage() {
                               variant="outline"
                               size="sm"
                               onClick={addPollOption}
-                              disabled={newPostData.pollOptions.length >= MAX_POLL_OPTIONS}
+                              disabled={
+                                newPostData.pollOptions.length >=
+                                MAX_POLL_OPTIONS
+                              }
                               className="border-none bg-primary/5 text-foreground font-semibold"
                             >
                               Add option
@@ -1665,8 +1774,13 @@ export default function ClassroomPage() {
                           </div>
                           <div className="flex items-center justify-between">
                             <div>
-                              <Label htmlFor="poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-muted-foreground">Give students the option to select more than one response.</p>
+                              <Label htmlFor="poll-allow-multiple">
+                                Allow multiple selections
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Give students the option to select more than one
+                                response.
+                              </p>
                             </div>
                             <Switch
                               id="poll-allow-multiple"
@@ -1684,9 +1798,19 @@ export default function ClassroomPage() {
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline" className="border-none bg-card text-foreground font-semibold hover:bg-muted">Cancel</Button>
+                        <Button
+                          variant="outline"
+                          className="border-none bg-card text-foreground font-semibold hover:bg-muted"
+                        >
+                          Cancel
+                        </Button>
                       </DialogClose>
-                      <Button onClick={handleCreatePost} className="bg-primary text-primary-foreground font-semibold shadow-lg">Post</Button>
+                      <Button
+                        onClick={handleCreatePost}
+                        className="bg-primary text-primary-foreground font-semibold shadow-lg"
+                      >
+                        Post
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -1725,12 +1849,16 @@ export default function ClassroomPage() {
               </div>
 
               {isInstructor && (
-                <Dialog open={isEditPostOpen} onOpenChange={handleEditDialogChange}>
+                <Dialog
+                  open={isEditPostOpen}
+                  onOpenChange={handleEditDialogChange}
+                >
                   <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Edit Announcement</DialogTitle>
                       <DialogDescription>
-                        Make updates to your announcement. Changes will be visible to everyone immediately.
+                        Make updates to your announcement. Changes will be
+                        visible to everyone immediately.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
@@ -1743,7 +1871,10 @@ export default function ClassroomPage() {
                           placeholder="e.g., Updated schedule"
                           value={editPostData.title}
                           onChange={(e) =>
-                            setEditPostData((prev) => ({ ...prev, title: e.target.value }))
+                            setEditPostData((prev) => ({
+                              ...prev,
+                              title: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -1757,30 +1888,43 @@ export default function ClassroomPage() {
                           className="min-h-[120px]"
                           value={editPostData.content}
                           onChange={(e) =>
-                            setEditPostData((prev) => ({ ...prev, content: e.target.value }))
+                            setEditPostData((prev) => ({
+                              ...prev,
+                              content: e.target.value,
+                            }))
                           }
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                          <Label htmlFor="edit-post-link-url">Link URL (Optional)</Label>
+                          <Label htmlFor="edit-post-link-url">
+                            Link URL (Optional)
+                          </Label>
                           <Input
                             id="edit-post-link-url"
                             placeholder="https://example.com"
                             value={editPostData.linkUrl}
                             onChange={(e) =>
-                              setEditPostData((prev) => ({ ...prev, linkUrl: e.target.value }))
+                              setEditPostData((prev) => ({
+                                ...prev,
+                                linkUrl: e.target.value,
+                              }))
                             }
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="edit-post-link-text">Link Text (Optional)</Label>
+                          <Label htmlFor="edit-post-link-text">
+                            Link Text (Optional)
+                          </Label>
                           <Input
                             id="edit-post-link-text"
                             placeholder="e.g., View Resource"
                             value={editPostData.linkText}
                             onChange={(e) =>
-                              setEditPostData((prev) => ({ ...prev, linkText: e.target.value }))
+                              setEditPostData((prev) => ({
+                                ...prev,
+                                linkText: e.target.value,
+                              }))
                             }
                           />
                         </div>
@@ -1791,7 +1935,10 @@ export default function ClassroomPage() {
                             id="edit-post-important"
                             checked={editPostData.isImportant}
                             onCheckedChange={(checked) =>
-                              setEditPostData((prev) => ({ ...prev, isImportant: checked }))
+                              setEditPostData((prev) => ({
+                                ...prev,
+                                isImportant: checked,
+                              }))
                             }
                           />
                           <Label htmlFor="edit-post-important">Important</Label>
@@ -1801,7 +1948,10 @@ export default function ClassroomPage() {
                             id="edit-post-urgent"
                             checked={editPostData.isUrgent}
                             onCheckedChange={(checked) =>
-                              setEditPostData((prev) => ({ ...prev, isUrgent: checked }))
+                              setEditPostData((prev) => ({
+                                ...prev,
+                                isUrgent: checked,
+                              }))
                             }
                           />
                           <Label htmlFor="edit-post-urgent">Urgent</Label>
@@ -1811,7 +1961,10 @@ export default function ClassroomPage() {
                             id="edit-post-pinned"
                             checked={editPostData.isPinned}
                             onCheckedChange={(checked) =>
-                              setEditPostData((prev) => ({ ...prev, isPinned: checked }))
+                              setEditPostData((prev) => ({
+                                ...prev,
+                                isPinned: checked,
+                              }))
                             }
                           />
                           <Label htmlFor="edit-post-pinned">Pin to top</Label>
@@ -1819,19 +1972,31 @@ export default function ClassroomPage() {
                       </div>
                       <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
                         <div>
-                          <Label htmlFor="edit-include-poll" className="font-medium">Include poll</Label>
-                          <p className="text-xs text-muted-foreground">Edit or remove the poll attached to this announcement.</p>
+                          <Label
+                            htmlFor="edit-include-poll"
+                            className="font-medium"
+                          >
+                            Include poll
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Edit or remove the poll attached to this
+                            announcement.
+                          </p>
                         </div>
                         <Switch
                           id="edit-include-poll"
                           checked={editPostData.includePoll}
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              const currentLength = editPostData.pollOptions.length;
+                              const currentLength =
+                                editPostData.pollOptions.length;
                               setEditPostData((prev) => ({
                                 ...prev,
                                 includePoll: true,
-                                pollOptions: prev.pollOptions.length >= 2 ? prev.pollOptions : ["", ""],
+                                pollOptions:
+                                  prev.pollOptions.length >= 2
+                                    ? prev.pollOptions
+                                    : ["", ""],
                               }));
                               setEditingPollOptionIds((prev) => {
                                 const next = [...prev];
@@ -1861,7 +2026,9 @@ export default function ClassroomPage() {
                       {editPostData.includePoll && (
                         <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
                           <div className="grid gap-2">
-                            <Label htmlFor="edit-poll-question">Poll question</Label>
+                            <Label htmlFor="edit-poll-question">
+                              Poll question
+                            </Label>
                             <Input
                               id="edit-poll-question"
                               placeholder="e.g., Which topic should we review?"
@@ -1878,7 +2045,12 @@ export default function ClassroomPage() {
                           <div className="space-y-2">
                             <Label>Options</Label>
                             {editPostData.pollOptions.map((option, index) => (
-                              <div key={`${index}-${editingPollOptionIds[index] || "new"}`} className="flex items-center gap-2">
+                              <div
+                                key={`${index}-${
+                                  editingPollOptionIds[index] || "new"
+                                }`}
+                                className="flex items-center gap-2"
+                              >
                                 <Input
                                   placeholder={`Option ${index + 1}`}
                                   value={option}
@@ -1886,7 +2058,10 @@ export default function ClassroomPage() {
                                     setEditPostData((prev) => {
                                       const nextOptions = [...prev.pollOptions];
                                       nextOptions[index] = e.target.value;
-                                      return { ...prev, pollOptions: nextOptions };
+                                      return {
+                                        ...prev,
+                                        pollOptions: nextOptions,
+                                      };
                                     })
                                   }
                                 />
@@ -1907,7 +2082,10 @@ export default function ClassroomPage() {
                               variant="outline"
                               size="sm"
                               onClick={addEditPollOption}
-                              disabled={editPostData.pollOptions.length >= MAX_POLL_OPTIONS}
+                              disabled={
+                                editPostData.pollOptions.length >=
+                                MAX_POLL_OPTIONS
+                              }
                             >
                               Add option
                             </Button>
@@ -1915,8 +2093,12 @@ export default function ClassroomPage() {
 
                           <div className="flex items-center justify-between">
                             <div>
-                              <Label htmlFor="edit-poll-allow-multiple">Allow multiple selections</Label>
-                              <p className="text-xs text-muted-foreground">Let students pick more than one answer.</p>
+                              <Label htmlFor="edit-poll-allow-multiple">
+                                Allow multiple selections
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Let students pick more than one answer.
+                              </p>
                             </div>
                             <Switch
                               id="edit-poll-allow-multiple"
@@ -1955,8 +2137,11 @@ export default function ClassroomPage() {
                 <div className="space-y-4">
                   {visibleStreamPosts.map((post, index) => {
                     const rawId = post._id ?? post.id;
-                    const pid = typeof rawId === "string" ? rawId : rawId?.toString?.();
-                    const createdAt = post.createdAt ? new Date(post.createdAt).toLocaleString() : "";
+                    const pid =
+                      typeof rawId === "string" ? rawId : rawId?.toString?.();
+                    const createdAt = post.createdAt
+                      ? new Date(post.createdAt).toLocaleString()
+                      : "";
                     return (
                       <div
                         key={pid || `post-${index}`}
@@ -1967,7 +2152,9 @@ export default function ClassroomPage() {
                             <span className="block font-semibold text-foreground">
                               {post.author?.name || "Unknown"}
                             </span>
-                            <span className="text-sm text-muted-foreground">{createdAt}</span>
+                            <span className="text-sm text-muted-foreground">
+                              {createdAt}
+                            </span>
                           </div>
                           {isInstructor && pid && (
                             <div className="flex items-center gap-1">
@@ -1993,13 +2180,20 @@ export default function ClassroomPage() {
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete this announcement?</AlertDialogTitle>
+                                    <AlertDialogTitle>
+                                      Delete this announcement?
+                                    </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      This action cannot be undone. The announcement and any poll data will be permanently removed for everyone in the class.
+                                      This action cannot be undone. The
+                                      announcement and any poll data will be
+                                      permanently removed for everyone in the
+                                      class.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogCancel>
+                                      Cancel
+                                    </AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleDeletePost(pid)}
                                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -2015,20 +2209,25 @@ export default function ClassroomPage() {
 
                         {/* Post Title & Badges */}
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-lg font-semibold">{post.title}</h3>
+                          <h3 className="text-lg font-semibold">
+                            {post.title}
+                          </h3>
                           {isInstructor && post.audience?.type === "group" && (
-                        <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-medium flex items-center">
-                          <Users className="w-3 h-3 inline-block mr-1" />
-                          {/* Find the group name from the state */}
-                          {groups.find((g) => g._id === post.audience.groupId)?.name || "Group Post"}
-                        </span>
-                      )}
+                            <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-medium flex items-center">
+                              <Users className="w-3 h-3 inline-block mr-1" />
+                              {/* Find the group name from the state */}
+                              {groups.find(
+                                (g) => g._id === post.audience.groupId
+                              )?.name || "Group Post"}
+                            </span>
+                          )}
                           {post.isPinned && (
                             <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-900 dark:text-amber-100 text-xs font-medium">
                               PINNED
                             </span>
                           )}
-                          {(post.type === "assignment" || post.assignmentRef) && (
+                          {(post.type === "assignment" ||
+                            post.assignmentRef) && (
                             <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-900 dark:text-purple-100 text-xs font-medium">
                               ASSIGNMENT
                             </span>
@@ -2045,7 +2244,9 @@ export default function ClassroomPage() {
                           )}
                         </div>
 
-                        <p className="text-foreground mb-3 text-left">{post.content}</p>
+                        <p className="text-foreground mb-3 text-left">
+                          {post.content}
+                        </p>
 
                         {/* Post Link (e.g., annotated PDF) */}
                         {post.link?.url && (
@@ -2057,179 +2258,229 @@ export default function ClassroomPage() {
                               className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                             >
                               <LinkIcon className="w-3 h-3" />
-                              {post.link.text || 'Annotated Material'}
+                              {post.link.text || "Annotated Material"}
                             </a>
                           </div>
                         )}
 
                         {/* Notes (from whiteboard) shown separately */}
-                        {post.notesText && post.notesText.trim() !== '' && (
+                        {post.notesText && post.notesText.trim() !== "" && (
                           <div className="mb-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-left">
-                            <div className="text-xs font-semibold text-amber-900 dark:text-amber-100 mb-1">Notes</div>
-                            <pre className="whitespace-pre-wrap wrap-break-word text-sm text-amber-900 dark:text-amber-50">{post.notesText}</pre>
+                            <div className="text-xs font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                              Notes
+                            </div>
+                            <pre className="whitespace-pre-wrap wrap-break-word text-sm text-amber-900 dark:text-amber-50">
+                              {post.notesText}
+                            </pre>
                           </div>
                         )}
 
-                        {Array.isArray(post.materials) && post.materials.length > 0 && (
-                          <div className="mb-3 rounded-md border border-border bg-muted/30 p-3 text-left">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Materials
-                            </div>
-                            <div className="mt-2 space-y-3">
-                              {post.materials.map((material, idx) => (
-                                <div
-                                  key={`${pid || idx}-material-${material?.fileId || idx}`}
-                                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                                >
-                                  <div>
-                                    <p className="font-medium text-foreground">
-                                      {material?.fileName || "Attachment"}
-                                    </p>
-                                    {material?.fileSize ? (
-                                      <p className="text-xs text-muted-foreground">
-                                        {formatFileSize(material.fileSize)}
+                        {Array.isArray(post.materials) &&
+                          post.materials.length > 0 && (
+                            <div className="mb-3 rounded-md border border-border bg-muted/30 p-3 text-left">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Materials
+                              </div>
+                              <div className="mt-2 space-y-3">
+                                {post.materials.map((material, idx) => (
+                                  <div
+                                    key={`${pid || idx}-material-${
+                                      material?.fileId || idx
+                                    }`}
+                                    className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                                  >
+                                    <div>
+                                      <p className="font-medium text-foreground">
+                                        {material?.fileName || "Attachment"}
                                       </p>
-                                    ) : null}
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {material?.viewLink && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        asChild
-                                      >
-                                        <a
-                                          href={material.viewLink}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
+                                      {material?.fileSize ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          {formatFileSize(material.fileSize)}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {material?.viewLink && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          asChild
                                         >
-                                          Open
-                                        </a>
-                                      </Button>
-                                    )}
-                                    {material?.downloadLink && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        asChild
-                                      >
-                                        <a
-                                          href={material.downloadLink}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
+                                          <a
+                                            href={material.viewLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            Open
+                                          </a>
+                                        </Button>
+                                      )}
+                                      {material?.downloadLink && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          asChild
                                         >
-                                          Download
-                                        </a>
-                                      </Button>
-                                    )}
+                                          <a
+                                            href={material.downloadLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            Download
+                                          </a>
+                                        </Button>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {post.poll && post.poll.options && post.poll.options.length > 0 && (
-                          <div className="mb-4 rounded-md border border-border bg-muted/30 p-4">
-                            <div className="mb-3">
-                              <p className="font-semibold text-foreground">{post.poll.question}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {post.poll.allowMultiple
-                                  ? "Select all options that apply."
-                                  : "Select one option."}
-                              </p>
-                            </div>
+                        {post.poll &&
+                          post.poll.options &&
+                          post.poll.options.length > 0 && (
+                            <div className="mb-4 rounded-md border border-border bg-muted/30 p-4">
+                              <div className="mb-3">
+                                <p className="font-semibold text-foreground">
+                                  {post.poll.question}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {post.poll.allowMultiple
+                                    ? "Select all options that apply."
+                                    : "Select one option."}
+                                </p>
+                              </div>
 
-                            {(() => {
-                              const pidString = pid;
-                              if (!pidString) {
-                                return (
-                                  <div className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-                                    Poll responses will be available once this post finishes syncing.
-                                  </div>
+                              {(() => {
+                                const pidString = pid;
+                                if (!pidString) {
+                                  return (
+                                    <div className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+                                      Poll responses will be available once this
+                                      post finishes syncing.
+                                    </div>
+                                  );
+                                }
+                                const pollOptions = post.poll?.options || [];
+                                const selectedIds = (
+                                  pollSelections[pidString] || []
+                                ).map(String);
+                                const totalSelections = pollOptions.reduce(
+                                  (sum, option) =>
+                                    sum + (option.voterIds?.length || 0),
+                                  0
                                 );
-                              }
-                              const pollOptions = post.poll?.options || [];
-                              const selectedIds = (pollSelections[pidString] || []).map(String);
-                              const totalSelections = pollOptions.reduce(
-                                (sum, option) => sum + (option.voterIds?.length || 0),
-                                0
-                              );
-                              const participantIds = new Set();
-                              pollOptions.forEach((option) => {
-                                (option.voterIds || []).forEach((voterId) => participantIds.add(voterId));
-                              });
-                              const participantCount = participantIds.size;
-                              const hasVoted = user ? participantIds.has(user.uid) : false;
-                              const allowMultipleSelections = Boolean(post.poll?.allowMultiple);
-                              const buttonDisabled = !selectedIds.length || pollSubmitting[pidString];
+                                const participantIds = new Set();
+                                pollOptions.forEach((option) => {
+                                  (option.voterIds || []).forEach((voterId) =>
+                                    participantIds.add(voterId)
+                                  );
+                                });
+                                const participantCount = participantIds.size;
+                                const hasVoted = user
+                                  ? participantIds.has(user.uid)
+                                  : false;
+                                const allowMultipleSelections = Boolean(
+                                  post.poll?.allowMultiple
+                                );
+                                const buttonDisabled =
+                                  !selectedIds.length ||
+                                  pollSubmitting[pidString];
 
-                              const selectionSummary = totalSelections === 0
-                                ? "No votes yet"
-                                : allowMultipleSelections
-                                  ? `${totalSelections} selection${totalSelections === 1 ? "" : "s"} • ${participantCount} participant${participantCount === 1 ? "" : "s"}`
-                                  : `${totalSelections} vote${totalSelections === 1 ? "" : "s"}`;
+                                const selectionSummary =
+                                  totalSelections === 0
+                                    ? "No votes yet"
+                                    : allowMultipleSelections
+                                    ? `${totalSelections} selection${
+                                        totalSelections === 1 ? "" : "s"
+                                      } • ${participantCount} participant${
+                                        participantCount === 1 ? "" : "s"
+                                      }`
+                                    : `${totalSelections} vote${
+                                        totalSelections === 1 ? "" : "s"
+                                      }`;
 
-                              return (
-                                <div className="space-y-3">
-                                  {pollOptions.map((option) => {
-                                    const optionVotes = option.voterIds?.length || 0;
-                                    const percentage = totalSelections
-                                      ? Math.round((optionVotes / totalSelections) * 100)
-                                      : 0;
-                                    const isSelected = selectedIds.includes(option.id);
+                                return (
+                                  <div className="space-y-3">
+                                    {pollOptions.map((option) => {
+                                      const optionVotes =
+                                        option.voterIds?.length || 0;
+                                      const percentage = totalSelections
+                                        ? Math.round(
+                                            (optionVotes / totalSelections) *
+                                              100
+                                          )
+                                        : 0;
+                                      const isSelected = selectedIds.includes(
+                                        option.id
+                                      );
 
-                                    return (
-                                      <div
-                                        key={option.id}
-                                        className={`rounded-md border bg-card px-3 py-2 transition ${
-                                          isSelected ? "border-primary shadow-sm" : "border-border"
-                                        }`}
-                                      >
-                                        <label className="flex items-center gap-3 text-sm text-foreground">
-                                          <input
-                                            type={allowMultipleSelections ? "checkbox" : "radio"}
-                                            name={`poll-${pidString}`}
-                                            checked={isSelected}
-                                            onChange={() => handlePollOptionToggle(pidString, option.id, allowMultipleSelections)}
-                                            className="h-4 w-4"
-                                          />
-                                          <span>{option.text}</span>
-                                        </label>
-                                        <div className="mt-2">
-                                          <Progress value={percentage} />
-                                          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                                            <span>{optionVotes} vote{optionVotes === 1 ? "" : "s"}</span>
-                                            <span>{percentage}%</span>
+                                      return (
+                                        <div
+                                          key={option.id}
+                                          className={`rounded-md border bg-card px-3 py-2 transition ${
+                                            isSelected
+                                              ? "border-primary shadow-sm"
+                                              : "border-border"
+                                          }`}
+                                        >
+                                          <label className="flex items-center gap-3 text-sm text-foreground">
+                                            <input
+                                              type={
+                                                allowMultipleSelections
+                                                  ? "checkbox"
+                                                  : "radio"
+                                              }
+                                              name={`poll-${pidString}`}
+                                              checked={isSelected}
+                                              onChange={() =>
+                                                handlePollOptionToggle(
+                                                  pidString,
+                                                  option.id,
+                                                  allowMultipleSelections
+                                                )
+                                              }
+                                              className="h-4 w-4"
+                                            />
+                                            <span>{option.text}</span>
+                                          </label>
+                                          <div className="mt-2">
+                                            <Progress value={percentage} />
+                                            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                                              <span>
+                                                {optionVotes} vote
+                                                {optionVotes === 1 ? "" : "s"}
+                                              </span>
+                                              <span>{percentage}%</span>
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
-                                    );
-                                  })}
+                                      );
+                                    })}
 
-                                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                                    <span>{selectionSummary}</span>
-                                    {user && (
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={() => handlePollSubmit(post)}
-                                        disabled={buttonDisabled}
-                                      >
-                                        {pollSubmitting[pidString]
-                                          ? "Saving..."
-                                          : hasVoted
+                                    <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                                      <span>{selectionSummary}</span>
+                                      {user && (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => handlePollSubmit(post)}
+                                          disabled={buttonDisabled}
+                                        >
+                                          {pollSubmitting[pidString]
+                                            ? "Saving..."
+                                            : hasVoted
                                             ? "Update Vote"
                                             : "Submit Vote"}
-                                      </Button>
-                                    )}
+                                        </Button>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-
+                                );
+                              })()}
+                            </div>
+                          )}
                       </div>
                     );
                   })}
@@ -2243,64 +2494,119 @@ export default function ClassroomPage() {
               <Card className="border border-border shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-xl">Assignments</CardTitle>
-                  <CardDescription>Course assignments and deadlines</CardDescription>
+                  <CardDescription>
+                    Course assignments and deadlines
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {isAssignmentsLoading && <p className="text-foreground">Loading assignments...</p>}
+                  {isAssignmentsLoading && (
+                    <p className="text-foreground">Loading assignments...</p>
+                  )}
                   {!isAssignmentsLoading && assignments.length === 0 && (
-                    <p className="text-muted-foreground">No assignments available.</p>
+                    <p className="text-muted-foreground">
+                      No assignments available.
+                    </p>
                   )}
                   {!isAssignmentsLoading && assignments.length > 0 && (
                     <div className="space-y-4">
                       {assignments
-                        .filter((a) => String(a.classId || a.courseId) === String(id))
+                        .filter(
+                          (a) => String(a.classId || a.courseId) === String(id)
+                        )
                         .map((a) => (
-                        <div key={a.id} className="border rounded-md p-4 hover:shadow-sm transition">
-                          <button
-                            className="font-semibold text-lg text-left text-primary hover:underline"
-                            onClick={() => window.location.href = `/assignments`}
-                            title="Open assignments page"
+                          <div
+                            key={a.id}
+                            className="border rounded-md p-4 hover:shadow-sm transition"
                           >
-                            {a.title}
-                          </button>
-                          {a.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{a.description}</p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-2">Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : 'No deadline'}</p>
-                          {isInstructor && (
-                            <div className="mt-2">
-                              {!editingDeadline[a.id] ? (
-                                <Button variant="outline" size="sm" className="border-none" onClick={() => startEditDeadline(a.id, a.deadline)}>Edit Deadline</Button>
-                              ) : (
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Input
-                                    type="datetime-local"
-                                    value={deadlineInputs[a.id] || ''}
-                                    onChange={(e) => setDeadlineInputs((p) => ({ ...p, [a.id]: e.target.value }))}
-                                  />
-                                  <Button size="sm" onClick={() => saveDeadline(a.id)}>Save</Button>
-                                  <Button size="sm" variant="outline" className="border-none" onClick={() => cancelEditDeadline(a.id)}>Cancel</Button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {a.fileUrl && (
-                            <div className="mt-3">
-                              <Button variant="outline" size="sm" className="border-none" asChild>
-                                <a href={a.fileUrl} target="_blank" rel="noopener noreferrer">Download File</a>
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                            <button
+                              className="font-semibold text-lg text-left text-primary hover:underline"
+                              onClick={() =>
+                                (window.location.href = `/assignments`)
+                              }
+                              title="Open assignments page"
+                            >
+                              {a.title}
+                            </button>
+                            {a.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {a.description}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Deadline:{" "}
+                              {a.deadline
+                                ? new Date(a.deadline).toLocaleString()
+                                : "No deadline"}
+                            </p>
+                            {isInstructor && (
+                              <div className="mt-2">
+                                {!editingDeadline[a.id] ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-none"
+                                    onClick={() =>
+                                      startEditDeadline(a.id, a.deadline)
+                                    }
+                                  >
+                                    Edit Deadline
+                                  </Button>
+                                ) : (
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Input
+                                      type="datetime-local"
+                                      value={deadlineInputs[a.id] || ""}
+                                      onChange={(e) =>
+                                        setDeadlineInputs((p) => ({
+                                          ...p,
+                                          [a.id]: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                    <Button
+                                      size="sm"
+                                      onClick={() => saveDeadline(a.id)}
+                                    >
+                                      Save
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="border-none"
+                                      onClick={() => cancelEditDeadline(a.id)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {a.fileUrl && (
+                              <div className="mt-3">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-none"
+                                  asChild
+                                >
+                                  <a
+                                    href={a.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Download File
+                                  </a>
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
           )}
-
-          
 
           {/* CHAT */}
           {activeTab === "chat" && (
@@ -2311,13 +2617,20 @@ export default function ClassroomPage() {
                   Discuss with your classmates and instructor
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-0 flex flex-col" style={{ height: "600px" }}>
+              <CardContent
+                className="p-0 flex flex-col"
+                style={{ height: "600px" }}
+              >
                 {/* Chat Message List */}
                 <div className="flex-1 overflow-y-auto p-4 bg-muted/10">
                   {isChatLoading ? (
-                    <p className="text-center text-foreground">Loading chat...</p>
+                    <p className="text-center text-foreground">
+                      Loading chat...
+                    </p>
                   ) : chatMessages.length === 0 ? (
-                    <p className="text-center text-muted-foreground">No messages yet. Start the conversation!</p>
+                    <p className="text-center text-muted-foreground">
+                      No messages yet. Start the conversation!
+                    </p>
                   ) : (
                     <ChatMessageList
                       messages={chatMessages}
@@ -2350,7 +2663,9 @@ export default function ClassroomPage() {
                 <CardContent>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-muted text-foreground flex items-center justify-center text-lg font-semibold">
-                      {classroom.instructorName ? classroom.instructorName[0].toUpperCase() : "I"}
+                      {classroom.instructorName
+                        ? classroom.instructorName[0].toUpperCase()
+                        : "I"}
                     </div>
                     <span className="font-medium text-foreground">
                       {classroom.instructorName}
@@ -2367,10 +2682,15 @@ export default function ClassroomPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {!classroom.students || classroom.students.length === 0 ? (
-                    <p className="text-muted-foreground">No students enrolled yet.</p>
+                    <p className="text-muted-foreground">
+                      No students enrolled yet.
+                    </p>
                   ) : (
                     classroom.students.map((student) => (
-                      <div key={student.userId} className="flex items-center gap-3">
+                      <div
+                        key={student.userId}
+                        className="flex items-center gap-3"
+                      >
                         <div className="w-10 h-10 rounded-full bg-muted text-foreground flex items-center justify-center text-lg font-semibold">
                           {student.name ? student.name[0].toUpperCase() : "S"}
                         </div>
@@ -2398,9 +2718,13 @@ export default function ClassroomPage() {
                   )}
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {isGroupsLoading && <p className="text-foreground">Loading groups...</p>}
+                  {isGroupsLoading && (
+                    <p className="text-foreground">Loading groups...</p>
+                  )}
                   {!isGroupsLoading && groups.length === 0 && (
-                    <p className="text-muted-foreground">No groups created yet.</p>
+                    <p className="text-muted-foreground">
+                      No groups created yet.
+                    </p>
                   )}
                   {!isGroupsLoading && groups.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

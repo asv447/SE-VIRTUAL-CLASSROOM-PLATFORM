@@ -204,18 +204,19 @@ export default function NotificationBell() {
   // Single action: mark as read, then delete (tick behavior)
   async function tickNotification(id) {
     try {
-      await Promise.allSettled([
-        fetch(`/api/notifications`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
-        }),
-        fetch(`/api/notifications`, {
-          method: "DELETE",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
-        }),
-      ]);
+      // First mark as read
+      await fetch(`/api/notifications`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      
+      // Then delete
+      await fetch(`/api/notifications`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
     } catch (_) {
       // ignore network error; we'll still optimistically update UI
     } finally {
