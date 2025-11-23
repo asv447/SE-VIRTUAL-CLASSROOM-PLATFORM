@@ -411,7 +411,7 @@ export default function ClassyncDashboard() {
                   </p>
                 </div>
                 <Button variant="destructive" size="sm" asChild>
-                  <Link href="/assignments">View Assignments</Link>
+                  <Link href="/student">View Assignments</Link>
                 </Button>
               </div>
             </div>
@@ -439,7 +439,7 @@ export default function ClassyncDashboard() {
                 className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
                 asChild
               >
-                <Link href="/assignments">
+                <Link href="/student">
                   <FileText className="w-6 h-6" />
                   <span className="text-sm">Assignments</span>
                 </Link>

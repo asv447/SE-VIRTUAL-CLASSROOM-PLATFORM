@@ -29,16 +29,13 @@ export default function NotificationBell() {
     if (!user) {
       setNotifications([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
   useEffect(() => {
     if (!user) return;
   fetchNotifications(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Lightweight polling and refetch on window focus
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
@@ -100,7 +97,6 @@ export default function NotificationBell() {
     }
   }
 
-  // SSE subscription for instant notifications
   useEffect(() => {
     if (!user) return;
     const src = new EventSource(`/api/notifications/stream?uid=${encodeURIComponent(user.uid)}`);
@@ -109,9 +105,7 @@ export default function NotificationBell() {
         const data = JSON.parse(ev.data);
         if (data?.type === "notification") {
           const n = data;
-          // Toast immediately
           toast({ title: n.title || "New notification", description: n.message || "" });
-          // Merge into list (avoid duplicates)
           setNotifications((prev) => {
             const exists = prev.some((p) => p.id === n.id);
             if (exists) return prev;
@@ -131,7 +125,6 @@ export default function NotificationBell() {
       } catch (_) {}
     };
     src.onerror = () => {
-      // auto-close on error to avoid leaks
       src.close();
     };
     return () => src.close();
@@ -159,7 +152,6 @@ export default function NotificationBell() {
   async function markAllAsRead() {
     if (!user) return;
     try {
-      // Delete all notifications instead of just marking as read
       const deletePromises = notifications.map((n) =>
         fetch(`/api/notifications`, {
           method: "DELETE",
@@ -201,7 +193,6 @@ export default function NotificationBell() {
     }
   }
 
-  // Single action: mark as read, then delete (tick behavior)
   async function tickNotification(id) {
     try {
       await Promise.allSettled([
@@ -217,7 +208,6 @@ export default function NotificationBell() {
         }),
       ]);
     } catch (_) {
-      // ignore network error; we'll still optimistically update UI
     } finally {
       setNotifications((prev) => prev.filter((p) => p.id !== id));
     }

@@ -21,11 +21,10 @@ export default function Sidebar() {
   const sidebarRef = useRef(null);
   const toggleRef = useRef(null);
 
-  const minWidth = 64; // minimum width (w-16)
-  const maxWidth = 400; // maximum width
+  const minWidth = 64;  
+  const maxWidth = 400;  
 
-  // Prevent hydration errors by only rendering after mount
-  useEffect(() => {
+   useEffect(() => {
     setIsMounted(true);
   }, []);
 
@@ -38,18 +37,15 @@ export default function Sidebar() {
     setIsPinned(newPinnedState);
     
     if (!newPinnedState) {
-      // Unpinning - collapse sidebar
-      setIsCollapsed(true);
+       setIsCollapsed(true);
       setSidebarWidth(64);
     } else {
-      // Pinning - expand sidebar
-      setIsCollapsed(false);
+       setIsCollapsed(false);
       setSidebarWidth(256);
     }
   };
 
-  // Emit custom event when sidebar width changes
-  useEffect(() => {
+   useEffect(() => {
     const event = new CustomEvent('sidebarWidthChange', { 
       detail: { width: sidebarWidth, isCollapsed }
     });
@@ -89,8 +85,7 @@ export default function Sidebar() {
       if (newWidth >= minWidth && newWidth <= maxWidth) {
         setSidebarWidth(newWidth);
         
-        // Auto collapse/expand based on width
-        if (newWidth < 100) {
+         if (newWidth < 100) {
           setIsCollapsed(true);
         } else {
           setIsCollapsed(false);
