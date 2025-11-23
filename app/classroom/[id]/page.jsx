@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import {
@@ -249,10 +248,17 @@ const EditGroupDialog = ({ open, onOpenChange, group, classroom, onUpdate, onDel
 
   useEffect(() => {
     if (group && open) {
+      const validMemberIds = new Set();
+      if (Array.isArray(group.members)) {
+        group.members.forEach(m => {
+          if (m && m.userId) validMemberIds.add(m.userId);
+        });
+      }
+      
       setFormData({
         name: group.name || "",
         representativeId: group.representative?.userId || "",
-        memberIds: new Set(group.members?.map(m => m.userId) || []),
+        memberIds: validMemberIds,
       });
     }
   }, [group, open]);
@@ -349,7 +355,6 @@ const EditGroupDialog = ({ open, onOpenChange, group, classroom, onUpdate, onDel
 
 export default function ClassroomPage() {
   const { id } = useParams();
-  const router = useRouter();
   const [classroom, setClassroom] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -370,7 +375,7 @@ export default function ClassroomPage() {
   });
 
   // Selected Group for Editing
-  const [selectedGroup, setGroup] = useState(null);
+  const [editingGroup, setEditingGroup] = useState(null);
   const [isEditGroupOpen, setIsEditGroupOpen] = useState(false);
 
   const [streamPosts, setStreamPosts] = useState([]);
@@ -452,10 +457,7 @@ export default function ClassroomPage() {
           if (res.ok) {
             const data = await res.json();
             setUsername(data.user.username || "User");
-            // Accept multiple role strings that mean "can edit/manage class/groups"
-            const role = (data.user?.role || "").toString().toLowerCase();
-            const canEdit = ["instructor", "teacher", "admin"].includes(role);
-            setIsInstructor(canEdit);
+            setIsInstructor(data.user.role === "instructor");
           }
         } catch (err) {
           console.error("Error fetching user details:", err);
@@ -490,6 +492,8 @@ export default function ClassroomPage() {
       const res = await fetch(`/api/groups?courseId=${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error("Failed to fetch groups");
       const data = await res.json();
+      console.debug('[fetchGroups] fetched', Array.isArray(data) ? data.length : typeof data);
+      console.trace('[fetchGroups] call stack');
       setGroups(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching groups:", err);
@@ -852,40 +856,84 @@ export default function ClassroomPage() {
 
   const handleUpdateGroup = async (groupId, updatedData) => {
     if (!updatedData.name.trim()) return toast.error("Group name required");
+    if (!updatedData.representativeId) return toast.error("Representative required");
 
     const loadingId = toast.loading("Updating group...");
 
-    // Reconstruct full member objects
-    const allStudents = classroom?.students || [];
-    const rep = allStudents.find(s => s.userId === updatedData.representativeId);
-    const finalMemberIds = new Set(updatedData.memberIds); finalMemberIds.add(updatedData.representativeId);
-    const members = Array.from(finalMemberIds).map(uid => allStudents.find(s => s.userId === uid)).filter(Boolean);
+    // 1. Optimistic Update: Close dialog & Update local state immediately
+    setIsEditGroupOpen(false);
+    setEditingGroup(null);
 
     try {
+      console.debug('[handleUpdateGroup] groupId=', groupId, 'payload=', updatedData);
+      console.trace('[handleUpdateGroup] call stack');
+      // Prepare Data safely
+      const allStudents = classroom?.students || [];
+      let rep = allStudents.find(s => s.userId === updatedData.representativeId);
+      if (!rep) {
+        console.warn("Selected representative not found in class list. Using placeholder.");
+        rep = { userId: updatedData.representativeId, name: "Unknown Student" };
+      }
+
+      const finalMemberIds = new Set(updatedData.memberIds);
+      finalMemberIds.add(updatedData.representativeId);
+
+      const members = Array.from(finalMemberIds)
+        .map(uid => {
+          const found = allStudents.find(s => s.userId === uid);
+          return found ? { userId: found.userId, name: found.name } : null;
+        })
+        .filter(Boolean);
+
+      // Update UI State (Optimistic)
+      setGroups((prevGroups) =>
+        prevGroups.map((g) =>
+          (String(g._id) === String(groupId) || String(g.id) === String(groupId))
+            ? { ...g, name: updatedData.name, representative: { userId: rep.userId, name: rep.name }, members }
+            : g
+        )
+      );
+
+      // 2. API Call
       const res = await fetch(`/api/groups/${groupId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-uid": user.uid },
         body: JSON.stringify({
           name: updatedData.name,
           representative: { userId: rep.userId, name: rep.name },
-          members: members.map(m => ({ userId: m.userId, name: m.name }))
+          members: members
         })
       });
 
-      if (!res.ok) throw new Error("Failed to update");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        // Revert change if failed (optional, but good practice)
+        console.error('[handleUpdateGroup] API failed, reverting via fetchGroups', errorData);
+        fetchGroups();
+        throw new Error(errorData.error || "Failed to update group");
+      }
 
       toast.success("Group updated successfully", { id: loadingId });
-      setIsEditGroupOpen(false);
-      setGroup(null);
+
+      // Ensure we refresh from server to remove any optimism mismatch
       fetchGroups();
+
     } catch (e) {
-      console.error(e);
-      toast.error("Failed to update group", { id: loadingId });
+      console.error("Update group error:", e);
+      toast.error(e.message || "Failed to update group", { id: loadingId });
+      fetchGroups();
     }
   };
 
   const handleDeleteGroup = async (groupId) => {
     const loadingId = toast.loading("Deleting group...");
+    console.debug('[handleDeleteGroup] deleting', groupId);
+    console.trace('[handleDeleteGroup] call stack');
+    // Optimistic Update
+    setGroups((prev) => prev.filter(g => String(g._id) !== String(groupId) && String(g.id) !== String(groupId)));
+    setIsEditGroupOpen(false);
+    setEditingGroup(null);
+
     try {
       const res = await fetch(`/api/groups/${groupId}?courseId=${id}`, {
         method: "DELETE",
@@ -894,11 +942,11 @@ export default function ClassroomPage() {
       if (!res.ok) throw new Error("Failed");
 
       toast.success("Group deleted", { id: loadingId });
-      setIsEditGroupOpen(false);
-      setGroup(null);
       fetchGroups();
     } catch (e) {
       toast.error("Failed to delete group", { id: loadingId });
+      console.error('[handleDeleteGroup] delete failed, refetching groups', e);
+      fetchGroups(); // Revert if failed
     }
   };
 
@@ -1220,7 +1268,7 @@ export default function ClassroomPage() {
       fetchStreamPosts();
     } catch (error) {
       console.error("Error deleting stream post:", error);
-      toast.error(error.message || "Failed to delete post", { id: loadingId });
+      toast.error(error.message || "Failed to delete post", { id: loadingToastId });
       setStreamPosts(sortStreamPosts(initialPosts));
     }
   };
@@ -2544,52 +2592,47 @@ export default function ClassroomPage() {
                   {!isGroupsLoading && groups.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {groups.map((group) => (
-                        <div
-                          key={group._id}
-                          onClick={() => {
-                            if (isInstructor) {
-                              setGroup(group);
-                              setIsEditGroupOpen(true);
-                            } else {
-                              // students view group details page
-                              router.push(`/classroom/${id}/group/${group._id}`);
-                            }
-                          }}
-                          className={`transition-shadow ${isInstructor ? "cursor-pointer" : ""}`}
-                        >
-                          <Card className="hover:shadow-md h-full">
-                            <CardHeader>
-                              <div className="flex justify-between items-start">
-                                <CardTitle className="text-lg text-primary hover:underline">
-                                  {group.name}
-                                </CardTitle>
-                                {isInstructor ? (
-                                  // explicit Edit button for instructors (stop propagation)
-                                  <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
-                                    <Pencil className="w-4 h-4 text-muted-foreground opacity-60" />
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setGroup(group);
-                                        setIsEditGroupOpen(true);
-                                      }}
-                                    >
-                                      Edit
-                                    </Button>
-                                  </div>
-                                ) : null}
-                              </div>
-                              <CardDescription>
-                                {group.members.length} member(s)
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-sm font-medium">
-                                Rep: {group.representative.name}
-                              </p>
-                            </CardContent>
-                          </Card>
+                        <div key={group._id} className="relative h-full group">
+                          {/* Card acts as navigation for everyone */}
+                          <Link
+                            href={`/classroom/${id}/group/${group._id}`}
+                            className="block h-full"
+                          >
+                            <Card className="hover:shadow-md h-full transition-shadow">
+                              <CardHeader>
+                                <div className="flex justify-between items-start pr-8">
+                                  <CardTitle className="text-lg text-primary hover:underline truncate">
+                                    {group.name}
+                                  </CardTitle>
+                                </div>
+                                <CardDescription>
+                                  {group.members.length} member(s)
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <p className="text-sm font-medium">
+                                  Rep: {group.representative.name}
+                                </p>
+                              </CardContent>
+                            </Card>
+                          </Link>
+                          
+                          {/* Edit Button ONLY for Instructors - Does not trigger navigation */}
+                          {isInstructor && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="absolute top-4 right-4 z-10 h-8 w-8 text-muted-foreground hover:text-primary bg-transparent hover:bg-muted/50"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setEditingGroup(group); // Uses correct setter
+                                setIsEditGroupOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -2627,7 +2670,7 @@ export default function ClassroomPage() {
             <EditGroupDialog 
               open={isEditGroupOpen}
               onOpenChange={setIsEditGroupOpen}
-              group={selectedGroup}
+              group={editingGroup}
               classroom={classroom}
               onUpdate={handleUpdateGroup}
               onDelete={handleDeleteGroup}
