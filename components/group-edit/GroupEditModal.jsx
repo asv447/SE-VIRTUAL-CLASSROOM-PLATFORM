@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 
 export default function GroupEditModal({ group = {}, allStudents = [], onClose, onSaved }) {
   const initialMembers = Array.isArray(group.members) ? group.members.map(String) : [];

@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+
+import { useParams, useRouter } from 'next/navigation';
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import {
@@ -348,6 +349,7 @@ const EditGroupDialog = ({ open, onOpenChange, group, classroom, onUpdate, onDel
 
 export default function ClassroomPage() {
   const { id } = useParams();
+  const router = useRouter();
   const [classroom, setClassroom] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -450,7 +452,10 @@ export default function ClassroomPage() {
           if (res.ok) {
             const data = await res.json();
             setUsername(data.user.username || "User");
-            setIsInstructor(data.user.role === "instructor");
+            // Accept multiple role strings that mean "can edit/manage class/groups"
+            const role = (data.user?.role || "").toString().toLowerCase();
+            const canEdit = ["instructor", "teacher", "admin"].includes(role);
+            setIsInstructor(canEdit);
           }
         } catch (err) {
           console.error("Error fetching user details:", err);
@@ -2222,6 +2227,7 @@ export default function ClassroomPage() {
                                       <Button
                                         variant="outline"
                                         size="sm"
+                                        className="border-none"
                                         asChild
                                       >
                                         <a
@@ -2237,6 +2243,7 @@ export default function ClassroomPage() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
+                                        className="border-none"
                                         asChild
                                       >
                                         <a
@@ -2509,8 +2516,8 @@ export default function ClassroomPage() {
                           {student.name}
                         </span>
                       </div>
-                    ))
-                  )}
+                    )))
+                  }
                 </CardContent>
               </Card>
 
@@ -2543,6 +2550,9 @@ export default function ClassroomPage() {
                             if (isInstructor) {
                               setGroup(group);
                               setIsEditGroupOpen(true);
+                            } else {
+                              // students view group details page
+                              router.push(`/classroom/${id}/group/${group._id}`);
                             }
                           }}
                           className={`transition-shadow ${isInstructor ? "cursor-pointer" : ""}`}
@@ -2553,9 +2563,22 @@ export default function ClassroomPage() {
                                 <CardTitle className="text-lg text-primary hover:underline">
                                   {group.name}
                                 </CardTitle>
-                                {isInstructor && (
-                                  <Pencil className="w-4 h-4 text-muted-foreground opacity-50" />
-                                )}
+                                {isInstructor ? (
+                                  // explicit Edit button for instructors (stop propagation)
+                                  <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
+                                    <Pencil className="w-4 h-4 text-muted-foreground opacity-60" />
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setGroup(group);
+                                        setIsEditGroupOpen(true);
+                                      }}
+                                    >
+                                      Edit
+                                    </Button>
+                                  </div>
+                                ) : null}
                               </div>
                               <CardDescription>
                                 {group.members.length} member(s)
