@@ -33,7 +33,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!user) return;
-  fetchNotifications(false);
+    fetchNotifications(false);
   }, [user]);
 
   useEffect(() => {
@@ -99,13 +99,18 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!user) return;
-    const src = new EventSource(`/api/notifications/stream?uid=${encodeURIComponent(user.uid)}`);
+    const src = new EventSource(
+      `/api/notifications/stream?uid=${encodeURIComponent(user.uid)}`
+    );
     src.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
         if (data?.type === "notification") {
           const n = data;
-          toast({ title: n.title || "New notification", description: n.message || "" });
+          toast({
+            title: n.title || "New notification",
+            description: n.message || "",
+          });
           setNotifications((prev) => {
             const exists = prev.some((p) => p.id === n.id);
             if (exists) return prev;
@@ -201,7 +206,7 @@ export default function NotificationBell() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      
+
       // Then delete
       await fetch(`/api/notifications`, {
         method: "DELETE",
@@ -219,18 +224,23 @@ export default function NotificationBell() {
     return (
       <div
         key={id}
-        className={`p-3 border-b border-border last:border-b-0 rounded-md ${n.read ? "bg-muted/30" : "bg-card"
-          } hover:bg-muted/50 transition-colors`}
+        className={`p-3 border-b border-border last:border-b-0 rounded-md ${
+          n.read ? "bg-muted/30" : "bg-card"
+        } hover:bg-muted/50 transition-colors`}
       >
         <div className="flex justify-between items-start">
           <div className="flex-1">
             <div className="font-semibold text-sm text-foreground">
               {n.title || "Notification"}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">{n.message}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {n.message}
+            </div>
             <div className="text-xs text-muted-foreground mt-1">
               {n.createdAt
-                ? formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })
+                ? formatDistanceToNow(new Date(n.createdAt), {
+                    addSuffix: true,
+                  })
                 : ""}
             </div>
           </div>
@@ -274,7 +284,10 @@ export default function NotificationBell() {
               >
                 Mark all as read
               </button>
-              <button onClick={() => setOpen(false)} className="p-1 hover:bg-muted rounded-md transition-colors">
+              <button
+                onClick={() => setOpen(false)}
+                className="p-1 hover:bg-muted rounded-md transition-colors"
+              >
                 <X className="w-4 h-4 cursor-pointer text-muted-foreground" />
               </button>
             </div>
@@ -284,14 +297,20 @@ export default function NotificationBell() {
             {loading && (
               <div className="p-8 text-center">
                 <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                <div className="text-sm text-muted-foreground mt-2">Loading notifications...</div>
+                <div className="text-sm text-muted-foreground mt-2">
+                  Loading notifications...
+                </div>
               </div>
             )}
             {!loading && notifications.length === 0 && (
               <div className="p-8 text-center">
                 <Bell className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
-                <div className="text-sm font-medium text-foreground">No notifications</div>
-                <div className="text-xs text-muted-foreground mt-1">You're all caught up!</div>
+                <div className="text-sm font-medium text-foreground">
+                  No notifications
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  You're all caught up!
+                </div>
               </div>
             )}
             {!loading && notifications.map((n) => renderNotification(n))}
