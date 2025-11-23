@@ -411,7 +411,7 @@ export default function ClassyncDashboard() {
                   </p>
                 </div>
                 <Button variant="destructive" size="sm" asChild>
-                  <a href="/assignments">View Assignments</a>
+                  <Link href="/assignments">View Assignments</Link>
                 </Button>
               </div>
             </div>
@@ -427,10 +427,10 @@ export default function ClassyncDashboard() {
                   className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
                   asChild
                 >
-                  <a href="/admin">
+                  <Link href="/admin">
                     <Shield className="w-6 h-6" />
                     <span className="text-sm">Admin Dashboard</span>
-                  </a>
+                  </Link>
                 </Button>
               </>
             ) : (
@@ -439,10 +439,10 @@ export default function ClassyncDashboard() {
                 className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
                 asChild
               >
-                <a href="/assignments">
+                <Link href="/assignments">
                   <FileText className="w-6 h-6" />
                   <span className="text-sm">Assignments</span>
-                </a>
+                </Link>
               </Button>
             )}
             <Button
@@ -460,10 +460,10 @@ export default function ClassyncDashboard() {
               className="h-20 flex-col gap-2 bg-card/60 backdrop-blur-sm w-full md:flex-1 border-2 border-dashed hover:border-solid hover:border-primary hover:bg-primary/10 hover:text-foreground transition-all duration-300"
               asChild
             >
-              <a href="/ai-tools">
+              <Link href="/ai-tools">
                 <Sparkles className="w-6 h-6" />
                 <span className="text-sm">AI Tools</span>
-              </a>
+              </Link>
             </Button>
             {user?.email?.includes("@instructor.com") ||
             user?.email?.includes("@admin.com") ? (

@@ -364,16 +364,15 @@ export async function PATCH(request) {
         { returnDocument: "after" }
       );
       console.log("[PATCH] Update result exists:", !!result);
-      console.log("[PATCH] Update result.value exists:", !!result?.value);
-      if (result?.value) {
-        console.log("[PATCH] Updated submission _id:", result.value._id?.toString());
+      if (result) {
+        console.log("[PATCH] Updated submission _id:", result._id?.toString());
       }
     } catch (updateErr) {
       console.error("[PATCH] Update operation failed:", updateErr.message, updateErr.stack);
       return NextResponse.json({ error: "Failed to update submission: " + updateErr.message }, { status: 500 });
     }
 
-    if (!result || !result.value) {
+    if (!result) {
       console.error("[PATCH] Update returned no document");
       // Try a direct update without returnDocument to see if that works
       try {
@@ -388,14 +387,14 @@ export async function PATCH(request) {
           const updatedDoc = await submissionsCollection.findOne({ _id: submissionObjectId });
           if (updatedDoc) {
             console.log("[PATCH] Successfully updated using direct method");
-            result = { value: updatedDoc };
+            result = updatedDoc;
           }
         }
       } catch (directErr) {
         console.error("[PATCH] Direct update also failed:", directErr);
       }
       
-      if (!result || !result.value) {
+      if (!result) {
         return NextResponse.json(
           { error: "Failed to update submission - document not found after update" },
           { status: 500 }
@@ -496,7 +495,7 @@ export async function PATCH(request) {
       // Non-fatal
     }
 
-    const { _id, fileData, ...rest } = result.value;
+    const { _id, fileData, ...rest } = result;
     console.log("[PATCH] Successfully completed grade update for submission:", _id.toString());
 
     return NextResponse.json(

@@ -6,7 +6,6 @@ import { X } from "lucide-react";
 import Register from "./Register";
 import { auth } from "../../lib/firebase";
 import {
-  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
@@ -21,8 +20,6 @@ export default function Login({ onBackToHome }) {
   const [showRegister, setShowRegister] = useState(false);
   const router = useRouter();
   const [showForgot, setShowForgot] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetMessage, setResetMessage] = useState("");
   const [awaitingVerification, setAwaitingVerification] = useState(false);
   const [unverifiedUser, setUnverifiedUser] = useState(null);
   const [unverifiedPassword, setUnverifiedPassword] = useState("");
@@ -39,19 +36,6 @@ export default function Login({ onBackToHome }) {
     });
     return () => unsubscribe();
   }, [onBackToHome]);
-
-  const handleForgotPassword = async () => {
-    if (!resetEmail) {
-      setResetMessage("Please enter your email.");
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, resetEmail);
-      setResetMessage("Password reset email sent! Check your inbox.");
-    } catch (error) {
-      setResetMessage(error.message);
-    }
-  };
 
   const checkVerification = async () => {
     if (!unverifiedUser?.uid) return;
@@ -103,7 +87,9 @@ export default function Login({ onBackToHome }) {
 
   const handleResendVerification = async () => {
     if (!unverifiedUser?.email || !unverifiedUser?.uid) {
-      setError("Unable to resend verification email. Please try signing in again.");
+      setError(
+        "Unable to resend verification email. Please try signing in again."
+      );
       return;
     }
 
@@ -128,7 +114,9 @@ export default function Login({ onBackToHome }) {
       });
     } catch (err) {
       console.error("[Login] Resend error:", err);
-      setError("Unable to resend verification email. Please try again in a moment.");
+      setError(
+        "Unable to resend verification email. Please try again in a moment."
+      );
       toast({
         title: "Resend Failed",
         description: err.message || "Please wait a moment and try again.",
@@ -187,31 +175,35 @@ export default function Login({ onBackToHome }) {
     } catch (err) {
       // Handle Firebase auth errors with user-friendly messages
       if (err.code === "auth/user-not-found") {
-        setError("This email is not registered. Please create an account first.");
+        setError(
+          "This email is not registered. Please create an account first."
+        );
       } else if (err.code === "auth/wrong-password") {
-        setError("Incorrect password. Please try again or reset your password.");
+        setError(
+          "Incorrect password. Please try again or reset your password."
+        );
       } else if (err.code === "auth/invalid-email") {
         setError("Please enter a valid email address.");
       } else if (err.code === "auth/user-disabled") {
-        setError("This account has been disabled. Contact support for assistance.");
+        setError(
+          "This account has been disabled. Contact support for assistance."
+        );
       } else if (err.code === "auth/invalid-credential") {
         setError(
           "Invalid email or password. Please check your credentials or create an account if you're new."
         );
       } else if (err.code === "auth/too-many-requests") {
-        setError("Too many failed attempts. Please wait a few minutes before trying again.");
+        setError(
+          "Too many failed attempts. Please wait a few minutes before trying again."
+        );
       } else if (err.code === "auth/account-exists-with-different-credential") {
         setError(
           "An account with this email already exists. Please sign in using your original method."
         );
       } else if (err.code === "auth/credential-already-in-use") {
-        setError(
-          "This credential is already associated with another account."
-        );
+        setError("This credential is already associated with another account.");
       } else if (err.code === "auth/email-already-in-use") {
-        setError(
-          "This email is already registered. Please sign in instead."
-        );
+        setError("This email is already registered. Please sign in instead.");
       } else if (err.code === "auth/weak-password") {
         setError("Please choose a stronger password.");
       } else if (err.code === "auth/operation-not-allowed") {
@@ -264,7 +256,9 @@ export default function Login({ onBackToHome }) {
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Your account hasn't been verified yet.
             <br />
-            <strong className="block mt-2 text-foreground">{unverifiedUser?.email}</strong>
+            <strong className="block mt-2 text-foreground">
+              {unverifiedUser?.email}
+            </strong>
           </p>
 
           <p className="mt-4 text-center text-xs text-muted-foreground">
@@ -335,7 +329,9 @@ export default function Login({ onBackToHome }) {
 
         <form className="mt-6 space-y-6" onSubmit={handleEmailLogin}>
           {error && (
-            <div className="text-destructive text-sm text-center p-3 bg-destructive/10 border border-destructive/20 rounded">{error}</div>
+            <div className="text-destructive text-sm text-center p-3 bg-destructive/10 border border-destructive/20 rounded">
+              {error}
+            </div>
           )}
 
           <div>
@@ -378,40 +374,39 @@ export default function Login({ onBackToHome }) {
           >
             Sign in
           </button>
-
-          {/* verification handled on registration; no verify button here */}
-
-          <div className="flex flex-col text-center space-y-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowForgot(true)}
-              className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
-            >
-              Forgot password?
-            </button>
-            {showForgot && (
-              <ResetPasswordModal onClose={() => setShowForgot(false)} />
-            )}
-
-            <button
-              type="button"
-              onClick={() => setShowRegister(true)}
-              className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
-            >
-              Don&apos;t have an account? Sign up
-            </button>
-
-            {onBackToHome && (
-              <button
-                type="button"
-                onClick={onBackToHome}
-                className="text-muted-foreground hover:text-foreground text-sm block cursor-pointer"
-              >
-                Back to Home
-              </button>
-            )}
-          </div>
         </form>
+
+        {/* Actions outside the form to avoid nested forms */}
+        <div className="flex flex-col text-center space-y-2 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowForgot(true)}
+            className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
+          >
+            Forgot password?
+          </button>
+          {showForgot && (
+            <ResetPasswordModal onClose={() => setShowForgot(false)} />
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowRegister(true)}
+            className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
+          >
+            Don&apos;t have an account? Sign up
+          </button>
+
+          {onBackToHome && (
+            <button
+              type="button"
+              onClick={onBackToHome}
+              className="text-muted-foreground hover:text-foreground text-sm block cursor-pointer"
+            >
+              Back to Home
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

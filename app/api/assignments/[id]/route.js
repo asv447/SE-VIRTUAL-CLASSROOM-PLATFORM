@@ -256,7 +256,7 @@ export async function PATCH(request, { params }) {
       { returnDocument: "after" }
     );
 
-    if (!result.value) {
+    if (!result) {
       return NextResponse.json(
         { error: "Assignment not found" },
         { status: 404 }
@@ -266,8 +266,8 @@ export async function PATCH(request, { params }) {
     return NextResponse.json(
       {
         id,
-        deadline: result.value.deadline,
-        maxScore: result.value.maxScore,
+        deadline: result.deadline,
+        maxScore: result.maxScore,
       },
       { status: 200 }
     );

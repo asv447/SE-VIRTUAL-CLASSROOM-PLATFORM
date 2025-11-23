@@ -71,10 +71,16 @@ import { ChevronDown } from "lucide-react";
 
 export default function AdminDashboard() {
   const router = useRouter(); // [FIX] Add router
-  const [user, setUser] = useState(null);
-  const [username, setUsername] = useState(""); // [FIX] Add username state
+  // Initialize user from auth.currentUser if available to avoid initial null state
+  const [user, setUser] = useState(auth?.currentUser || null);
+  const [username, setUsername] = useState(
+    auth?.currentUser?.displayName || 
+    auth?.currentUser?.email?.split("@")[0] || 
+    ""
+  ); 
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(!!auth?.currentUser); // [NEW] Track if auth check is done
   const [activeTab, setActiveTab] = useState("assignments");
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
@@ -136,45 +142,36 @@ export default function AdminDashboard() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
       if (usr) {
-        let isInstructorEmail =
-          usr.email?.includes("@instructor.com") ||
-          usr.email?.includes("@admin.com");
+        // Optimistic update: Set user immediately to avoid loading delay
+        setUser(usr);
+        setUsername(usr.displayName || usr.email.split("@")[0]);
 
+        // Perform role check in background
         try {
           const res = await fetch(`/api/users/${usr.uid}`);
           if (res.ok) {
             const data = await res.json();
             const isInstructorRole = data.user.role === "instructor";
-
-            // [FIX] Set the username from the database
-            setUsername(data.user.username || usr.email.split("@")[0]);
+            
+            // Update username with DB value if available
+            if (data.user.username) {
+              setUsername(data.user.username);
+            }
 
             if (!isInstructorRole) {
+              // Only redirect if we confirm they are NOT an instructor
               window.location.href = "/student";
-              return;
             }
-          } else if (!isInstructorEmail) {
-            window.location.href = "/student";
-            return;
-          } else {
-            // [FIX] Fallback for username if DB fetch fails but email is correct
-            setUsername(usr.email.split("@")[0]);
           }
         } catch (err) {
           console.error("Error checking user role:", err);
-          if (!isInstructorEmail) {
-            window.location.href = "/student";
-            return;
-          }
-          // [FIX] Fallback for username on error
-          setUsername(usr.email.split("@")[0]);
+          // If check fails, we stay on page (assuming instructor if they got here)
         }
-
-        setUser(usr);
       } else {
         setUser(null);
         setUsername("");
       }
+      setIsAuthReady(true); // [NEW] Auth check complete
     });
     return () => unsubscribe();
   }, []);
@@ -242,7 +239,7 @@ export default function AdminDashboard() {
   };
 
   const loadData = async () => {
-    setPageLoading(true);
+    // Don't set pageLoading(true) here to avoid full screen loader on refresh
     try {
       await Promise.all([
         loadCourses(),
@@ -573,11 +570,16 @@ export default function AdminDashboard() {
 
     setSavingDeadline((p) => ({ ...p, [assignmentId]: true }));
     try {
-      const res = await fetch(`/api/assignments/${assignmentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deadline: value }),
-      });
+      const res = await fetch(
+        `/api/assignments/${assignmentId}?role=instructor&userId=${encodeURIComponent(
+          user?.uid || ""
+        )}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-uid": user?.uid || "" },
+          body: JSON.stringify({ deadline: value }),
+        }
+      );
       if (res.ok) {
         const updated = await res.json();
         setAssignments((assignments) =>
@@ -751,7 +753,7 @@ export default function AdminDashboard() {
     }
   };
 
-  if (!user) {
+  if (isAuthReady && !user) {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center">
         <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
@@ -762,13 +764,8 @@ export default function AdminDashboard() {
     );
   }
 
-  if (pageLoading) {
-    return (
-      <div className="p-6 max-w-4xl mx-auto text-center">
-        <p>Loading dashboard...</p>
-      </div>
-    );
-  }
+  // Removed blocking pageLoading check to allow instant render
+  // if (pageLoading) { ... }
 
   return (
     <>
@@ -1150,60 +1147,6 @@ export default function AdminDashboard() {
                                       c.id === assignment.classId
                                   )?.name ||
                                   "Unknown Course"}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                Deadline:{" "}
-                                {editingDeadline[assignment.id] ? (
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      type="datetime-local"
-                                      value={
-                                        deadlineInputs[assignment.id] || ""
-                                      }
-                                      onChange={(e) =>
-                                        setDeadlineInputs((p) => ({
-                                          ...p,
-                                          [assignment.id]: e.target.value,
-                                        }))
-                                      }
-                                      className="border px-2 py-1 rounded"
-                                    />
-                                    <Button
-                                      onClick={() =>
-                                        saveDeadline(assignment.id)
-                                      }
-                                      size="sm"
-                                      disabled={savingDeadline[assignment.id]}
-                                    >
-                                      {savingDeadline[assignment.id]
-                                        ? "Saving..."
-                                        : "Save"}
-                                    </Button>
-                                    <Button
-                                      onClick={() =>
-                                        cancelEditDeadline(assignment.id)
-                                      }
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={savingDeadline[assignment.id]}
-                                    >
-                                      Cancel
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <span
-                                    onClick={() =>
-                                      startEditDeadline(
-                                        assignment.id,
-                                        assignment.deadline
-                                      )
-                                    }
-                                    className="cursor-pointer underline text-blue-600 hover:text-blue-800"
-                                  >
-                                    {safeFormatDate(assignment.deadline)}
-                                  </span>
-                                )}
                               </div>
                               {assignment.maxScore && (
                                 <div className="flex items-center gap-1">
