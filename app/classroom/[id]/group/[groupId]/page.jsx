@@ -12,12 +12,19 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { User, Star } from "lucide-react";
+import dynamic from 'next/dynamic';
 
-export default function GroupDetailsPage() {
+const GroupEditControls = dynamic(
+  () => import('../../../../../components/group-edit/GroupEditControls.jsx'),
+  { ssr: false }
+);
+
+export default function GroupDetailsPage(props) {
   const params = useParams();
   const { id: courseId, groupId } = params; // Rename id to courseId for clarity
 
-  const [group, setGroup] = useState(null);
+  const { group, currentUserRole, allStudents } = props; // adjust if your prop names differ
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -94,6 +101,13 @@ export default function GroupDetailsPage() {
             ))}
           </CardContent>
         </Card>
+
+        {/* Instructor-only edit controls (client-side) */}
+        {currentUserRole === 'instructor' && (
+          <div className="mt-3">
+            <GroupEditControls group={group} allStudents={allStudents} currentUserRole={currentUserRole} />
+          </div>
+        )}
       </div>
     </div>
   );
