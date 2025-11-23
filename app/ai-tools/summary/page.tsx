@@ -62,7 +62,7 @@ export default function SummaryTool() {
               <span className="text-xl">📄</span>
               Upload your file
             </label>
-            <p className="text-sm text-muted-foreground">Supported formats: PDF, DOCX, TXT, PPTX</p>
+            <p className="text-sm text-muted-foreground">Supported formats: DOCX, TXT</p>
             <input
               id="file-upload"
               type="file"
@@ -110,7 +110,6 @@ export default function SummaryTool() {
               <option value="brief">📋 Quick overview (5 min read)</option>
               <option value="long">📚 Detailed notes (complete coverage)</option>
               <option value="examples">💡 Practice questions & examples</option>
-              <option value="mindmap">🗺️ Concept mind map</option>
             </select>
           </div>
 
