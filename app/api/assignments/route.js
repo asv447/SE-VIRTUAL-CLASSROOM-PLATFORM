@@ -50,7 +50,7 @@ export async function GET(request) {
       // 1. Get the user's group memberships for this course
       const myGroups = await groupsCollection
         .find({
-          courseId: new ObjectId(classId),
+          courseId: classId,
           "members.userId": userId,
         })
         .toArray();
@@ -172,6 +172,7 @@ export async function POST(request) {
       deadline,
       fileUrl,
       fileData,
+      audience: audience,
       // Store per-student grading summaries under the assignment
       grades: [],
       createdAt: new Date(),
@@ -180,7 +181,7 @@ export async function POST(request) {
 
     const result = await assignmentsCollection.insertOne(newAssignment);
 
-    // ✅ Add this assignment as a stream post
+    // ✅ Add this assignment as a stream post (preserve audience)
     try {
       const streamsCollection = await getStreamsCollection();
 
@@ -192,17 +193,19 @@ export async function POST(request) {
         content: `📝 New assignment posted: ${title}`,
         type: "assignment",
         assignmentRef: result.insertedId.toString(),
+        audience: audience || { type: "class", groupIds: [] },
         createdAt: new Date(),
       });
     } catch (streamError) {
       console.error("Failed to sync assignment with stream:", streamError);
     }
 
-    // ✅ Create notifications for all enrolled students in this course
+    // ✅ Create notifications based on audience
     try {
       if (courseId) {
         const coursesCollection = await getCoursesCollection();
         const notificationsCollection = await getNotificationsCollection();
+        const groupsCollection = await getGroupsCollection();
 
         // Find course by its _id
         let courseDoc = null;
@@ -212,12 +215,28 @@ export async function POST(request) {
           // If courseId is not an ObjectId, skip notification fanout safely
         }
 
-        const students = courseDoc?.students || [];
-        if (students.length > 0) {
-          const notifDocs = students
-            .filter((s) => s?.userId && s.userId !== instructorId)
-            .map((s) => ({
-              userId: s.userId,
+        // Resolve audience and notify accordingly
+        let targetUserIds = [];
+        if (audience.type === "class") {
+          // Notify all enrolled students
+          targetUserIds = courseDoc?.students?.map(s => s.userId).filter(Boolean) || [];
+        } else if (audience.type === "group") {
+          // Notify only group members
+          const groupIds = audience.groupIds || [];
+          const groups = await groupsCollection.find({ _id: { $in: groupIds.map(id => {
+            try { return new ObjectId(id); } catch { return id; }
+          }) } }).toArray();
+          const memberUserIds = new Set();
+          groups.forEach(g => g.members?.forEach(m => memberUserIds.add(m.userId)));
+          targetUserIds = Array.from(memberUserIds);
+        }
+
+        // Create notifications only for target users
+        if (targetUserIds.length > 0) {
+          const notifDocs = targetUserIds
+            .filter(userId => userId !== instructorId) // Don't notify the author
+            .map(userId => ({
+              userId,
               title: "New assignment",
               message: `${title} has been posted by ${instructorName}`,
               read: false,

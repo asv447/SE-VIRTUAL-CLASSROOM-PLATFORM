@@ -348,7 +348,8 @@ export default function ClassyncDashboard() {
       // Refresh the course list to show the newly joined course
       await fetchCourses(isAdmin ? "instructor" : "student", user.uid);
     } catch (err) {
-      toast.error(`Error: ${err.message}`, { id: loadingToastId });
+      const errorMessage = err.message === "Course code not found" ? "Invalid course code" : `Error: ${err.message}`;
+      toast.error(errorMessage, { id: loadingToastId });
     }
   };
 

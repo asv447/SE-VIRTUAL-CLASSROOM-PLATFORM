@@ -80,7 +80,7 @@ export async function GET(request) {
 
     const myGroups = await groupsCol
       .find({
-        courseId: new ObjectId(classId),
+        courseId: classId,
         "members.userId": uid,
       })
       .toArray();
@@ -157,7 +157,8 @@ export async function GET(request) {
   
         // If post is for a group, check if user is in that group
         if (post.audience.type === "group") {
-          return myGroupIds.includes(post.audience.groupId);
+          const assignedGroupIds = post.audience.groupIds || [];
+          return assignedGroupIds.some((gid) => myGroupIds.includes(String(gid)));
         }
   
         return false; // Default to hiding
@@ -309,9 +310,9 @@ export async function POST(request) {
       audience && typeof audience === "object"
         ? {
             type: audience.type === "group" ? "group" : "class",
-            groupId: audience.type === "group" ? audience.groupId : null,
+            groupIds: audience.type === "group" ? (audience.groupIds || [audience.groupId].filter(Boolean)) : [],
           }
-        : { type: "class", groupId: null };
+        : { type: "class", groupIds: [] };
 
     const sanitizedLink = sanitizeLink(link);
     const fallbackLink =
@@ -353,12 +354,16 @@ export async function POST(request) {
         } catch (_) {
           // classId might not be an ObjectId; skip fanout safely
         }
-        if (normalizedAudience?.type === "group" && normalizedAudience.groupId) {
+        if (normalizedAudience?.type === "group") {
+          // Notify only group members
           const groupsCol = await getGroupsCollection();
-          const group = await groupsCol.findOne({
-            _id: new ObjectId(normalizedAudience.groupId),
-          });
-          notifRecipients = group?.members || [];
+          const groupIds = normalizedAudience.groupIds || [];
+          const groups = await groupsCol.find({ _id: { $in: groupIds.map(id => {
+            try { return new ObjectId(String(id)); } catch { return id; }
+          }) }, courseId: classId }).toArray();
+          const memberUserIds = new Set();
+          groups.forEach(g => g.members?.forEach(m => memberUserIds.add(m.userId)));
+          notifRecipients = Array.from(memberUserIds).map(userId => ({ userId }));
         } else {
           notifRecipients = courseDoc?.students || [];
         }
