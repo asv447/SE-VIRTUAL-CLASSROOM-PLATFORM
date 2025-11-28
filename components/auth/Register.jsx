@@ -162,6 +162,16 @@ export default function Register({ onBackToHome }) {
       setError("Passwords do not match. Please try again.");
       return;
     }
+
+    // Add password complexity validation
+    const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
+    if (password.length < 6 || !specialCharRegex.test(password)) {
+      setError(
+        "Password must be at least 6 characters long and contain at least one special character."
+      );
+      return;
+    }
+
     if (!isOnline) {
       setError("No internet connection. Please connect to the internet and try again.");
       return;
@@ -251,7 +261,7 @@ export default function Register({ onBackToHome }) {
           setError("Please enter a valid email address.");
         } else if (e.code === "auth/weak-password") {
           setError(
-            "Password is too weak. Please use at least 6 characters with a mix of letters and numbers."
+            "Password is too weak. Please use at least 6 characters with a mix of letters, numbers, and at least one special character."
           );
         } else if (e.code === "auth/invalid-credential") {
           setError(
