@@ -48,12 +48,23 @@ export async function GET(request) {
       }
       
       // 1. Get the user's group memberships for this course
-      const myGroups = await groupsCollection
-        .find({
-          courseId: classId,
-          "members.userId": userId,
-        })
-        .toArray();
+      // Robust query for groups
+      let courseObjectId = null;
+      try {
+        courseObjectId = new ObjectId(classId);
+      } catch (e) {
+        // Not a valid ObjectId
+      }
+
+      const groupQuery = {
+        $or: [
+          { courseId: courseObjectId },
+          { courseId: classId }
+        ],
+        "members.userId": userId,
+      };
+
+      const myGroups = await groupsCollection.find(groupQuery).toArray();
       const myGroupIds = myGroups.map((g) => g._id.toString());
 
       // 2. Find all assignments for this class

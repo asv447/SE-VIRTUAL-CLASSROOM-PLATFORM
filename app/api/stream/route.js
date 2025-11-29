@@ -78,12 +78,23 @@ export async function GET(request) {
     });
     const isInstructor = course?.instructorId === uid;
 
-    const myGroups = await groupsCol
-      .find({
-        courseId: classId,
-        "members.userId": uid,
-      })
-      .toArray();
+    // Robust query for groups, checking courseId as ObjectId or string
+    let courseObjectId = null;
+    try {
+      courseObjectId = new ObjectId(classId);
+    } catch (e) {
+      // Not a valid ObjectId
+    }
+
+    const groupQuery = {
+      $or: [
+        { courseId: courseObjectId },
+        { courseId: classId }
+      ],
+      "members.userId": uid,
+    };
+
+    const myGroups = await groupsCol.find(groupQuery).toArray();
     // Get a list of group ID strings the user belongs to
     const myGroupIds = myGroups.map((g) => g._id.toString());
     const streamsCollection = await getStreamsCollection();
@@ -157,8 +168,13 @@ export async function GET(request) {
   
         // If post is for a group, check if user is in that group
         if (post.audience.type === "group") {
-          const assignedGroupIds = post.audience.groupIds || [];
-          return assignedGroupIds.some((gid) => myGroupIds.includes(String(gid)));
+          if (post.audience.groupId) {
+            return myGroupIds.includes(String(post.audience.groupId));
+          }
+          if (post.audience.groupIds && Array.isArray(post.audience.groupIds)) {
+            return post.audience.groupIds.some((gid) => myGroupIds.includes(String(gid)));
+          }
+          return false;
         }
   
         return false; // Default to hiding
@@ -310,9 +326,9 @@ export async function POST(request) {
       audience && typeof audience === "object"
         ? {
             type: audience.type === "group" ? "group" : "class",
-            groupIds: audience.type === "group" ? (audience.groupIds || [audience.groupId].filter(Boolean)) : [],
+            groupId: audience.type === "group" ? audience.groupId : null,
           }
-        : { type: "class", groupIds: [] };
+        : { type: "class", groupId: null };
 
     const sanitizedLink = sanitizeLink(link);
     const fallbackLink =
@@ -357,13 +373,13 @@ export async function POST(request) {
         if (normalizedAudience?.type === "group") {
           // Notify only group members
           const groupsCol = await getGroupsCollection();
-          const groupIds = normalizedAudience.groupIds || [];
-          const groups = await groupsCol.find({ _id: { $in: groupIds.map(id => {
-            try { return new ObjectId(String(id)); } catch { return id; }
-          }) }, courseId: classId }).toArray();
-          const memberUserIds = new Set();
-          groups.forEach(g => g.members?.forEach(m => memberUserIds.add(m.userId)));
-          notifRecipients = Array.from(memberUserIds).map(userId => ({ userId }));
+          const groupId = normalizedAudience.groupId;
+          if (groupId) {
+            const group = await groupsCol.findOne({ _id: new ObjectId(groupId), courseId: classId });
+            notifRecipients = group?.members || [];
+          } else {
+            notifRecipients = [];
+          }
         } else {
           notifRecipients = courseDoc?.students || [];
         }

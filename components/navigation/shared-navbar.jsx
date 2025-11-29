@@ -162,7 +162,7 @@ export default function SharedNavbar() {
           const res = await fetch(`/api/users/${currentUser.uid}`);
           if (res.ok) {
             const data = await res.json();
-            setUsername(data.user.username || currentUser.email.split("@")[0]);
+            setUsername(data.user.username || currentUser.displayName || currentUser.email.split("@")[0]);
             setIsAdmin(data.user.role === "instructor");
             setUserRole(data.user.role || null);
             if (data.user?.photoBase64) {
@@ -175,13 +175,13 @@ export default function SharedNavbar() {
               setUserPhoto("");
             }
           } else {
-            setUsername(currentUser.email.split("@")[0]);
+            setUsername(currentUser.displayName || currentUser.email.split("@")[0]);
             setIsAdmin(false);
             setUserRole(null);
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
-          setUsername(currentUser.email.split("@")[0]);
+          setUsername(currentUser.displayName || currentUser.email.split("@")[0]);
           setIsAdmin(false);
         } finally {
           setLoading(false);

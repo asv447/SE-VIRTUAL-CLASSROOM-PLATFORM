@@ -951,6 +951,11 @@ export default function ClassroomPage() {
       return;
     }
 
+    if (newPostData.audienceType === "group" && !newPostData.audienceGroupId) {
+      toast.error("Please select a group to post to.");
+      return;
+    }
+
     const pollQuestion = newPostData.includePoll
       ? newPostData.pollQuestion.trim()
       : "";
@@ -1102,7 +1107,7 @@ export default function ClassroomPage() {
       linkUrl: post.link?.url || "",
       linkText: post.link?.text || "",
       audienceType: post.audience?.type || "class",
-      audienceGroupId: post.audience?.groupId || null,
+      audienceGroupId: post.audience?.groupId || (post.audience?.groupIds && post.audience.groupIds[0]) || null,
       includePoll: hasPoll,
       allowMultiplePollSelections: hasPoll ? post.poll.allowMultiple : false,
     };
